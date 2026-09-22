@@ -1,27 +1,29 @@
-# Training & Nutrition Plan Tracking
+# מעקב אימונים ותזונה
 
-Modern web app for tracking training sessions and nutrition plans.
+אפליקציית RTL בעברית למעקב אימונים, תזונה, הרגלים וייצוא נתונים ל-AI.
 
 ## Stack
 
-- Vite
-- React 19 + TypeScript
+- Vite + React 19 + TypeScript
 - Tailwind CSS v4
 - React Router
 - Lucide icons
+- Open Food Facts (חיפוש מזון חי)
+- Supabase schema (`supabase/schema.sql`)
 
-## Getting started
+## הרצה
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Scripts
+## מודולים
 
-| Command | Description |
+| מסלול | תיאור |
 | --- | --- |
-| `npm run dev` | Start the development server |
-| `npm run build` | Type-check and build for production |
-| `npm run preview` | Preview the production build |
-| `npm run lint` | Run Oxlint |
+| `/` | דשבורד |
+| `/workouts` | שגרת 5 ימים, Key Lifts, רישום סטים וטיימר מנוחה |
+| `/nutrition` | מאקרו, שקילה, חיפוש OFF, מתכונים |
+| `/habits` | ניידות מפרקים ושליטה בדחפים |
+| `/export` | פרומפט שבועי להעתקה ל-AI |
