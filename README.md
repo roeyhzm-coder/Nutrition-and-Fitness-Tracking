@@ -8,7 +8,8 @@
 - Tailwind CSS v4
 - React Router
 - Lucide icons
-- Open Food Facts (חיפוש מזון חי)
+- Open Food Facts
+- Netlify (`netlify.toml`)
 - Supabase schema (`supabase/schema.sql`)
 
 ## הרצה
@@ -22,8 +23,8 @@ npm run dev
 
 | מסלול | תיאור |
 | --- | --- |
-| `/` | דשבורד |
-| `/workouts` | שגרת 5 ימים, Key Lifts, רישום סטים וטיימר מנוחה |
-| `/nutrition` | מאקרו, שקילה, חיפוש OFF, מתכונים |
-| `/habits` | ניידות מפרקים ושליטה בדחפים |
-| `/export` | פרומפט שבועי להעתקה ל-AI |
+| `/` | דשבורד — יעדים, משקל/שומן, התקדמות בתהליך |
+| `/workouts` | שגרת Push/Pull מותאמת אישית + רישום סטים |
+| `/nutrition` | מאקרו, ארוחות קבועות, מתכונים לפי סוג ארוחה, ייבוא JSON |
+| `/habits` | מנהל הרגלים גמיש |
+| `/export` | פרומפט שבועי ל-AI |

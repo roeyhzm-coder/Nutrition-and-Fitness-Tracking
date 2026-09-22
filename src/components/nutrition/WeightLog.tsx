@@ -5,27 +5,39 @@ import { Card } from '../ui/Card'
 
 type WeightLogProps = {
   entries: WeightEntry[]
-  onAdd: (weightKg: number, note?: string) => void
+  onAdd: (input: {
+    weightKg: number
+    bodyFatPct?: number | null
+    note?: string
+  }) => void
 }
 
 export function WeightLog({ entries, onAdd }: WeightLogProps) {
   const [weight, setWeight] = useState('')
+  const [bodyFat, setBodyFat] = useState('')
   const [note, setNote] = useState('')
   const latest = entries.at(-1)
 
-  function submit(e: React.FormEvent) {
-    e.preventDefault()
-    const w = Number(weight)
-    if (!Number.isFinite(w) || w <= 0) return
-    onAdd(w, note.trim() || undefined)
-    setWeight('')
-    setNote('')
-  }
-
   return (
-    <Card title="מעקב שקילה יומי">
-      <form onSubmit={submit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-2">
+    <Card title="מעקב שקילה ואחוזי שומן">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          const w = Number(weight)
+          if (!Number.isFinite(w) || w <= 0) return
+          const fat = bodyFat === '' ? null : Number(bodyFat)
+          onAdd({
+            weightKg: w,
+            bodyFatPct: fat != null && Number.isFinite(fat) ? fat : null,
+            note: note.trim() || undefined,
+          })
+          setWeight('')
+          setBodyFat('')
+          setNote('')
+        }}
+        className="space-y-3"
+      >
+        <div className="grid grid-cols-3 gap-2">
           <label className="block text-xs text-muted">
             משקל (ק״ג)
             <input
@@ -38,17 +50,27 @@ export function WeightLog({ entries, onAdd }: WeightLogProps) {
             />
           </label>
           <label className="block text-xs text-muted">
-            הערה (אופציונלי)
+            אחוזי שומן
+            <input
+              inputMode="decimal"
+              value={bodyFat}
+              onChange={(e) => setBodyFat(e.target.value)}
+              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              placeholder="%"
+            />
+          </label>
+          <label className="block text-xs text-muted">
+            הערה
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
               className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-              placeholder="בוקר / אחרי אימון"
+              placeholder="בוקר"
             />
           </label>
         </div>
         <Button type="submit" className="w-full">
-          שמור שקילה
+          שמור מדידה
         </Button>
       </form>
 
@@ -66,7 +88,10 @@ export function WeightLog({ entries, onAdd }: WeightLogProps) {
                   {new Date(e.loggedAt).toLocaleDateString('he-IL')}
                   {e.note ? ` · ${e.note}` : ''}
                 </span>
-                <span className="font-semibold text-text">{e.weightKg} ק״ג</span>
+                <span className="font-semibold text-text">
+                  {e.weightKg} ק״ג
+                  {e.bodyFatPct != null ? ` · ${e.bodyFatPct}%` : ''}
+                </span>
               </li>
             ))}
         </ul>

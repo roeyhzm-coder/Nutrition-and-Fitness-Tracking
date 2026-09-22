@@ -1,0 +1,163 @@
+import { useState } from 'react'
+import { useAppData } from '../../context/AppDataContext'
+import type { SavedMeal } from '../../lib/types'
+import { Button } from '../ui/Button'
+import { Card } from '../ui/Card'
+import { Modal } from '../ui/Modal'
+
+export function SavedMeals() {
+  const {
+    savedMeals,
+    addSavedMeal,
+    updateSavedMeal,
+    deleteSavedMeal,
+    logSavedMeal,
+  } = useAppData()
+  const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<SavedMeal | null>(null)
+  const [form, setForm] = useState({
+    name: '',
+    calories: '',
+    protein: '',
+    carbs: '',
+    fats: '',
+  })
+
+  function openCreate() {
+    setEditing(null)
+    setForm({ name: '', calories: '', protein: '', carbs: '', fats: '' })
+    setOpen(true)
+  }
+
+  function openEdit(meal: SavedMeal) {
+    setEditing(meal)
+    setForm({
+      name: meal.name,
+      calories: String(meal.calories),
+      protein: String(meal.protein),
+      carbs: String(meal.carbs),
+      fats: String(meal.fats),
+    })
+    setOpen(true)
+  }
+
+  return (
+    <>
+      <Card
+        title="ארוחות קבועות"
+        action={
+          <button
+            type="button"
+            className="text-sm font-medium text-accent"
+            onClick={openCreate}
+          >
+            + ארוחה
+          </button>
+        }
+      >
+        {savedMeals.length === 0 ? (
+          <p className="text-sm text-muted">אין ארוחות קבועות עדיין.</p>
+        ) : (
+          <ul className="space-y-2">
+            {savedMeals.map((meal) => (
+              <li
+                key={meal.id}
+                className="rounded-xl border border-line bg-surface p-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-semibold text-text">{meal.name}</p>
+                    <p className="mt-1 text-xs text-muted">
+                      {meal.calories} קק״ל · ח {meal.protein} · פ {meal.carbs} ·
+                      ש {meal.fats}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="text-xs text-primary"
+                      onClick={() => openEdit(meal)}
+                    >
+                      ערוך
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs text-danger"
+                      onClick={() => deleteSavedMeal(meal.id)}
+                    >
+                      מחק
+                    </button>
+                  </div>
+                </div>
+                <Button
+                  className="mt-3 w-full"
+                  variant="accent"
+                  onClick={() => logSavedMeal(meal.id)}
+                >
+                  הוסף בלחיצה אחת
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <Modal
+        open={open}
+        title={editing ? 'עריכת ארוחה קבועה' : 'ארוחה קבועה חדשה'}
+        onClose={() => setOpen(false)}
+      >
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            const payload = {
+              name: form.name.trim(),
+              calories: Number(form.calories) || 0,
+              protein: Number(form.protein) || 0,
+              carbs: Number(form.carbs) || 0,
+              fats: Number(form.fats) || 0,
+            }
+            if (!payload.name) return
+            if (editing) updateSavedMeal(editing.id, payload)
+            else addSavedMeal(payload)
+            setOpen(false)
+          }}
+        >
+          <input
+            value={form.name}
+            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+            placeholder="למשל ארוחת בוקר קבועה"
+            className="w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+            required
+          />
+          <div className="grid grid-cols-2 gap-2">
+            {(
+              [
+                ['calories', 'קלוריות'],
+                ['protein', 'חלבון'],
+                ['carbs', 'פחמימות'],
+                ['fats', 'שומנים'],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="block text-xs text-muted">
+                {label}
+                <input
+                  inputMode="decimal"
+                  value={form[key]}
+                  onChange={(e) =>
+                    setForm((p) => ({ ...p, [key]: e.target.value }))
+                  }
+                  className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+                />
+              </label>
+            ))}
+          </div>
+          <Button type="submit" className="w-full" variant="accent">
+            שמור
+          </Button>
+        </form>
+      </Modal>
+    </>
+  )
+}

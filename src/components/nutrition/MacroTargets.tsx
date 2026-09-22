@@ -1,17 +1,19 @@
-import { DEFAULT_MACRO_TARGETS } from '../../data/habits'
-import type { FoodLogEntry } from '../../lib/types'
+import type { FoodLogEntry, MacroTargets } from '../../lib/types'
 import { todayKey } from '../../lib/types'
 import { Card } from '../ui/Card'
 import { ProgressBar } from '../ui/ProgressBar'
+import { Button } from '../ui/Button'
 
 type MacroTargetsProps = {
   logs: FoodLogEntry[]
-  targets?: typeof DEFAULT_MACRO_TARGETS
+  targets: MacroTargets
+  onEditTargets: () => void
 }
 
-export function MacroTargets({
+export function MacroTargetsView({
   logs,
-  targets = DEFAULT_MACRO_TARGETS,
+  targets,
+  onEditTargets,
 }: MacroTargetsProps) {
   const today = todayKey()
   const todayLogs = logs.filter((l) => l.loggedAt.startsWith(today))
@@ -57,7 +59,14 @@ export function MacroTargets({
   ]
 
   return (
-    <Card title="יעדי מאקרו יומיים">
+    <Card
+      title="יעדי מאקרו יומיים"
+      action={
+        <Button variant="ghost" onClick={onEditTargets}>
+          עריכת יעדים
+        </Button>
+      }
+    >
       <div className="space-y-4">
         {rows.map((row) => (
           <div key={row.label}>

@@ -1,97 +1,113 @@
-import { Link } from 'react-router-dom'
-import { Activity, Flame, Scale, Target } from 'lucide-react'
+import { useState } from 'react'
+import { Flame, Percent, Scale } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
+import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
-import { KeyLiftsProgress } from '../components/workouts/KeyLiftsProgress'
+import { ProgressBar } from '../components/ui/ProgressBar'
+import { EditTargetsModal } from '../components/dashboard/EditTargetsModal'
+import { AddFoodModal } from '../components/dashboard/AddFoodModal'
+import { ProcessProgressCard } from '../components/dashboard/ProcessProgressCard'
+import { WeightFatTracker } from '../components/dashboard/WeightFatTracker'
 import { useAppData } from '../context/AppDataContext'
-import { DEFAULT_MACRO_TARGETS, HABIT_GROUPS } from '../data/habits'
 import { todayKey } from '../lib/types'
 
 export function DashboardPage() {
-  const { setLogs, foodLogs, weightLogs, habitChecks } = useAppData()
-  const today = todayKey()
+  const {
+    foodLogs,
+    weightLogs,
+    macroTargets,
+    setMacroTargets,
+    process,
+    setProcess,
+    addWeight,
+  } = useAppData()
 
+  const [targetsOpen, setTargetsOpen] = useState(false)
+  const [foodOpen, setFoodOpen] = useState(false)
+
+  const today = todayKey()
   const todayFood = foodLogs.filter((f) => f.loggedAt.startsWith(today))
   const calories = todayFood.reduce((s, f) => s + f.calories, 0)
-  const protein = todayFood.reduce((s, f) => s + f.protein, 0)
-  const todaySets = setLogs.filter((s) => s.loggedAt.startsWith(today)).length
-  const latestWeight = weightLogs.at(-1)?.weightKg
-
-  const habitIds = HABIT_GROUPS.flatMap((g) => g.items.map((i) => i.id))
-  const habitsDone = (habitChecks[today] ?? []).filter((id) =>
-    habitIds.includes(id),
-  ).length
-
-  const stats = [
-    {
-      label: 'קלוריות היום',
-      value: `${Math.round(calories)}`,
-      hint: `מתוך ${DEFAULT_MACRO_TARGETS.calories}`,
-      icon: Flame,
-    },
-    {
-      label: 'חלבון',
-      value: `${Math.round(protein)}ג׳`,
-      hint: `יעד ${DEFAULT_MACRO_TARGETS.protein}ג׳`,
-      icon: Target,
-    },
-    {
-      label: 'סטים היום',
-      value: String(todaySets),
-      hint: 'רישומי אימון',
-      icon: Activity,
-    },
-    {
-      label: 'משקל אחרון',
-      value: latestWeight != null ? `${latestWeight}` : '—',
-      hint: latestWeight != null ? 'ק״ג' : 'אין שקילה',
-      icon: Scale,
-    },
-  ]
+  const latest = weightLogs.at(-1)
 
   return (
     <>
       <PageHeader
         title="דשבורד"
-        subtitle="סקירה יומית של אימונים, תזונה והרגלים"
+        subtitle="יעדים, משקל, שומן והתקדמות בתהליך"
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="surface" onClick={() => setTargetsOpen(true)}>
+              עריכת יעדים
+            </Button>
+            <Button variant="accent" onClick={() => setFoodOpen(true)}>
+              הוסף מזון / ארוחה
+            </Button>
+          </div>
+        }
       />
-      <div className="space-y-4 px-4 py-4">
-        <div className="grid grid-cols-2 gap-3">
-          {stats.map(({ label, value, hint, icon: Icon }) => (
-            <div
-              key={label}
-              className="rounded-2xl border border-line bg-card p-4"
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-muted">{label}</p>
-                <Icon className="size-4 text-primary" strokeWidth={1.75} />
-              </div>
-              <p className="mt-2 font-display text-2xl font-bold text-text">
-                {value}
-              </p>
-              <p className="mt-1 text-xs text-muted">{hint}</p>
-            </div>
-          ))}
-        </div>
 
-        <Card title="הרגלים היום">
-          <p className="text-sm text-text">
-            הושלמו{' '}
-            <span className="font-bold text-accent">
-              {habitsDone}/{habitIds.length}
-            </span>{' '}
-            משימות
+      <div className="space-y-4 px-4 py-4">
+        <Card title="יעדי קלוריות היום">
+          <div className="mb-2 flex items-center justify-between text-sm">
+            <span className="flex items-center gap-2 text-muted">
+              <Flame className="size-4 text-primary" />
+              קלוריות
+            </span>
+            <span className="font-semibold text-text">
+              {Math.round(calories)} / {macroTargets.calories}
+            </span>
+          </div>
+          <ProgressBar
+            value={calories}
+            max={macroTargets.calories}
+            color="primary"
+          />
+          <p className="mt-2 text-xs text-muted">
+            חלבון {macroTargets.protein}ג׳ · פחמימות {macroTargets.carbs}ג׳ ·
+            שומן {macroTargets.fats}ג׳
           </p>
-          <Link
-            to="/habits"
-            className="mt-3 inline-block text-sm font-medium text-primary"
-          >
-            מעבר להרגלים ←
-          </Link>
         </Card>
 
-        <KeyLiftsProgress logs={setLogs} />
+        <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-2xl border border-line bg-card p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted">משקל עדכני</p>
+              <Scale className="size-4 text-primary" strokeWidth={1.75} />
+            </div>
+            <p className="mt-2 font-display text-2xl font-bold text-text">
+              {latest ? latest.weightKg : '—'}
+            </p>
+            <p className="mt-1 text-xs text-muted">
+              {latest ? 'ק״ג' : 'אין מדידה'}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-line bg-card p-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted">אחוזי שומן</p>
+              <Percent className="size-4 text-accent" strokeWidth={1.75} />
+            </div>
+            <p className="mt-2 font-display text-2xl font-bold text-text">
+              {latest?.bodyFatPct != null ? latest.bodyFatPct : '—'}
+            </p>
+            <p className="mt-1 text-xs text-muted">
+              {latest?.bodyFatPct != null ? '%' : 'אין מדידה'}
+            </p>
+          </div>
+        </div>
+
+        <ProcessProgressCard process={process} onSave={setProcess} />
+
+        <WeightFatTracker entries={weightLogs} onAdd={addWeight} />
       </div>
+
+      <EditTargetsModal
+        open={targetsOpen}
+        targets={macroTargets}
+        onClose={() => setTargetsOpen(false)}
+        onSave={setMacroTargets}
+      />
+      <AddFoodModal open={foodOpen} onClose={() => setFoodOpen(false)} />
     </>
   )
 }

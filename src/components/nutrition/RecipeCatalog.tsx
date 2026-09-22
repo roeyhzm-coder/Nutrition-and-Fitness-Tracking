@@ -1,36 +1,28 @@
 import { useState } from 'react'
-import {
-  APPLIANCE_LABELS,
-  RECIPES,
-  type Recipe,
-  type RecipeAppliance,
-} from '../../data/recipes'
-import type { FoodLogEntry } from '../../lib/types'
+import { MEAL_TYPE_LABELS } from '../../data/recipes'
+import { useAppData } from '../../context/AppDataContext'
+import type { MealType, Recipe } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 
-type RecipeCatalogProps = {
-  onLogRecipe: (entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) => void
-}
-
-const filters: Array<{ id: 'all' | RecipeAppliance; label: string }> = [
+const filters: Array<{ id: 'all' | MealType; label: string }> = [
   { id: 'all', label: 'הכל' },
-  { id: 'ninja-grill', label: APPLIANCE_LABELS['ninja-grill'] },
-  { id: 'air-fryer', label: APPLIANCE_LABELS['air-fryer'] },
-  { id: 'ninja-creami', label: APPLIANCE_LABELS['ninja-creami'] },
+  { id: 'breakfast', label: MEAL_TYPE_LABELS.breakfast },
+  { id: 'lunch', label: MEAL_TYPE_LABELS.lunch },
+  { id: 'dinner', label: MEAL_TYPE_LABELS.dinner },
+  { id: 'snacks', label: MEAL_TYPE_LABELS.snacks },
 ]
 
-export function RecipeCatalog({ onLogRecipe }: RecipeCatalogProps) {
-  const [filter, setFilter] = useState<'all' | RecipeAppliance>('all')
+export function RecipeCatalog() {
+  const { recipes, addFood } = useAppData()
+  const [filter, setFilter] = useState<'all' | MealType>('all')
   const [openId, setOpenId] = useState<string | null>(null)
 
   const list =
-    filter === 'all'
-      ? RECIPES
-      : RECIPES.filter((r) => r.appliance === filter)
+    filter === 'all' ? recipes : recipes.filter((r) => r.mealType === filter)
 
   function logRecipe(recipe: Recipe) {
-    onLogRecipe({
+    addFood({
       name: recipe.name,
       grams: 1,
       calories: recipe.calories,
@@ -42,12 +34,7 @@ export function RecipeCatalog({ onLogRecipe }: RecipeCatalogProps) {
   }
 
   return (
-    <Card
-      title="מתכונים עתירי חלבון"
-      action={
-        <span className="text-[10px] text-muted">ללא דגים · חרדל · מעובדים</span>
-      }
-    >
+    <Card title="קטלוג מתכונים">
       <div className="mb-3 flex flex-wrap gap-2">
         {filters.map((f) => (
           <button
@@ -83,8 +70,8 @@ export function RecipeCatalog({ onLogRecipe }: RecipeCatalogProps) {
                   <div>
                     <p className="font-semibold text-text">{recipe.name}</p>
                     <p className="mt-1 text-xs text-muted">
-                      {APPLIANCE_LABELS[recipe.appliance]} · {recipe.timeMin}{' '}
-                      דק׳ · {recipe.proteinG}ג׳ חלבון · {recipe.calories} קק״ל
+                      {MEAL_TYPE_LABELS[recipe.mealType]} · {recipe.timeMin} דק׳
+                      · {recipe.proteinG}ג׳ חלבון · {recipe.calories} קק״ל
                     </p>
                   </div>
                   <span className="text-xs text-primary">
@@ -95,22 +82,26 @@ export function RecipeCatalog({ onLogRecipe }: RecipeCatalogProps) {
 
               {open ? (
                 <div className="mt-3 space-y-3 border-t border-line pt-3 text-sm">
-                  <div>
-                    <p className="mb-1 font-medium text-text">מצרכים</p>
-                    <ul className="list-inside list-disc text-muted">
-                      {recipe.ingredients.map((ing) => (
-                        <li key={ing}>{ing}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <p className="mb-1 font-medium text-text">שלבים</p>
-                    <ol className="list-inside list-decimal text-muted">
-                      {recipe.steps.map((step) => (
-                        <li key={step}>{step}</li>
-                      ))}
-                    </ol>
-                  </div>
+                  {recipe.ingredients.length > 0 ? (
+                    <div>
+                      <p className="mb-1 font-medium text-text">מצרכים</p>
+                      <ul className="list-inside list-disc text-muted">
+                        {recipe.ingredients.map((ing) => (
+                          <li key={ing}>{ing}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {recipe.steps.length > 0 ? (
+                    <div>
+                      <p className="mb-1 font-medium text-text">שלבים</p>
+                      <ol className="list-inside list-decimal text-muted">
+                        {recipe.steps.map((step) => (
+                          <li key={step}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  ) : null}
                   <Button
                     className="w-full"
                     variant="accent"

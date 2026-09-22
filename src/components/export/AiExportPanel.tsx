@@ -1,21 +1,20 @@
 import { useMemo, useState } from 'react'
 import { buildAiExportPrompt } from '../../lib/exportPrompt'
-import type { FoodLogEntry, SetLog, WeightEntry } from '../../lib/types'
-import { DEFAULT_MACRO_TARGETS } from '../../data/habits'
+import { useAppData } from '../../context/AppDataContext'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 
-type AiExportPanelProps = {
-  setLogs: SetLog[]
-  weightLogs: WeightEntry[]
-  foodLogs: FoodLogEntry[]
-}
-
-export function AiExportPanel({
-  setLogs,
-  weightLogs,
-  foodLogs,
-}: AiExportPanelProps) {
+export function AiExportPanel() {
+  const {
+    setLogs,
+    weightLogs,
+    foodLogs,
+    habits,
+    habitChecks,
+    macroTargets,
+    process,
+    workoutDays,
+  } = useAppData()
   const [copied, setCopied] = useState(false)
 
   const prompt = useMemo(
@@ -24,9 +23,22 @@ export function AiExportPanel({
         setLogs,
         weightLogs,
         foodLogs,
-        calorieTarget: DEFAULT_MACRO_TARGETS.calories,
+        habits,
+        habitChecks,
+        macroTargets,
+        process,
+        workoutDays,
       }),
-    [setLogs, weightLogs, foodLogs],
+    [
+      setLogs,
+      weightLogs,
+      foodLogs,
+      habits,
+      habitChecks,
+      macroTargets,
+      process,
+      workoutDays,
+    ],
   )
 
   async function copy() {
@@ -42,8 +54,8 @@ export function AiExportPanel({
   return (
     <Card title="ייצוא לניתוח AI">
       <p className="mb-3 text-sm text-muted">
-        כפתור אחד מרכז את נתוני השבוע (הרמות, ממוצע קלוריות ומשקל) לפרומפט
-        בעברית להדבקה בצ׳אט AI.
+        פרומפט שבועי בעברית שכולל משקל, אחוזי שומן, ממוצעי תזונה, אימונים
+        ואחוז השלמת הרגלים.
       </p>
       <Button className="w-full" variant="accent" onClick={copy}>
         {copied ? 'הועתק ✓' : 'העתק פרומפט שבועי'}
