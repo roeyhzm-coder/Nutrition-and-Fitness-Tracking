@@ -63,7 +63,8 @@ export function WorkoutLibrary({
         }
       >
         <p className="mb-3 text-xs text-muted">
-          צור תבניות מלאות והחל אותן על כל יום בשגרה (1–5).
+          ספרייה מובנית (דחיפה, משיכה, שחייה) — ערוך, מחק, או הוסף תבניות
+          והצמד כמה אימונים לאותו יום.
         </p>
         <div className="flex flex-wrap gap-2">
           <Button

@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Library, Pencil, Plus, Trash2 } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { SetLogger } from '../components/workouts/SetLogger'
 import { ProgramManager } from '../components/workouts/ProgramManager'
@@ -9,7 +9,8 @@ import { Card } from '../components/ui/Card'
 import { IconButton } from '../components/ui/IconButton'
 import { Modal } from '../components/ui/Modal'
 import { useAppData } from '../context/AppDataContext'
-import type { Exercise } from '../lib/types'
+import type { DaySession, Exercise } from '../lib/types'
+import { dayAllExercises } from '../lib/types'
 
 export function WorkoutsPage() {
   const {
@@ -19,6 +20,9 @@ export function WorkoutsPage() {
     addExercise,
     updateExercise,
     deleteExercise,
+    removeDaySession,
+    attachTemplateToDay,
+    workoutTemplates,
     addSetLog,
   } = useAppData()
 
@@ -28,6 +32,8 @@ export function WorkoutsPage() {
   const [editDayOpen, setEditDayOpen] = useState(false)
   const [editExercise, setEditExercise] = useState<Exercise | null>(null)
   const [addOpen, setAddOpen] = useState(false)
+  const [addSessionId, setAddSessionId] = useState<string | null>(null)
+  const [pickTemplateOpen, setPickTemplateOpen] = useState(false)
 
   const [dayTitle, setDayTitle] = useState('')
   const [dayFocus, setDayFocus] = useState('')
@@ -43,8 +49,106 @@ export function WorkoutsPage() {
     setActiveExerciseId(null)
   }, [activeProgram?.id])
 
+  const allExercises = useMemo(
+    () => (day ? dayAllExercises(day) : []),
+    [day],
+  )
+
   const activeExercise =
-    day?.exercises.find((e) => e.id === activeExerciseId) ?? null
+    allExercises.find((e) => e.id === activeExerciseId) ?? null
+
+  function openAddExercise(sessionId?: string | null) {
+    setAddSessionId(sessionId ?? null)
+    setEditExercise(null)
+    setExForm({ name: '', sets: '3', reps: '8–10', notes: '' })
+    setAddOpen(true)
+  }
+
+  function openEditExercise(ex: Exercise) {
+    setEditExercise(ex)
+    setAddSessionId(null)
+    setExForm({
+      name: ex.name,
+      sets: String(ex.sets),
+      reps: ex.reps,
+      notes: ex.notes ?? '',
+    })
+  }
+
+  function renderExerciseRow(ex: Exercise) {
+    return (
+      <li key={ex.id} className="rounded-xl border border-line bg-bg/40">
+        <div className="flex items-start gap-1 px-3 py-2.5">
+          <button
+            type="button"
+            className="min-w-0 flex-1 text-right"
+            onClick={() =>
+              setActiveExerciseId(activeExerciseId === ex.id ? null : ex.id)
+            }
+          >
+            <p className="font-semibold text-text">{ex.name}</p>
+            <p className="mt-0.5 text-xs text-muted">
+              {ex.sets} סטים · {ex.reps}
+              {ex.notes ? ` · ${ex.notes}` : ''}
+            </p>
+          </button>
+          <IconButton
+            label="עריכת תרגיל"
+            tone="accent"
+            onClick={() => openEditExercise(ex)}
+          >
+            <Pencil className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+          <IconButton
+            label="מחק תרגיל"
+            tone="danger"
+            onClick={() => deleteExercise(day!.id, ex.id)}
+          >
+            <Trash2 className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        </div>
+      </li>
+    )
+  }
+
+  function renderSession(session: DaySession) {
+    return (
+      <section
+        key={session.id}
+        className="rounded-xl border border-line bg-surface p-3"
+      >
+        <div className="mb-2 flex items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold text-text">{session.name}</p>
+            <p className="text-xs text-muted">
+              {session.exercises.length} תרגילים
+            </p>
+          </div>
+          <IconButton
+            label="הוסף תרגיל לאימון"
+            tone="accent"
+            onClick={() => openAddExercise(session.id)}
+          >
+            <Plus className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+          <IconButton
+            label="הסר אימון מהיום"
+            tone="danger"
+            onClick={() => removeDaySession(day!.id, session.id)}
+          >
+            <Trash2 className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        </div>
+        {session.exercises.length === 0 ? (
+          <p className="text-sm text-muted">אין תרגילים באימון זה.</p>
+        ) : (
+          <ul className="space-y-2">
+            {session.exercises.map(renderExerciseRow)}
+          </ul>
+        )}
+      </section>
+    )
+  }
 
   if (!day) {
     return (
@@ -64,7 +168,7 @@ export function WorkoutsPage() {
         subtitle={activeProgram?.name ?? 'תוכניות אימון שמורות'}
         action={
           <IconButton
-            label="ערוך יום"
+            label="עריכת יום"
             tone="accent"
             onClick={() => {
               setDayTitle(day.title)
@@ -81,7 +185,7 @@ export function WorkoutsPage() {
         <ProgramManager />
         <WorkoutLibrary
           currentDayId={day.id}
-          currentDayExercises={day.exercises}
+          currentDayExercises={allExercises}
         />
 
         <div className="flex gap-2 overflow-x-auto pb-1">
@@ -105,21 +209,7 @@ export function WorkoutsPage() {
           ))}
         </div>
 
-        <Card
-          title={day.title}
-          action={
-            <IconButton
-              label="הוסף תרגיל"
-              tone="accent"
-              onClick={() => {
-                setExForm({ name: '', sets: '3', reps: '8–10', notes: '' })
-                setAddOpen(true)
-              }}
-            >
-              <Plus className="size-4" strokeWidth={1.75} />
-            </IconButton>
-          }
-        >
+        <Card title={day.title}>
           <button
             type="button"
             className="mb-3 text-sm text-muted hover:text-text"
@@ -131,60 +221,50 @@ export function WorkoutsPage() {
           >
             {day.focus || 'הוסף מיקוד ליום…'}
           </button>
-          <ul className="space-y-2">
-            {day.exercises.map((ex) => (
-              <li key={ex.id} className="rounded-xl border border-line bg-surface">
-                <div className="flex items-start gap-1 px-3 py-3">
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-right"
-                    onClick={() =>
-                      setActiveExerciseId(
-                        activeExerciseId === ex.id ? null : ex.id,
-                      )
-                    }
-                    onDoubleClick={() => {
-                      setEditExercise(ex)
-                      setExForm({
-                        name: ex.name,
-                        sets: String(ex.sets),
-                        reps: ex.reps,
-                        notes: ex.notes ?? '',
-                      })
-                    }}
-                  >
-                    <p className="font-semibold text-text">{ex.name}</p>
-                    <p className="mt-1 text-xs text-muted">
-                      {ex.sets} סטים · {ex.reps}
-                      {ex.notes ? ` · ${ex.notes}` : ''}
-                    </p>
-                  </button>
+
+          <div className="mb-3 flex flex-wrap gap-2">
+            <Button
+              variant="accent"
+              onClick={() => setPickTemplateOpen(true)}
+            >
+              <Library className="size-3.5" strokeWidth={1.75} />
+              הוסף אימון מהספרייה
+            </Button>
+            <Button variant="surface" onClick={() => openAddExercise(null)}>
+              <Plus className="size-3.5" strokeWidth={1.75} />
+              תרגיל
+            </Button>
+          </div>
+
+          <div className="space-y-3">
+            {day.sessions.map(renderSession)}
+
+            {(day.exercises.length > 0 || day.sessions.length === 0) && (
+              <section className="rounded-xl border border-dashed border-line bg-surface/50 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-text">
+                    תרגילים עצמאיים
+                  </p>
                   <IconButton
-                    label="ערוך תרגיל"
+                    label="הוסף תרגיל"
                     tone="accent"
-                    onClick={() => {
-                      setEditExercise(ex)
-                      setExForm({
-                        name: ex.name,
-                        sets: String(ex.sets),
-                        reps: ex.reps,
-                        notes: ex.notes ?? '',
-                      })
-                    }}
+                    onClick={() => openAddExercise(null)}
                   >
-                    <Pencil className="size-3.5" strokeWidth={1.75} />
-                  </IconButton>
-                  <IconButton
-                    label="מחק תרגיל"
-                    tone="danger"
-                    onClick={() => deleteExercise(day.id, ex.id)}
-                  >
-                    <Trash2 className="size-3.5" strokeWidth={1.75} />
+                    <Plus className="size-3.5" strokeWidth={1.75} />
                   </IconButton>
                 </div>
-              </li>
-            ))}
-          </ul>
+                {day.exercises.length === 0 ? (
+                  <p className="text-sm text-muted">
+                    אין תרגילים עצמאיים. הוסף אימון מהספרייה או תרגיל בודד.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {day.exercises.map(renderExerciseRow)}
+                  </ul>
+                )}
+              </section>
+            )}
+          </div>
         </Card>
 
         {activeExercise ? (
@@ -195,6 +275,35 @@ export function WorkoutsPage() {
           />
         ) : null}
       </div>
+
+      <Modal
+        open={pickTemplateOpen}
+        title="הוסף אימון מהספרייה"
+        onClose={() => setPickTemplateOpen(false)}
+        wide
+      >
+        {workoutTemplates.length === 0 ? (
+          <p className="text-sm text-muted">הספרייה ריקה. צור תבנית קודם.</p>
+        ) : (
+          <ul className="space-y-2">
+            {workoutTemplates.map((t) => (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  className="w-full rounded-xl border border-line bg-surface px-3 py-3 text-right transition hover:border-primary"
+                  onClick={() => {
+                    attachTemplateToDay(day.id, t.id)
+                    setPickTemplateOpen(false)
+                  }}
+                >
+                  <p className="font-semibold text-text">{t.name}</p>
+                  <p className="text-xs text-muted">{t.exercises.length} תרגילים</p>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Modal>
 
       <Modal
         open={editDayOpen}
@@ -240,6 +349,7 @@ export function WorkoutsPage() {
         onClose={() => {
           setAddOpen(false)
           setEditExercise(null)
+          setAddSessionId(null)
         }}
       >
         <form
@@ -256,10 +366,11 @@ export function WorkoutsPage() {
             if (editExercise) {
               updateExercise(day.id, editExercise.id, payload)
             } else {
-              addExercise(day.id, payload)
+              addExercise(day.id, payload, addSessionId)
             }
             setAddOpen(false)
             setEditExercise(null)
+            setAddSessionId(null)
           }}
         >
           <input

@@ -83,11 +83,22 @@ export type Exercise = {
   notes?: string
 }
 
+/** A full workout block slotted into a day (from library or custom). */
+export type DaySession = {
+  id: string
+  name: string
+  sourceTemplateId?: string | null
+  exercises: Exercise[]
+}
+
 export type WorkoutDay = {
   id: string
   dayNumber: number
   title: string
   focus: string
+  /** Modular slotted workouts (e.g. Push + Swim on the same day). */
+  sessions: DaySession[]
+  /** Standalone exercises not part of a slotted session. */
   exercises: Exercise[]
 }
 
@@ -152,6 +163,60 @@ export function normalizeGoal(goal: Partial<GoalSettings> | null | undefined): G
     masterTotalDays: goal?.masterTotalDays ?? 1200,
     masterTargetWeightKg: goal?.masterTargetWeightKg ?? 80,
     masterTargetBodyFatPct: goal?.masterTargetBodyFatPct ?? 9,
+  }
+}
+
+/** Flatten all exercises on a day (sessions + standalone). */
+export function dayAllExercises(day: WorkoutDay): Exercise[] {
+  return [
+    ...(day.sessions ?? []).flatMap((s) => s.exercises),
+    ...(day.exercises ?? []),
+  ]
+}
+
+export function normalizeWorkoutDay(
+  day: Partial<WorkoutDay> & {
+    id: string
+    dayNumber: number
+    title: string
+  },
+): WorkoutDay {
+  const sessions = Array.isArray(day.sessions) ? day.sessions : []
+  const exercises = Array.isArray(day.exercises) ? day.exercises : []
+
+  // Legacy flat days → one session so existing programs keep their content
+  if (sessions.length === 0 && exercises.length > 0) {
+    return {
+      id: day.id,
+      dayNumber: day.dayNumber,
+      title: day.title,
+      focus: day.focus ?? '',
+      sessions: [
+        {
+          id: `${day.id}-session-legacy`,
+          name: day.focus || day.title || 'אימון',
+          sourceTemplateId: null,
+          exercises,
+        },
+      ],
+      exercises: [],
+    }
+  }
+
+  return {
+    id: day.id,
+    dayNumber: day.dayNumber,
+    title: day.title,
+    focus: day.focus ?? '',
+    sessions,
+    exercises,
+  }
+}
+
+export function normalizeWorkoutProgram(program: WorkoutProgram): WorkoutProgram {
+  return {
+    ...program,
+    days: program.days.map((d) => normalizeWorkoutDay(d)),
   }
 }
 

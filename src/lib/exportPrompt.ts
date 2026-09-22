@@ -11,7 +11,7 @@ import type {
   WeightEntry,
   WorkoutDay,
 } from './types'
-import { calcProcessDay, PHASE_LABELS } from './types'
+import { calcProcessDay, dayAllExercises, PHASE_LABELS } from './types'
 import { relativeWeekNumber } from './weeklyConsistency'
 
 function average(nums: number[]) {
@@ -134,10 +134,27 @@ export function buildAiExportPrompt(input: {
   const keyExercises =
     topExercises ||
     input.workoutDays
-      .flatMap((d) => d.exercises.slice(0, 2).map((e) => `- ${d.title}: ${e.name}`))
+      .flatMap((d) => {
+        const sessions = (d.sessions ?? [])
+          .map((s) => `- יום ${d.dayNumber} · ${s.name}`)
+          .slice(0, 2)
+        const ex = dayAllExercises(d)
+          .slice(0, 2)
+          .map((e) => `- יום ${d.dayNumber}: ${e.name}`)
+        return sessions.length ? sessions : ex
+      })
       .slice(0, 8)
       .join('\n') ||
     '- אין תרגילים'
+
+  const programLines = input.workoutDays
+    .map((d) => {
+      const blocks =
+        (d.sessions ?? []).map((s) => s.name).join(' + ') ||
+        'תרגילים עצמאיים'
+      return `יום ${d.dayNumber} ${d.title} (${blocks})`
+    })
+    .join(' | ')
 
   return `אנא נתח את הנתונים שלי לאימונים ותזונה ותן המלצות ממוקדות בעברית:
 
@@ -161,7 +178,7 @@ export function buildAiExportPrompt(input: {
 - סה״כ סטים השבוע: ${weekSets.length}
 - תרגילים מרכזיים:
 ${keyExercises}
-- תוכנית נוכחית: ${input.workoutDays.map((d) => `יום ${d.dayNumber} ${d.title}`).join(' | ')}
+- תוכנית נוכחית: ${programLines}
 
 ## משקל, אחוזי שומן ומאקרו
 - ממוצע שקילה השבוע: ${avgWeight ? avgWeight.toFixed(1) : 'אין נתונים'} ק״ג (יעד שלב: ${phaseWeight})

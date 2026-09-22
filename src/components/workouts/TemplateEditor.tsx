@@ -314,7 +314,10 @@ export function TemplateEditor({
                 <p className="font-semibold text-text">
                   יום {d.dayNumber} — {d.title}
                 </p>
-                <p className="text-xs text-muted">{d.exercises.length} תרגילים כרגע</p>
+                <p className="text-xs text-muted">
+                  {(d.sessions?.length ?? 0) + (d.exercises?.length ? 1 : 0)}{' '}
+                  בלוקים · יום {d.dayNumber}
+                </p>
               </button>
             </li>
           ))}

@@ -17,6 +17,7 @@ import {
   DEFAULT_SAVED_MEALS,
 } from '../data/defaults'
 import { DEFAULT_RECIPES } from '../data/recipes'
+import { ensureSeedTemplates } from '../data/workouts'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { pullAppState, pushAppState } from '../lib/appStateSync'
 import { fetchRecipesFromSupabase } from '../lib/recipesApi'
@@ -38,7 +39,14 @@ import type {
   WorkoutProgram,
   WorkoutTemplate,
 } from '../lib/types'
-import { normalizeGoal, todayKey, uid } from '../lib/types'
+import {
+  dayAllExercises,
+  normalizeGoal,
+  normalizeWorkoutDay,
+  normalizeWorkoutProgram,
+  todayKey,
+  uid,
+} from '../lib/types'
 
 type RecipesSyncStatus = 'idle' | 'loading' | 'synced' | 'error'
 
@@ -70,13 +78,18 @@ type AppDataContextValue = {
   workoutDays: WorkoutDay[]
   setWorkoutDays: (days: WorkoutDay[]) => void
   updateWorkoutDay: (dayId: string, patch: Partial<WorkoutDay>) => void
-  addExercise: (dayId: string, exercise: Omit<Exercise, 'id'>) => void
+  addExercise: (
+    dayId: string,
+    exercise: Omit<Exercise, 'id'>,
+    sessionId?: string | null,
+  ) => void
   updateExercise: (
     dayId: string,
     exerciseId: string,
     patch: Partial<Exercise>,
   ) => void
   deleteExercise: (dayId: string, exerciseId: string) => void
+  removeDaySession: (dayId: string, sessionId: string) => void
   workoutTemplates: WorkoutTemplate[]
   addWorkoutTemplate: (
     template: Omit<WorkoutTemplate, 'id' | 'updatedAt'>,
@@ -86,7 +99,13 @@ type AppDataContextValue = {
     patch: Partial<Pick<WorkoutTemplate, 'name' | 'exercises'>>,
   ) => void
   deleteWorkoutTemplate: (id: string) => void
+  /** Attach (append) a library template as a new session on the day. */
   assignTemplateToDay: (
+    dayId: string,
+    templateId: string,
+    exercisesOverride?: Exercise[],
+  ) => void
+  attachTemplateToDay: (
     dayId: string,
     templateId: string,
     exercisesOverride?: Exercise[],
@@ -155,7 +174,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     'tn.macroPresets.v1',
     DEFAULT_PHASE_MACROS,
   )
-  const [workoutPrograms, setWorkoutPrograms] = useLocalStorage<
+  const [workoutProgramsRaw, setWorkoutProgramsRaw] = useLocalStorage<
     WorkoutProgram[]
   >('tn.workoutPrograms.v1', defaults)
   const [activeProgramId, setActiveProgramIdState] = useLocalStorage<string>(
@@ -165,6 +184,31 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [workoutTemplates, setWorkoutTemplates] = useLocalStorage<
     WorkoutTemplate[]
   >('tn.workoutTemplates.v1', [])
+  const [librarySeeded, setLibrarySeeded] = useLocalStorage<boolean>(
+    'tn.librarySeeded.v1',
+    false,
+  )
+
+  const setWorkoutPrograms = useCallback(
+    (
+      next:
+        | WorkoutProgram[]
+        | ((prev: WorkoutProgram[]) => WorkoutProgram[]),
+    ) => {
+      setWorkoutProgramsRaw((prev) => {
+        const normalizedPrev = prev.map(normalizeWorkoutProgram)
+        const resolved =
+          typeof next === 'function' ? next(normalizedPrev) : next
+        return resolved.map(normalizeWorkoutProgram)
+      })
+    },
+    [setWorkoutProgramsRaw],
+  )
+
+  const workoutPrograms = useMemo(
+    () => workoutProgramsRaw.map(normalizeWorkoutProgram),
+    [workoutProgramsRaw],
+  )
 
   const [setLogs, setSetLogs] = useLocalStorage<SetLog[]>('tn.setLogs', [])
   const [weightLogs, setWeightLogs] = useLocalStorage<WeightEntry[]>(
@@ -204,6 +248,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const workoutDays = activeProgram?.days ?? []
   const macroTargets = macroPresets[phase]
+
+  useEffect(() => {
+    if (librarySeeded) return
+    setWorkoutTemplates((prev) => {
+      const { templates } = ensureSeedTemplates(prev, false)
+      return templates
+    })
+    setLibrarySeeded(true)
+  }, [librarySeeded, setWorkoutTemplates, setLibrarySeeded])
 
   const setPhase = useCallback(
     (next: Phase) => {
@@ -251,18 +304,33 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   )
 
   const addExercise = useCallback(
-    (dayId: string, exercise: Omit<Exercise, 'id'>) => {
+    (
+      dayId: string,
+      exercise: Omit<Exercise, 'id'>,
+      sessionId?: string | null,
+    ) => {
       if (!activeProgram) return
+      const nextEx = { ...exercise, id: uid() }
       setWorkoutPrograms((prev) =>
         updateActiveProgramDays(prev, activeProgram.id, (days) =>
-          days.map((d) =>
-            d.id === dayId
-              ? {
-                  ...d,
-                  exercises: [...d.exercises, { ...exercise, id: uid() }],
-                }
-              : d,
-          ),
+          days.map((d) => {
+            if (d.id !== dayId) return d
+            const day = normalizeWorkoutDay(d)
+            if (sessionId) {
+              return {
+                ...day,
+                sessions: day.sessions.map((s) =>
+                  s.id === sessionId
+                    ? { ...s, exercises: [...s.exercises, nextEx] }
+                    : s,
+                ),
+              }
+            }
+            return {
+              ...day,
+              exercises: [...day.exercises, nextEx],
+            }
+          }),
         ),
       )
     },
@@ -274,16 +342,22 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (!activeProgram) return
       setWorkoutPrograms((prev) =>
         updateActiveProgramDays(prev, activeProgram.id, (days) =>
-          days.map((d) =>
-            d.id === dayId
-              ? {
-                  ...d,
-                  exercises: d.exercises.map((e) =>
-                    e.id === exerciseId ? { ...e, ...patch } : e,
-                  ),
-                }
-              : d,
-          ),
+          days.map((d) => {
+            if (d.id !== dayId) return d
+            const day = normalizeWorkoutDay(d)
+            return {
+              ...day,
+              sessions: day.sessions.map((s) => ({
+                ...s,
+                exercises: s.exercises.map((e) =>
+                  e.id === exerciseId ? { ...e, ...patch } : e,
+                ),
+              })),
+              exercises: day.exercises.map((e) =>
+                e.id === exerciseId ? { ...e, ...patch } : e,
+              ),
+            }
+          }),
         ),
       )
     },
@@ -295,14 +369,37 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (!activeProgram) return
       setWorkoutPrograms((prev) =>
         updateActiveProgramDays(prev, activeProgram.id, (days) =>
-          days.map((d) =>
-            d.id === dayId
-              ? {
-                  ...d,
-                  exercises: d.exercises.filter((e) => e.id !== exerciseId),
-                }
-              : d,
-          ),
+          days.map((d) => {
+            if (d.id !== dayId) return d
+            const day = normalizeWorkoutDay(d)
+            return {
+              ...day,
+              sessions: day.sessions.map((s) => ({
+                ...s,
+                exercises: s.exercises.filter((e) => e.id !== exerciseId),
+              })),
+              exercises: day.exercises.filter((e) => e.id !== exerciseId),
+            }
+          }),
+        ),
+      )
+    },
+    [activeProgram, setWorkoutPrograms],
+  )
+
+  const removeDaySession = useCallback(
+    (dayId: string, sessionId: string) => {
+      if (!activeProgram) return
+      setWorkoutPrograms((prev) =>
+        updateActiveProgramDays(prev, activeProgram.id, (days) =>
+          days.map((d) => {
+            if (d.id !== dayId) return d
+            const day = normalizeWorkoutDay(d)
+            return {
+              ...day,
+              sessions: day.sessions.filter((s) => s.id !== sessionId),
+            }
+          }),
         ),
       )
     },
@@ -354,32 +451,44 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       const template = workoutTemplates.find((t) => t.id === templateId)
       const source = exercisesOverride ?? template?.exercises
       if (!source) return
+      const sessionName = template?.name ?? 'אימון'
       setWorkoutPrograms((prev) =>
         updateActiveProgramDays(prev, activeProgram.id, (days) =>
-          days.map((d) =>
-            d.id === dayId
-              ? {
-                  ...d,
-                  exercises: source.map((ex) => ({
-                    ...ex,
-                    id: uid(),
-                  })),
-                }
-              : d,
-          ),
+          days.map((d) => {
+            if (d.id !== dayId) return d
+            const day = normalizeWorkoutDay(d)
+            return {
+              ...day,
+              sessions: [
+                ...day.sessions,
+                {
+                  id: uid(),
+                  name: sessionName,
+                  sourceTemplateId: templateId,
+                  exercises: source.map((ex) => ({ ...ex, id: uid() })),
+                },
+              ],
+            }
+          }),
         ),
       )
     },
     [activeProgram, workoutTemplates, setWorkoutPrograms],
   )
 
+  const attachTemplateToDay = assignTemplateToDay
+
   const saveDayAsTemplate = useCallback(
     (dayId: string, name: string) => {
       const day = activeProgram?.days.find((d) => d.id === dayId)
       if (!day) return
+      const normalized = normalizeWorkoutDay(day)
       addWorkoutTemplate({
         name: name.trim() || day.title,
-        exercises: day.exercises.map((ex) => ({ ...ex, id: uid() })),
+        exercises: dayAllExercises(normalized).map((ex) => ({
+          ...ex,
+          id: uid(),
+        })),
       })
     },
     [activeProgram, addWorkoutTemplate],
@@ -476,13 +585,22 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setGoal(normalizeGoal(remote.goal))
       setMacroPresets(remote.macroPresets)
       if (remote.workoutPrograms?.length) {
-        setWorkoutPrograms(remote.workoutPrograms)
+        setWorkoutPrograms(
+          remote.workoutPrograms.map(normalizeWorkoutProgram),
+        )
         setActiveProgramIdState(
           remote.activeProgramId || remote.workoutPrograms[0].id,
         )
       }
       if (remote.workoutTemplates) {
-        setWorkoutTemplates(remote.workoutTemplates)
+        if (!librarySeeded && remote.workoutTemplates.length === 0) {
+          const { templates, seeded } = ensureSeedTemplates([], false)
+          setWorkoutTemplates(templates)
+          setLibrarySeeded(seeded)
+        } else {
+          setWorkoutTemplates(remote.workoutTemplates)
+          if (!librarySeeded) setLibrarySeeded(true)
+        }
       }
       setStateSyncStatus('synced')
       hydratedRef.current = true
@@ -498,6 +616,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setWorkoutPrograms,
     setActiveProgramIdState,
     setWorkoutTemplates,
+    setLibrarySeeded,
   ])
 
   useEffect(() => {
@@ -701,11 +820,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       addExercise,
       updateExercise,
       deleteExercise,
+      removeDaySession,
       workoutTemplates,
       addWorkoutTemplate,
       updateWorkoutTemplate,
       deleteWorkoutTemplate,
       assignTemplateToDay,
+      attachTemplateToDay,
       saveDayAsTemplate,
       savedMeals,
       addSavedMeal,
@@ -756,11 +877,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       addExercise,
       updateExercise,
       deleteExercise,
+      removeDaySession,
       workoutTemplates,
       addWorkoutTemplate,
       updateWorkoutTemplate,
       deleteWorkoutTemplate,
       assignTemplateToDay,
+      attachTemplateToDay,
       saveDayAsTemplate,
       savedMeals,
       addSavedMeal,
