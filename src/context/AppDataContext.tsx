@@ -2,42 +2,70 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
+  useState,
   type ReactNode,
 } from 'react'
 import {
-  DEFAULT_MACRO_TARGETS,
-  DEFAULT_PROCESS,
+  cloneProgram,
+  createDefaultPrograms,
+  DEFAULT_GOAL,
+  DEFAULT_PHASE,
+  DEFAULT_PHASE_MACROS,
   DEFAULT_SAVED_MEALS,
 } from '../data/defaults'
 import { DEFAULT_RECIPES } from '../data/recipes'
-import { DEFAULT_WORKOUT_DAYS } from '../data/workouts'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import { pullAppState, pushAppState } from '../lib/appStateSync'
+import { fetchRecipesFromSupabase } from '../lib/recipesApi'
+import { isSupabaseConfigured } from '../lib/supabase'
 import type {
   CustomHabit,
   Exercise,
   FoodLogEntry,
+  GoalSettings,
   HabitChecks,
   MacroTargets,
-  ProcessSettings,
+  Phase,
+  PhaseMacroPresets,
   Recipe,
   SavedMeal,
   SetLog,
   WeightEntry,
   WorkoutDay,
+  WorkoutProgram,
 } from '../lib/types'
 import { todayKey, uid } from '../lib/types'
 
+type RecipesSyncStatus = 'idle' | 'loading' | 'synced' | 'error'
+
 type AppDataContextValue = {
+  phase: Phase
+  setPhase: (phase: Phase) => void
+  goal: GoalSettings
+  setGoal: (goal: GoalSettings) => void
+  /** @deprecated alias of goal */
+  process: GoalSettings
+  setProcess: (settings: GoalSettings) => void
+  macroPresets: PhaseMacroPresets
+  setMacroPresets: (presets: PhaseMacroPresets) => void
   macroTargets: MacroTargets
   setMacroTargets: (targets: MacroTargets) => void
-  process: ProcessSettings
-  setProcess: (settings: ProcessSettings) => void
   setLogs: SetLog[]
   weightLogs: WeightEntry[]
   foodLogs: FoodLogEntry[]
   habitChecks: HabitChecks
   habits: CustomHabit[]
+  workoutPrograms: WorkoutProgram[]
+  activeProgramId: string
+  activeProgram: WorkoutProgram | null
+  setActiveProgramId: (id: string) => void
+  createProgram: (name: string, fromActive?: boolean) => void
+  renameProgram: (id: string, name: string) => void
+  deleteProgram: (id: string) => void
+  duplicateProgram: (id: string, name?: string) => void
   workoutDays: WorkoutDay[]
   setWorkoutDays: (days: WorkoutDay[]) => void
   updateWorkoutDay: (dayId: string, patch: Partial<WorkoutDay>) => void
@@ -56,6 +84,10 @@ type AppDataContextValue = {
   setRecipes: (recipes: Recipe[]) => void
   addRecipe: (recipe: Omit<Recipe, 'id'>) => void
   importMealsAndRecipes: (meals: SavedMeal[], recipes: Recipe[]) => void
+  recipesSyncStatus: RecipesSyncStatus
+  recipesSyncError: string | null
+  syncRecipes: () => Promise<void>
+  stateSyncStatus: 'idle' | 'syncing' | 'synced' | 'error'
   addSetLog: (entry: Omit<SetLog, 'id' | 'loggedAt'>) => void
   addWeight: (input: {
     weightKg: number
@@ -72,15 +104,41 @@ type AppDataContextValue = {
 
 const AppDataContext = createContext<AppDataContextValue | null>(null)
 
+function updateActiveProgramDays(
+  programs: WorkoutProgram[],
+  activeId: string,
+  updater: (days: WorkoutDay[]) => WorkoutDay[],
+) {
+  return programs.map((p) =>
+    p.id === activeId
+      ? {
+          ...p,
+          days: updater(p.days),
+          updatedAt: new Date().toISOString(),
+        }
+      : p,
+  )
+}
+
 export function AppDataProvider({ children }: { children: ReactNode }) {
-  const [macroTargets, setMacroTargets] = useLocalStorage<MacroTargets>(
-    'tn.macroTargets',
-    DEFAULT_MACRO_TARGETS,
+  const defaults = useMemo(() => createDefaultPrograms(), [])
+  const [phase, setPhaseState] = useLocalStorage<Phase>(
+    'tn.phase',
+    DEFAULT_PHASE,
   )
-  const [process, setProcess] = useLocalStorage<ProcessSettings>(
-    'tn.process',
-    DEFAULT_PROCESS,
+  const [goal, setGoal] = useLocalStorage<GoalSettings>('tn.goal.v1', DEFAULT_GOAL)
+  const [macroPresets, setMacroPresets] = useLocalStorage<PhaseMacroPresets>(
+    'tn.macroPresets.v1',
+    DEFAULT_PHASE_MACROS,
   )
+  const [workoutPrograms, setWorkoutPrograms] = useLocalStorage<
+    WorkoutProgram[]
+  >('tn.workoutPrograms.v1', defaults)
+  const [activeProgramId, setActiveProgramIdState] = useLocalStorage<string>(
+    'tn.activeProgramId.v1',
+    defaults[0]?.id ?? '',
+  )
+
   const [setLogs, setSetLogs] = useLocalStorage<SetLog[]>('tn.setLogs', [])
   const [weightLogs, setWeightLogs] = useLocalStorage<WeightEntry[]>(
     'tn.weightLogs',
@@ -95,18 +153,267 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     {},
   )
   const [habits, setHabits] = useLocalStorage<CustomHabit[]>('tn.habits', [])
-  const [workoutDays, setWorkoutDays] = useLocalStorage<WorkoutDay[]>(
-    'tn.workoutDays.v2',
-    DEFAULT_WORKOUT_DAYS,
-  )
   const [savedMeals, setSavedMeals] = useLocalStorage<SavedMeal[]>(
     'tn.savedMeals.v2',
     DEFAULT_SAVED_MEALS,
   )
   const [recipes, setRecipes] = useLocalStorage<Recipe[]>(
-    'tn.recipes.v2',
+    'tn.recipes.v3',
     DEFAULT_RECIPES,
   )
+  const [recipesSyncStatus, setRecipesSyncStatus] =
+    useState<RecipesSyncStatus>('idle')
+  const [recipesSyncError, setRecipesSyncError] = useState<string | null>(null)
+  const [stateSyncStatus, setStateSyncStatus] = useState<
+    'idle' | 'syncing' | 'synced' | 'error'
+  >('idle')
+  const hydratedRef = useRef(false)
+  const skipNextPush = useRef(false)
+
+  const activeProgram =
+    workoutPrograms.find((p) => p.id === activeProgramId) ??
+    workoutPrograms[0] ??
+    null
+
+  const workoutDays = activeProgram?.days ?? []
+  const macroTargets = macroPresets[phase]
+
+  const setPhase = useCallback(
+    (next: Phase) => {
+      setPhaseState(next)
+    },
+    [setPhaseState],
+  )
+
+  const setMacroTargets = useCallback(
+    (targets: MacroTargets) => {
+      setMacroPresets((prev) => ({ ...prev, [phase]: targets }))
+    },
+    [phase, setMacroPresets],
+  )
+
+  const setActiveProgramId = useCallback(
+    (id: string) => {
+      if (workoutPrograms.some((p) => p.id === id)) {
+        setActiveProgramIdState(id)
+      }
+    },
+    [workoutPrograms, setActiveProgramIdState],
+  )
+
+  const setWorkoutDays = useCallback(
+    (days: WorkoutDay[]) => {
+      if (!activeProgram) return
+      setWorkoutPrograms((prev) =>
+        updateActiveProgramDays(prev, activeProgram.id, () => days),
+      )
+    },
+    [activeProgram, setWorkoutPrograms],
+  )
+
+  const updateWorkoutDay = useCallback(
+    (dayId: string, patch: Partial<WorkoutDay>) => {
+      if (!activeProgram) return
+      setWorkoutPrograms((prev) =>
+        updateActiveProgramDays(prev, activeProgram.id, (days) =>
+          days.map((d) => (d.id === dayId ? { ...d, ...patch } : d)),
+        ),
+      )
+    },
+    [activeProgram, setWorkoutPrograms],
+  )
+
+  const addExercise = useCallback(
+    (dayId: string, exercise: Omit<Exercise, 'id'>) => {
+      if (!activeProgram) return
+      setWorkoutPrograms((prev) =>
+        updateActiveProgramDays(prev, activeProgram.id, (days) =>
+          days.map((d) =>
+            d.id === dayId
+              ? {
+                  ...d,
+                  exercises: [...d.exercises, { ...exercise, id: uid() }],
+                }
+              : d,
+          ),
+        ),
+      )
+    },
+    [activeProgram, setWorkoutPrograms],
+  )
+
+  const updateExercise = useCallback(
+    (dayId: string, exerciseId: string, patch: Partial<Exercise>) => {
+      if (!activeProgram) return
+      setWorkoutPrograms((prev) =>
+        updateActiveProgramDays(prev, activeProgram.id, (days) =>
+          days.map((d) =>
+            d.id === dayId
+              ? {
+                  ...d,
+                  exercises: d.exercises.map((e) =>
+                    e.id === exerciseId ? { ...e, ...patch } : e,
+                  ),
+                }
+              : d,
+          ),
+        ),
+      )
+    },
+    [activeProgram, setWorkoutPrograms],
+  )
+
+  const deleteExercise = useCallback(
+    (dayId: string, exerciseId: string) => {
+      if (!activeProgram) return
+      setWorkoutPrograms((prev) =>
+        updateActiveProgramDays(prev, activeProgram.id, (days) =>
+          days.map((d) =>
+            d.id === dayId
+              ? {
+                  ...d,
+                  exercises: d.exercises.filter((e) => e.id !== exerciseId),
+                }
+              : d,
+          ),
+        ),
+      )
+    },
+    [activeProgram, setWorkoutPrograms],
+  )
+
+  const createProgram = useCallback(
+    (name: string, fromActive = true) => {
+      const baseDays = fromActive && activeProgram ? activeProgram.days : undefined
+      const program = cloneProgram(name.trim() || 'תוכנית חדשה', baseDays)
+      setWorkoutPrograms((prev) => [...prev, program])
+      setActiveProgramIdState(program.id)
+    },
+    [activeProgram, setWorkoutPrograms, setActiveProgramIdState],
+  )
+
+  const renameProgram = useCallback(
+    (id: string, name: string) => {
+      const trimmed = name.trim()
+      if (!trimmed) return
+      setWorkoutPrograms((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, name: trimmed, updatedAt: new Date().toISOString() }
+            : p,
+        ),
+      )
+    },
+    [setWorkoutPrograms],
+  )
+
+  const deleteProgram = useCallback(
+    (id: string) => {
+      setWorkoutPrograms((prev) => {
+        if (prev.length <= 1) return prev
+        const next = prev.filter((p) => p.id !== id)
+        if (activeProgramId === id) {
+          setActiveProgramIdState(next[0]?.id ?? '')
+        }
+        return next
+      })
+    },
+    [activeProgramId, setWorkoutPrograms, setActiveProgramIdState],
+  )
+
+  const duplicateProgram = useCallback(
+    (id: string, name?: string) => {
+      const source = workoutPrograms.find((p) => p.id === id)
+      if (!source) return
+      const copy = cloneProgram(
+        name?.trim() || `${source.name} (עותק)`,
+        source.days,
+      )
+      setWorkoutPrograms((prev) => [...prev, copy])
+      setActiveProgramIdState(copy.id)
+    },
+    [workoutPrograms, setWorkoutPrograms, setActiveProgramIdState],
+  )
+
+  const syncRecipes = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      setRecipesSyncStatus('error')
+      setRecipesSyncError('חסרים משתני סביבה של Supabase')
+      return
+    }
+
+    setRecipesSyncStatus('loading')
+    setRecipesSyncError(null)
+    try {
+      const remote = await fetchRecipesFromSupabase()
+      if (remote.length > 0) setRecipes(remote)
+      setRecipesSyncStatus('synced')
+    } catch (err) {
+      setRecipesSyncStatus('error')
+      setRecipesSyncError(
+        err instanceof Error ? err.message : 'סנכרון המתכונים נכשל',
+      )
+    }
+  }, [setRecipes])
+
+  useEffect(() => {
+    void syncRecipes()
+  }, [syncRecipes])
+
+  useEffect(() => {
+    let cancelled = false
+    async function hydrate() {
+      const remote = await pullAppState()
+      if (cancelled || !remote) {
+        hydratedRef.current = true
+        return
+      }
+      skipNextPush.current = true
+      setPhaseState(remote.phase)
+      setGoal(remote.goal)
+      setMacroPresets(remote.macroPresets)
+      if (remote.workoutPrograms?.length) {
+        setWorkoutPrograms(remote.workoutPrograms)
+        setActiveProgramIdState(
+          remote.activeProgramId || remote.workoutPrograms[0].id,
+        )
+      }
+      setStateSyncStatus('synced')
+      hydratedRef.current = true
+    }
+    void hydrate()
+    return () => {
+      cancelled = true
+    }
+  }, [
+    setPhaseState,
+    setGoal,
+    setMacroPresets,
+    setWorkoutPrograms,
+    setActiveProgramIdState,
+  ])
+
+  useEffect(() => {
+    if (!hydratedRef.current) return
+    if (skipNextPush.current) {
+      skipNextPush.current = false
+      return
+    }
+    if (!activeProgramId || workoutPrograms.length === 0) return
+
+    const handle = window.setTimeout(() => {
+      setStateSyncStatus('syncing')
+      void pushAppState({
+        phase,
+        goal,
+        macroPresets,
+        activeProgramId,
+        workoutPrograms,
+      }).then((ok) => setStateSyncStatus(ok ? 'synced' : 'error'))
+    }, 800)
+
+    return () => window.clearTimeout(handle)
+  }, [phase, goal, macroPresets, activeProgramId, workoutPrograms])
 
   const addSetLog = useCallback(
     (entry: Omit<SetLog, 'id' | 'loggedAt'>) => {
@@ -146,62 +453,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       ])
     },
     [setFoodLogs],
-  )
-
-  const updateWorkoutDay = useCallback(
-    (dayId: string, patch: Partial<WorkoutDay>) => {
-      setWorkoutDays((prev) =>
-        prev.map((d) => (d.id === dayId ? { ...d, ...patch } : d)),
-      )
-    },
-    [setWorkoutDays],
-  )
-
-  const addExercise = useCallback(
-    (dayId: string, exercise: Omit<Exercise, 'id'>) => {
-      setWorkoutDays((prev) =>
-        prev.map((d) =>
-          d.id === dayId
-            ? { ...d, exercises: [...d.exercises, { ...exercise, id: uid() }] }
-            : d,
-        ),
-      )
-    },
-    [setWorkoutDays],
-  )
-
-  const updateExercise = useCallback(
-    (dayId: string, exerciseId: string, patch: Partial<Exercise>) => {
-      setWorkoutDays((prev) =>
-        prev.map((d) =>
-          d.id === dayId
-            ? {
-                ...d,
-                exercises: d.exercises.map((e) =>
-                  e.id === exerciseId ? { ...e, ...patch } : e,
-                ),
-              }
-            : d,
-        ),
-      )
-    },
-    [setWorkoutDays],
-  )
-
-  const deleteExercise = useCallback(
-    (dayId: string, exerciseId: string) => {
-      setWorkoutDays((prev) =>
-        prev.map((d) =>
-          d.id === dayId
-            ? {
-                ...d,
-                exercises: d.exercises.filter((e) => e.id !== exerciseId),
-              }
-            : d,
-        ),
-      )
-    },
-    [setWorkoutDays],
   )
 
   const addSavedMeal = useCallback(
@@ -306,15 +557,29 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo(
     () => ({
+      phase,
+      setPhase,
+      goal,
+      setGoal,
+      process: goal,
+      setProcess: setGoal,
+      macroPresets,
+      setMacroPresets,
       macroTargets,
       setMacroTargets,
-      process,
-      setProcess,
       setLogs,
       weightLogs,
       foodLogs,
       habitChecks,
       habits,
+      workoutPrograms,
+      activeProgramId: activeProgram?.id ?? activeProgramId,
+      activeProgram,
+      setActiveProgramId,
+      createProgram,
+      renameProgram,
+      deleteProgram,
+      duplicateProgram,
       workoutDays,
       setWorkoutDays,
       updateWorkoutDay,
@@ -329,6 +594,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setRecipes,
       addRecipe,
       importMealsAndRecipes,
+      recipesSyncStatus,
+      recipesSyncError,
+      syncRecipes,
+      stateSyncStatus,
       addSetLog,
       addWeight,
       addFood,
@@ -339,15 +608,27 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toggleHabit,
     }),
     [
+      phase,
+      setPhase,
+      goal,
+      setGoal,
+      macroPresets,
+      setMacroPresets,
       macroTargets,
       setMacroTargets,
-      process,
-      setProcess,
       setLogs,
       weightLogs,
       foodLogs,
       habitChecks,
       habits,
+      workoutPrograms,
+      activeProgramId,
+      activeProgram,
+      setActiveProgramId,
+      createProgram,
+      renameProgram,
+      deleteProgram,
+      duplicateProgram,
       workoutDays,
       setWorkoutDays,
       updateWorkoutDay,
@@ -362,6 +643,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setRecipes,
       addRecipe,
       importMealsAndRecipes,
+      recipesSyncStatus,
+      recipesSyncError,
+      syncRecipes,
+      stateSyncStatus,
       addSetLog,
       addWeight,
       addFood,

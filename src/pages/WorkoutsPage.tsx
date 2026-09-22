@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { SetLogger } from '../components/workouts/SetLogger'
+import { ProgramManager } from '../components/workouts/ProgramManager'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { Modal } from '../components/ui/Modal'
@@ -10,6 +11,7 @@ import type { Exercise } from '../lib/types'
 export function WorkoutsPage() {
   const {
     workoutDays,
+    activeProgram,
     updateWorkoutDay,
     addExercise,
     updateExercise,
@@ -33,6 +35,11 @@ export function WorkoutsPage() {
     notes: '',
   })
 
+  useEffect(() => {
+    setDayId(activeProgram?.days[0]?.id ?? '')
+    setActiveExerciseId(null)
+  }, [activeProgram?.id])
+
   const activeExercise =
     day?.exercises.find((e) => e.id === activeExerciseId) ?? null
 
@@ -40,6 +47,9 @@ export function WorkoutsPage() {
     return (
       <>
         <PageHeader title="אימונים" subtitle="אין ימי אימון" />
+        <div className="px-4 py-4">
+          <ProgramManager />
+        </div>
       </>
     )
   }
@@ -48,7 +58,7 @@ export function WorkoutsPage() {
     <>
       <PageHeader
         title="אימונים"
-        subtitle="שגרת 5 ימים · דחיפה / משיכה — ניתנת להתאמה"
+        subtitle={activeProgram?.name ?? 'תוכניות אימון שמורות'}
         action={
           <Button
             variant="surface"
@@ -64,6 +74,8 @@ export function WorkoutsPage() {
       />
 
       <div className="space-y-4 px-4 py-4">
+        <ProgramManager />
+
         <div className="flex gap-2 overflow-x-auto pb-1">
           {workoutDays.map((d) => (
             <button

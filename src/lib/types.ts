@@ -5,6 +5,20 @@ export type MacroTargets = {
   fats: number
 }
 
+export type Phase = 'bulk' | 'cut'
+
+export type GoalSettings = {
+  startDate: string
+  totalDays: number
+  targetWeightKg: number | null
+  targetBodyFatPct: number | null
+}
+
+export type PhaseMacroPresets = {
+  bulk: MacroTargets
+  cut: MacroTargets
+}
+
 export type SetLog = {
   id: string
   exerciseId: string
@@ -52,10 +66,8 @@ export type SavedMeal = {
   fats: number
 }
 
-export type ProcessSettings = {
-  startDate: string
-  totalDays: number
-}
+/** @deprecated use GoalSettings */
+export type ProcessSettings = GoalSettings
 
 export type Exercise = {
   id: string
@@ -73,6 +85,13 @@ export type WorkoutDay = {
   exercises: Exercise[]
 }
 
+export type WorkoutProgram = {
+  id: string
+  name: string
+  days: WorkoutDay[]
+  updatedAt: string
+}
+
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snacks'
 
 export type Recipe = {
@@ -87,6 +106,9 @@ export type Recipe = {
   tags: string[]
   ingredients: string[]
   steps: string[]
+  image?: string
+  categories?: string[]
+  equipment?: string[]
 }
 
 export function todayKey(d = new Date()) {
@@ -95,4 +117,18 @@ export function todayKey(d = new Date()) {
 
 export function uid() {
   return crypto.randomUUID()
+}
+
+export function calcProcessDay(startDate: string, totalDays: number) {
+  const start = new Date(startDate)
+  const today = new Date()
+  start.setHours(0, 0, 0, 0)
+  today.setHours(0, 0, 0, 0)
+  const raw = Math.floor((today.getTime() - start.getTime()) / 86400000) + 1
+  return Math.min(Math.max(raw, 1), Math.max(totalDays, 1))
+}
+
+export const PHASE_LABELS: Record<Phase, string> = {
+  bulk: 'מסה',
+  cut: 'חיטוב',
 }

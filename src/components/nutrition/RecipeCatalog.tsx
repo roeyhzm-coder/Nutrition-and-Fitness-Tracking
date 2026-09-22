@@ -14,7 +14,13 @@ const filters: Array<{ id: 'all' | MealType; label: string }> = [
 ]
 
 export function RecipeCatalog() {
-  const { recipes, addFood } = useAppData()
+  const {
+    recipes,
+    addFood,
+    recipesSyncStatus,
+    recipesSyncError,
+    syncRecipes,
+  } = useAppData()
   const [filter, setFilter] = useState<'all' | MealType>('all')
   const [openId, setOpenId] = useState<string | null>(null)
 
@@ -34,7 +40,28 @@ export function RecipeCatalog() {
   }
 
   return (
-    <Card title="קטלוג מתכונים">
+    <Card
+      title="קטלוג מתכונים"
+      action={
+        <button
+          type="button"
+          className="text-sm font-medium text-primary"
+          onClick={() => void syncRecipes()}
+        >
+          סנכרון
+        </button>
+      }
+    >
+      <p className="mb-3 text-xs text-muted">
+        {recipesSyncStatus === 'loading'
+          ? 'מסנכרן מתכונים מ-Supabase…'
+          : recipesSyncStatus === 'synced'
+            ? `מסונכרן · ${recipes.length} מתכונים`
+            : recipesSyncStatus === 'error'
+              ? `שגיאת סנכרון: ${recipesSyncError ?? 'לא ידוע'}`
+              : 'ממתין לסנכרון'}
+      </p>
+
       <div className="mb-3 flex flex-wrap gap-2">
         {filters.map((f) => (
           <button
@@ -66,17 +93,31 @@ export function RecipeCatalog() {
                 className="w-full text-right"
                 onClick={() => setOpenId(open ? null : recipe.id)}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="font-semibold text-text">{recipe.name}</p>
-                    <p className="mt-1 text-xs text-muted">
-                      {MEAL_TYPE_LABELS[recipe.mealType]} · {recipe.timeMin} דק׳
-                      · {recipe.proteinG}ג׳ חלבון · {recipe.calories} קק״ל
-                    </p>
+                <div className="flex items-start gap-3">
+                  {recipe.image ? (
+                    <img
+                      src={recipe.image}
+                      alt=""
+                      className="size-14 shrink-0 rounded-lg object-cover bg-card"
+                    />
+                  ) : null}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-text">{recipe.name}</p>
+                        <p className="mt-1 text-xs text-muted">
+                          {MEAL_TYPE_LABELS[recipe.mealType]} ·{' '}
+                          {recipe.proteinG}ג׳ חלבון · {recipe.calories} קק״ל
+                          {recipe.equipment?.length
+                            ? ` · ${recipe.equipment[0]}`
+                            : ''}
+                        </p>
+                      </div>
+                      <span className="text-xs text-primary">
+                        {open ? 'סגור' : 'פרטים'}
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-xs text-primary">
-                    {open ? 'סגור' : 'פרטים'}
-                  </span>
                 </div>
               </button>
 

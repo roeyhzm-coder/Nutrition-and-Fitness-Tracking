@@ -8,6 +8,7 @@ type EditTargetsModalProps = {
   targets: MacroTargets
   onClose: () => void
   onSave: (targets: MacroTargets) => void
+  title?: string
 }
 
 export function EditTargetsModal({
@@ -15,6 +16,7 @@ export function EditTargetsModal({
   targets,
   onClose,
   onSave,
+  title = 'עריכת יעדים יומיים',
 }: EditTargetsModalProps) {
   const [form, setForm] = useState(targets)
 
@@ -42,7 +44,7 @@ export function EditTargetsModal({
   }
 
   return (
-    <Modal open={open} title="עריכת יעדים יומיים" onClose={onClose}>
+    <Modal open={open} title={title} onClose={onClose}>
       <form
         className="space-y-3"
         onSubmit={(e) => {

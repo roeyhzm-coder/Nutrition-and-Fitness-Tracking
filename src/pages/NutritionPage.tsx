@@ -8,8 +8,9 @@ import { SavedMeals } from '../components/nutrition/SavedMeals'
 import { ImportMealsModal } from '../components/nutrition/ImportMealsModal'
 import { EditTargetsModal } from '../components/dashboard/EditTargetsModal'
 import { Card } from '../components/ui/Card'
+import { Button } from '../components/ui/Button'
 import { useAppData } from '../context/AppDataContext'
-import { todayKey } from '../lib/types'
+import { PHASE_LABELS, type Phase, todayKey } from '../lib/types'
 
 export function NutritionPage() {
   const {
@@ -19,6 +20,8 @@ export function NutritionPage() {
     addWeight,
     macroTargets,
     setMacroTargets,
+    phase,
+    setPhase,
   } = useAppData()
   const [targetsOpen, setTargetsOpen] = useState(false)
   const today = todayKey()
@@ -30,9 +33,41 @@ export function NutritionPage() {
     <>
       <PageHeader
         title="תזונה ומתכונים"
-        subtitle="מאקרו, ארוחות קבועות, מתכונים וייבוא"
+        subtitle={`יעדי ${PHASE_LABELS[phase]} · ארוחות, מתכונים וייבוא`}
       />
       <div className="space-y-4 px-4 py-4">
+        <Card title="שלב תזונה">
+          <div className="mb-3 grid grid-cols-2 gap-2 rounded-xl bg-surface p-1">
+            {(['bulk', 'cut'] as Phase[]).map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPhase(p)}
+                className={[
+                  'rounded-lg px-3 py-2 text-sm font-bold transition',
+                  phase === p
+                    ? p === 'bulk'
+                      ? 'bg-primary text-white'
+                      : 'bg-accent text-bg'
+                    : 'text-muted hover:text-text',
+                ].join(' ')}
+              >
+                {PHASE_LABELS[p]}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted">
+            מעבר בין מסה לחיטוב מחליף אוטומטית את יעדי המאקרו השמורים לכל שלב.
+          </p>
+          <Button
+            className="mt-3 w-full"
+            variant="surface"
+            onClick={() => setTargetsOpen(true)}
+          >
+            ערוך יעדי {PHASE_LABELS[phase]}
+          </Button>
+        </Card>
+
         <MacroTargetsView
           logs={foodLogs}
           targets={macroTargets}
@@ -88,6 +123,7 @@ export function NutritionPage() {
         targets={macroTargets}
         onClose={() => setTargetsOpen(false)}
         onSave={setMacroTargets}
+        title={`עריכת יעדי ${PHASE_LABELS[phase]}`}
       />
     </>
   )

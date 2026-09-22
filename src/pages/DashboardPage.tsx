@@ -6,10 +6,10 @@ import { Card } from '../components/ui/Card'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { EditTargetsModal } from '../components/dashboard/EditTargetsModal'
 import { AddFoodModal } from '../components/dashboard/AddFoodModal'
-import { ProcessProgressCard } from '../components/dashboard/ProcessProgressCard'
+import { GoalPhaseCard } from '../components/dashboard/GoalPhaseCard'
 import { WeightFatTracker } from '../components/dashboard/WeightFatTracker'
 import { useAppData } from '../context/AppDataContext'
-import { todayKey } from '../lib/types'
+import { PHASE_LABELS, todayKey } from '../lib/types'
 
 export function DashboardPage() {
   const {
@@ -17,8 +17,11 @@ export function DashboardPage() {
     weightLogs,
     macroTargets,
     setMacroTargets,
-    process,
-    setProcess,
+    goal,
+    setGoal,
+    phase,
+    setPhase,
+    stateSyncStatus,
     addWeight,
   } = useAppData()
 
@@ -34,7 +37,7 @@ export function DashboardPage() {
     <>
       <PageHeader
         title="דשבורד"
-        subtitle="יעדים, משקל, שומן והתקדמות בתהליך"
+        subtitle={`שלב ${PHASE_LABELS[phase]} · יעדים, משקל והתקדמות`}
         action={
           <div className="flex flex-wrap gap-2">
             <Button variant="surface" onClick={() => setTargetsOpen(true)}>
@@ -48,7 +51,16 @@ export function DashboardPage() {
       />
 
       <div className="space-y-4 px-4 py-4">
-        <Card title="יעדי קלוריות היום">
+        <GoalPhaseCard
+          phase={phase}
+          onPhaseChange={setPhase}
+          goal={goal}
+          onSaveGoal={setGoal}
+          currentWeight={latest?.weightKg}
+          currentBodyFat={latest?.bodyFatPct}
+        />
+
+        <Card title={`יעדי קלוריות היום · ${PHASE_LABELS[phase]}`}>
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="flex items-center gap-2 text-muted">
               <Flame className="size-4 text-primary" />
@@ -66,6 +78,16 @@ export function DashboardPage() {
           <p className="mt-2 text-xs text-muted">
             חלבון {macroTargets.protein}ג׳ · פחמימות {macroTargets.carbs}ג׳ ·
             שומן {macroTargets.fats}ג׳
+          </p>
+          <p className="mt-1 text-[10px] text-muted">
+            סנכרון:{' '}
+            {stateSyncStatus === 'synced'
+              ? 'שמור'
+              : stateSyncStatus === 'syncing'
+                ? 'שומר…'
+                : stateSyncStatus === 'error'
+                  ? 'שגיאה'
+                  : 'מקומי'}
           </p>
         </Card>
 
@@ -96,8 +118,6 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <ProcessProgressCard process={process} onSave={setProcess} />
-
         <WeightFatTracker entries={weightLogs} onAdd={addWeight} />
       </div>
 
@@ -106,6 +126,7 @@ export function DashboardPage() {
         targets={macroTargets}
         onClose={() => setTargetsOpen(false)}
         onSave={setMacroTargets}
+        title={`עריכת יעדי ${PHASE_LABELS[phase]}`}
       />
       <AddFoodModal open={foodOpen} onClose={() => setFoodOpen(false)} />
     </>
