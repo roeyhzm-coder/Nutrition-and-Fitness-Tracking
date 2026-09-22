@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { Copy, Pencil, Settings2, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import { Button } from '../ui/Button'
+import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 
 export function ProgramManager() {
@@ -38,9 +40,9 @@ export function ProgramManager() {
             </option>
           ))}
         </select>
-        <Button variant="surface" onClick={() => setOpen(true)}>
-          ניהול
-        </Button>
+        <IconButton label="ניהול תוכניות" tone="accent" onClick={() => setOpen(true)}>
+          <Settings2 className="size-4" strokeWidth={1.75} />
+        </IconButton>
       </div>
 
       <Modal open={open} title="מנהל תוכניות אימון" onClose={() => setOpen(false)} wide>
@@ -58,53 +60,51 @@ export function ProgramManager() {
                 key={p.id}
                 className="rounded-xl border border-line bg-surface p-3"
               >
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="min-w-0 flex-1 font-semibold text-text">
-                    {p.name}
-                    {p.id === activeProgramId ? (
-                      <span className="ms-2 text-xs text-accent">פעילה</span>
-                    ) : null}
-                  </p>
+                <div className="flex items-center gap-1">
                   <button
                     type="button"
-                    className="text-xs text-primary"
+                    className="min-w-0 flex-1 text-right"
                     onClick={() => {
                       setActiveProgramId(p.id)
                       setOpen(false)
                     }}
                   >
-                    בחר
+                    <p className="font-semibold text-text">
+                      {p.name}
+                      {p.id === activeProgramId ? (
+                        <span className="ms-2 text-xs text-accent">פעילה</span>
+                      ) : null}
+                    </p>
+                    <p className="mt-1 text-xs text-muted">
+                      {p.days.length} ימים · עודכן{' '}
+                      {new Date(p.updatedAt).toLocaleDateString('he-IL')}
+                    </p>
                   </button>
-                  <button
-                    type="button"
-                    className="text-xs text-primary"
+                  <IconButton
+                    label="שנה שם"
+                    tone="accent"
                     onClick={() => {
                       setRenameId(p.id)
                       setRenameValue(p.name)
                     }}
                   >
-                    שנה שם
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs text-muted"
+                    <Pencil className="size-3.5" strokeWidth={1.75} />
+                  </IconButton>
+                  <IconButton
+                    label="שכפל"
                     onClick={() => duplicateProgram(p.id)}
                   >
-                    שכפל
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs text-danger"
+                    <Copy className="size-3.5" strokeWidth={1.75} />
+                  </IconButton>
+                  <IconButton
+                    label="מחק"
+                    tone="danger"
                     disabled={workoutPrograms.length <= 1}
                     onClick={() => deleteProgram(p.id)}
                   >
-                    מחק
-                  </button>
+                    <Trash2 className="size-3.5" strokeWidth={1.75} />
+                  </IconButton>
                 </div>
-                <p className="mt-1 text-xs text-muted">
-                  {p.days.length} ימים · עודכן{' '}
-                  {new Date(p.updatedAt).toLocaleDateString('he-IL')}
-                </p>
               </li>
             ))}
           </ul>

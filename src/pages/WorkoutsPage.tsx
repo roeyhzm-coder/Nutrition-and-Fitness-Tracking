@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { SetLogger } from '../components/workouts/SetLogger'
 import { ProgramManager } from '../components/workouts/ProgramManager'
+import { WorkoutLibrary } from '../components/workouts/WorkoutLibrary'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
+import { IconButton } from '../components/ui/IconButton'
 import { Modal } from '../components/ui/Modal'
 import { useAppData } from '../context/AppDataContext'
 import type { Exercise } from '../lib/types'
@@ -60,21 +63,26 @@ export function WorkoutsPage() {
         title="אימונים"
         subtitle={activeProgram?.name ?? 'תוכניות אימון שמורות'}
         action={
-          <Button
-            variant="surface"
+          <IconButton
+            label="ערוך יום"
+            tone="accent"
             onClick={() => {
               setDayTitle(day.title)
               setDayFocus(day.focus)
               setEditDayOpen(true)
             }}
           >
-            ערוך יום
-          </Button>
+            <Pencil className="size-4" strokeWidth={1.75} />
+          </IconButton>
         }
       />
 
       <div className="space-y-4 px-4 py-4">
         <ProgramManager />
+        <WorkoutLibrary
+          currentDayId={day.id}
+          currentDayExercises={day.exercises}
+        />
 
         <div className="flex gap-2 overflow-x-auto pb-1">
           {workoutDays.map((d) => (
@@ -100,23 +108,33 @@ export function WorkoutsPage() {
         <Card
           title={day.title}
           action={
-            <button
-              type="button"
-              className="text-sm font-medium text-accent"
+            <IconButton
+              label="הוסף תרגיל"
+              tone="accent"
               onClick={() => {
                 setExForm({ name: '', sets: '3', reps: '8–10', notes: '' })
                 setAddOpen(true)
               }}
             >
-              + תרגיל
-            </button>
+              <Plus className="size-4" strokeWidth={1.75} />
+            </IconButton>
           }
         >
-          <p className="mb-3 text-sm text-muted">{day.focus}</p>
+          <button
+            type="button"
+            className="mb-3 text-sm text-muted hover:text-text"
+            onClick={() => {
+              setDayTitle(day.title)
+              setDayFocus(day.focus)
+              setEditDayOpen(true)
+            }}
+          >
+            {day.focus || 'הוסף מיקוד ליום…'}
+          </button>
           <ul className="space-y-2">
             {day.exercises.map((ex) => (
               <li key={ex.id} className="rounded-xl border border-line bg-surface">
-                <div className="flex items-start gap-2 px-3 py-3">
+                <div className="flex items-start gap-1 px-3 py-3">
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-right"
@@ -125,6 +143,15 @@ export function WorkoutsPage() {
                         activeExerciseId === ex.id ? null : ex.id,
                       )
                     }
+                    onDoubleClick={() => {
+                      setEditExercise(ex)
+                      setExForm({
+                        name: ex.name,
+                        sets: String(ex.sets),
+                        reps: ex.reps,
+                        notes: ex.notes ?? '',
+                      })
+                    }}
                   >
                     <p className="font-semibold text-text">{ex.name}</p>
                     <p className="mt-1 text-xs text-muted">
@@ -132,9 +159,9 @@ export function WorkoutsPage() {
                       {ex.notes ? ` · ${ex.notes}` : ''}
                     </p>
                   </button>
-                  <button
-                    type="button"
-                    className="text-xs text-primary"
+                  <IconButton
+                    label="ערוך תרגיל"
+                    tone="accent"
                     onClick={() => {
                       setEditExercise(ex)
                       setExForm({
@@ -145,15 +172,15 @@ export function WorkoutsPage() {
                       })
                     }}
                   >
-                    ערוך
-                  </button>
-                  <button
-                    type="button"
-                    className="text-xs text-danger"
+                    <Pencil className="size-3.5" strokeWidth={1.75} />
+                  </IconButton>
+                  <IconButton
+                    label="מחק תרגיל"
+                    tone="danger"
                     onClick={() => deleteExercise(day.id, ex.id)}
                   >
-                    מחק
-                  </button>
+                    <Trash2 className="size-3.5" strokeWidth={1.75} />
+                  </IconButton>
                 </div>
               </li>
             ))}

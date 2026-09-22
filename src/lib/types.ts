@@ -8,10 +8,16 @@ export type MacroTargets = {
 export type Phase = 'bulk' | 'cut'
 
 export type GoalSettings = {
+  /** Short-term phase tracker */
   startDate: string
   totalDays: number
   targetWeightKg: number | null
   targetBodyFatPct: number | null
+  /** Long-term master plan */
+  masterStartDate: string
+  masterTotalDays: number
+  masterTargetWeightKg: number | null
+  masterTargetBodyFatPct: number | null
 }
 
 export type PhaseMacroPresets = {
@@ -92,6 +98,13 @@ export type WorkoutProgram = {
   updatedAt: string
 }
 
+export type WorkoutTemplate = {
+  id: string
+  name: string
+  exercises: Exercise[]
+  updatedAt: string
+}
+
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snacks'
 
 export type Recipe = {
@@ -126,6 +139,20 @@ export function calcProcessDay(startDate: string, totalDays: number) {
   today.setHours(0, 0, 0, 0)
   const raw = Math.floor((today.getTime() - start.getTime()) / 86400000) + 1
   return Math.min(Math.max(raw, 1), Math.max(totalDays, 1))
+}
+
+export function normalizeGoal(goal: Partial<GoalSettings> | null | undefined): GoalSettings {
+  const start = goal?.startDate || todayKey()
+  return {
+    startDate: start,
+    totalDays: goal?.totalDays ?? 84,
+    targetWeightKg: goal?.targetWeightKg ?? null,
+    targetBodyFatPct: goal?.targetBodyFatPct ?? null,
+    masterStartDate: goal?.masterStartDate || start,
+    masterTotalDays: goal?.masterTotalDays ?? 365,
+    masterTargetWeightKg: goal?.masterTargetWeightKg ?? null,
+    masterTargetBodyFatPct: goal?.masterTargetBodyFatPct ?? 9,
+  }
 }
 
 export const PHASE_LABELS: Record<Phase, string> = {

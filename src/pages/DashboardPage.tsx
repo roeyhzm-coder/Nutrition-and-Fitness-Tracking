@@ -8,6 +8,7 @@ import { EditTargetsModal } from '../components/dashboard/EditTargetsModal'
 import { AddFoodModal } from '../components/dashboard/AddFoodModal'
 import { GoalPhaseCard } from '../components/dashboard/GoalPhaseCard'
 import { WeightFatTracker } from '../components/dashboard/WeightFatTracker'
+import { WeeklyConsistencyTracker } from '../components/dashboard/WeeklyConsistencyTracker'
 import { useAppData } from '../context/AppDataContext'
 import { PHASE_LABELS, todayKey } from '../lib/types'
 
@@ -15,6 +16,7 @@ export function DashboardPage() {
   const {
     foodLogs,
     weightLogs,
+    setLogs,
     macroTargets,
     setMacroTargets,
     goal,
@@ -37,7 +39,7 @@ export function DashboardPage() {
     <>
       <PageHeader
         title="דשבורד"
-        subtitle={`שלב ${PHASE_LABELS[phase]} · יעדים, משקל והתקדמות`}
+        subtitle={`שלב ${PHASE_LABELS[phase]} · יעדים, עקביות והתקדמות`}
         action={
           <div className="flex flex-wrap gap-2">
             <Button variant="surface" onClick={() => setTargetsOpen(true)}>
@@ -59,6 +61,8 @@ export function DashboardPage() {
           currentWeight={latest?.weightKg}
           currentBodyFat={latest?.bodyFatPct}
         />
+
+        <WeeklyConsistencyTracker setLogs={setLogs} targetPerWeek={5} />
 
         <Card title={`יעדי קלוריות היום · ${PHASE_LABELS[phase]}`}>
           <div className="mb-2 flex items-center justify-between text-sm">

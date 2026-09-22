@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import { todayKey } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
+import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 
 export function HabitManager() {
@@ -55,38 +57,43 @@ export function HabitManager() {
               const checked = done.has(habit.id)
               return (
                 <li key={habit.id}>
-                  <div className="flex items-start gap-3 rounded-xl border border-line bg-surface px-3 py-3">
+                  <div className="flex items-start gap-2 rounded-xl border border-line bg-surface px-3 py-3">
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={() => toggleHabit(habit.id)}
                       className="mt-0.5 size-4 accent-accent"
                     />
-                    <span
-                      className={[
-                        'min-w-0 flex-1 text-sm',
-                        checked ? 'text-muted line-through' : 'text-text',
-                      ].join(' ')}
-                    >
-                      {habit.label}
-                    </span>
                     <button
                       type="button"
-                      className="text-xs text-primary"
+                      className={[
+                        'min-w-0 flex-1 text-right text-sm',
+                        checked ? 'text-muted line-through' : 'text-text',
+                      ].join(' ')}
                       onClick={() => {
                         setEditingId(habit.id)
                         setEditLabel(habit.label)
                       }}
                     >
-                      ערוך
+                      {habit.label}
                     </button>
-                    <button
-                      type="button"
-                      className="text-xs text-danger"
+                    <IconButton
+                      label="ערוך הרגל"
+                      tone="accent"
+                      onClick={() => {
+                        setEditingId(habit.id)
+                        setEditLabel(habit.label)
+                      }}
+                    >
+                      <Pencil className="size-3.5" strokeWidth={1.75} />
+                    </IconButton>
+                    <IconButton
+                      label="מחק הרגל"
+                      tone="danger"
                       onClick={() => deleteHabit(habit.id)}
                     >
-                      מחק
-                    </button>
+                      <Trash2 className="size-3.5" strokeWidth={1.75} />
+                    </IconButton>
                   </div>
                 </li>
               )

@@ -1,4 +1,4 @@
--- Device-scoped app state for goals, phase macros, and workout presets
+-- Device-scoped app state for goals, phase macros, workout presets & templates
 -- Run in Supabase SQL editor for project sync
 
 create table if not exists public.client_app_state (
@@ -8,8 +8,12 @@ create table if not exists public.client_app_state (
   macro_presets jsonb not null default '{}'::jsonb,
   active_program_id text,
   workout_programs jsonb not null default '[]'::jsonb,
+  workout_templates jsonb not null default '[]'::jsonb,
   updated_at timestamptz not null default now()
 );
+
+alter table public.client_app_state
+  add column if not exists workout_templates jsonb not null default '[]'::jsonb;
 
 alter table public.client_app_state enable row level security;
 

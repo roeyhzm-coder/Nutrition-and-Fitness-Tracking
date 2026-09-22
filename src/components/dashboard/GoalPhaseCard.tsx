@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Pencil } from 'lucide-react'
 import {
   calcProcessDay,
   PHASE_LABELS,
@@ -7,6 +8,7 @@ import {
 } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
+import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 import { ProgressBar } from '../ui/ProgressBar'
 
@@ -27,27 +29,48 @@ export function GoalPhaseCard({
   currentWeight,
   currentBodyFat,
 }: GoalPhaseCardProps) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState<'short' | 'master' | null>(null)
   const [form, setForm] = useState(goal)
-  const day = calcProcessDay(goal.startDate, goal.totalDays)
+  const shortDay = calcProcessDay(goal.startDate, goal.totalDays)
+  const masterDay = calcProcessDay(goal.masterStartDate, goal.masterTotalDays)
 
   useEffect(() => {
     if (open) setForm(goal)
   }, [open, goal])
 
+  function save() {
+    onSaveGoal({
+      startDate: form.startDate,
+      totalDays: Math.max(1, Number(form.totalDays) || 1),
+      targetWeightKg:
+        form.targetWeightKg == null || Number.isNaN(Number(form.targetWeightKg))
+          ? null
+          : Number(form.targetWeightKg),
+      targetBodyFatPct:
+        form.targetBodyFatPct == null ||
+        Number.isNaN(Number(form.targetBodyFatPct))
+          ? null
+          : Number(form.targetBodyFatPct),
+      masterStartDate: form.masterStartDate,
+      masterTotalDays: Math.max(1, Number(form.masterTotalDays) || 1),
+      masterTargetWeightKg:
+        form.masterTargetWeightKg == null ||
+        Number.isNaN(Number(form.masterTargetWeightKg))
+          ? null
+          : Number(form.masterTargetWeightKg),
+      masterTargetBodyFatPct:
+        form.masterTargetBodyFatPct == null ||
+        Number.isNaN(Number(form.masterTargetBodyFatPct))
+          ? null
+          : Number(form.masterTargetBodyFatPct),
+    })
+    setOpen(null)
+  }
+
   return (
     <>
       <Card
         title="מטרת על ותהליך"
-        action={
-          <button
-            type="button"
-            className="text-sm font-medium text-primary"
-            onClick={() => setOpen(true)}
-          >
-            עריכה
-          </button>
-        }
         className="border-primary/30 bg-gradient-to-b from-primary/10 to-card"
       >
         <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-surface p-1">
@@ -70,60 +93,106 @@ export function GoalPhaseCard({
           ))}
         </div>
 
-        <p className="font-display text-2xl font-bold text-text">
-          יום {day} מתוך {goal.totalDays}
-        </p>
-        <p className="mt-1 text-xs text-muted">
-          שלב נוכחי: {PHASE_LABELS[phase]} · התחלה{' '}
-          {new Date(goal.startDate).toLocaleDateString('he-IL')}
-        </p>
-        <div className="mt-3">
-          <ProgressBar value={day} max={goal.totalDays} color="accent" />
-        </div>
+        <section className="rounded-xl border border-line bg-surface/70 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold text-text">
+              מעקב קצר · {PHASE_LABELS[phase]}
+            </p>
+            <IconButton label="עריכת מעקב קצר" tone="accent" onClick={() => setOpen('short')}>
+              <Pencil className="size-4" strokeWidth={1.75} />
+            </IconButton>
+          </div>
+          <p className="font-display text-2xl font-bold text-text">
+            יום {shortDay} מתוך {goal.totalDays}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            התחלה {new Date(goal.startDate).toLocaleDateString('he-IL')}
+          </p>
+          <div className="mt-3">
+            <ProgressBar value={shortDay} max={goal.totalDays} color="primary" />
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+            <div>
+              <p className="text-xs text-muted">משקל יעד</p>
+              <p className="font-semibold text-text">
+                {goal.targetWeightKg != null ? `${goal.targetWeightKg} ק״ג` : '—'}
+              </p>
+              <p className="text-[11px] text-muted">
+                נוכחי: {currentWeight != null ? `${currentWeight}` : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">שומן יעד</p>
+              <p className="font-semibold text-text">
+                {goal.targetBodyFatPct != null
+                  ? `${goal.targetBodyFatPct}%`
+                  : '—'}
+              </p>
+              <p className="text-[11px] text-muted">
+                נוכחי: {currentBodyFat != null ? `${currentBodyFat}%` : '—'}
+              </p>
+            </div>
+          </div>
+        </section>
 
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          <div className="rounded-xl border border-line bg-surface px-3 py-3">
-            <p className="text-xs text-muted">משקל יעד</p>
-            <p className="mt-1 font-display text-lg font-bold text-text">
-              {goal.targetWeightKg != null ? `${goal.targetWeightKg} ק״ג` : '—'}
-            </p>
-            <p className="mt-1 text-xs text-muted">
-              נוכחי: {currentWeight != null ? `${currentWeight} ק״ג` : '—'}
-            </p>
+        <section className="mt-3 rounded-xl border border-accent/30 bg-accent/5 p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold text-text">תוכנית על ארוכת טווח</p>
+            <IconButton
+              label="עריכת תוכנית על"
+              tone="accent"
+              onClick={() => setOpen('master')}
+            >
+              <Pencil className="size-4" strokeWidth={1.75} />
+            </IconButton>
           </div>
-          <div className="rounded-xl border border-line bg-surface px-3 py-3">
-            <p className="text-xs text-muted">אחוזי שומן יעד</p>
-            <p className="mt-1 font-display text-lg font-bold text-text">
-              {goal.targetBodyFatPct != null
-                ? `${goal.targetBodyFatPct}%`
-                : '—'}
-            </p>
-            <p className="mt-1 text-xs text-muted">
-              נוכחי: {currentBodyFat != null ? `${currentBodyFat}%` : '—'}
-            </p>
+          <p className="font-display text-xl font-bold text-text">
+            יום {masterDay} מתוך {goal.masterTotalDays}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            יעד שומן מאסטר:{' '}
+            {goal.masterTargetBodyFatPct != null
+              ? `${goal.masterTargetBodyFatPct}%`
+              : '9%'}
+          </p>
+          <div className="mt-3">
+            <ProgressBar
+              value={masterDay}
+              max={goal.masterTotalDays}
+              color="accent"
+            />
           </div>
-        </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+            <div>
+              <p className="text-xs text-muted">משקל יעד מאסטר</p>
+              <p className="font-semibold text-text">
+                {goal.masterTargetWeightKg != null
+                  ? `${goal.masterTargetWeightKg} ק״ג`
+                  : '—'}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted">שומן יעד מאסטר</p>
+              <p className="font-semibold text-text">
+                {goal.masterTargetBodyFatPct != null
+                  ? `${goal.masterTargetBodyFatPct}%`
+                  : '9%'}
+              </p>
+            </div>
+          </div>
+        </section>
       </Card>
 
-      <Modal open={open} title="עריכת מטרת על" onClose={() => setOpen(false)}>
+      <Modal
+        open={open === 'short'}
+        title="עריכת מעקב קצר"
+        onClose={() => setOpen(null)}
+      >
         <form
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault()
-            onSaveGoal({
-              startDate: form.startDate,
-              totalDays: Math.max(1, Number(form.totalDays) || 1),
-              targetWeightKg:
-                form.targetWeightKg == null || Number.isNaN(Number(form.targetWeightKg))
-                  ? null
-                  : Number(form.targetWeightKg),
-              targetBodyFatPct:
-                form.targetBodyFatPct == null ||
-                Number.isNaN(Number(form.targetBodyFatPct))
-                  ? null
-                  : Number(form.targetBodyFatPct),
-            })
-            setOpen(false)
+            save()
           }}
         >
           <label className="block text-xs text-muted">
@@ -139,7 +208,7 @@ export function GoalPhaseCard({
             />
           </label>
           <label className="block text-xs text-muted">
-            סה״כ ימים בתהליך
+            סה״כ ימים
             <input
               inputMode="numeric"
               value={form.totalDays}
@@ -155,7 +224,7 @@ export function GoalPhaseCard({
           </label>
           <div className="grid grid-cols-2 gap-2">
             <label className="block text-xs text-muted">
-              משקל יעד (ק״ג)
+              משקל יעד
               <input
                 inputMode="decimal"
                 value={form.targetWeightKg ?? ''}
@@ -167,7 +236,6 @@ export function GoalPhaseCard({
                   }))
                 }
                 className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-                placeholder="לדוגמה 78"
               />
             </label>
             <label className="block text-xs text-muted">
@@ -183,7 +251,86 @@ export function GoalPhaseCard({
                   }))
                 }
                 className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-                placeholder="לדוגמה 12"
+              />
+            </label>
+          </div>
+          <Button type="submit" className="w-full" variant="accent">
+            שמור
+          </Button>
+        </form>
+      </Modal>
+
+      <Modal
+        open={open === 'master'}
+        title="עריכת תוכנית על"
+        onClose={() => setOpen(null)}
+      >
+        <form
+          className="space-y-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            save()
+          }}
+        >
+          <label className="block text-xs text-muted">
+            תאריך התחלת מאסטר
+            <input
+              type="date"
+              value={form.masterStartDate}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  masterStartDate: e.target.value,
+                }))
+              }
+              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              required
+            />
+          </label>
+          <label className="block text-xs text-muted">
+            סה״כ ימי מאסטר
+            <input
+              inputMode="numeric"
+              value={form.masterTotalDays}
+              onChange={(e) =>
+                setForm((prev) => ({
+                  ...prev,
+                  masterTotalDays: Number(e.target.value) || 0,
+                }))
+              }
+              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              required
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-xs text-muted">
+              משקל יעד מאסטר
+              <input
+                inputMode="decimal"
+                value={form.masterTargetWeightKg ?? ''}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    masterTargetWeightKg:
+                      e.target.value === '' ? null : Number(e.target.value),
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              />
+            </label>
+            <label className="block text-xs text-muted">
+              שומן יעד מאסטר (%)
+              <input
+                inputMode="decimal"
+                value={form.masterTargetBodyFatPct ?? 9}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    masterTargetBodyFatPct:
+                      e.target.value === '' ? null : Number(e.target.value),
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
               />
             </label>
           </div>

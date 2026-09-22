@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import type { SavedMeal } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
+import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 
 export function SavedMeals() {
@@ -46,13 +48,9 @@ export function SavedMeals() {
       <Card
         title="ארוחות קבועות"
         action={
-          <button
-            type="button"
-            className="text-sm font-medium text-accent"
-            onClick={openCreate}
-          >
-            + ארוחה
-          </button>
+          <IconButton label="הוסף ארוחה" tone="accent" onClick={openCreate}>
+            <Plus className="size-4" strokeWidth={1.75} />
+          </IconButton>
         }
       >
         {savedMeals.length === 0 ? (
@@ -64,30 +62,32 @@ export function SavedMeals() {
                 key={meal.id}
                 className="rounded-xl border border-line bg-surface p-3"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
+                <div className="flex items-start gap-2">
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 text-right"
+                    onClick={() => openEdit(meal)}
+                  >
                     <p className="font-semibold text-text">{meal.name}</p>
                     <p className="mt-1 text-xs text-muted">
                       {meal.calories} קק״ל · ח {meal.protein} · פ {meal.carbs} ·
                       ש {meal.fats}
                     </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className="text-xs text-primary"
-                      onClick={() => openEdit(meal)}
-                    >
-                      ערוך
-                    </button>
-                    <button
-                      type="button"
-                      className="text-xs text-danger"
-                      onClick={() => deleteSavedMeal(meal.id)}
-                    >
-                      מחק
-                    </button>
-                  </div>
+                  </button>
+                  <IconButton
+                    label="ערוך ארוחה"
+                    tone="accent"
+                    onClick={() => openEdit(meal)}
+                  >
+                    <Pencil className="size-3.5" strokeWidth={1.75} />
+                  </IconButton>
+                  <IconButton
+                    label="מחק ארוחה"
+                    tone="danger"
+                    onClick={() => deleteSavedMeal(meal.id)}
+                  >
+                    <Trash2 className="size-3.5" strokeWidth={1.75} />
+                  </IconButton>
                 </div>
                 <Button
                   className="mt-3 w-full"

@@ -15,6 +15,9 @@
   --color-line: #2a303c;
   --color-danger: #ff6b7a;
   --color-warn: #f0b429;
+  --color-week-blue: #5b8cff;
+  --color-week-green: #22c58e;
+  --color-week-amber: #f0b429;
 }
 
 * {
