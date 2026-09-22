@@ -1,33 +1,41 @@
 import type {
   CustomHabit,
   FoodLogEntry,
+  GoalSettings,
   HabitChecks,
   MacroTargets,
-  ProcessSettings,
+  Phase,
   Recipe,
   SavedMeal,
   SetLog,
   WeightEntry,
   WorkoutDay,
 } from './types'
+import { calcProcessDay, PHASE_LABELS } from './types'
+import { relativeWeekNumber } from './weeklyConsistency'
 
 function average(nums: number[]) {
   if (nums.length === 0) return 0
   return nums.reduce((a, b) => a + b, 0) / nums.length
 }
 
-function startOfWeek(d = new Date()) {
-  const date = new Date(d)
-  const day = date.getDay()
-  const diff = day === 0 ? -6 : 1 - day
-  date.setDate(date.getDate() + diff)
-  date.setHours(0, 0, 0, 0)
-  return date
+function startOfRelativeWeek(phaseStartDate: string, date = new Date()) {
+  const start = new Date(phaseStartDate)
+  start.setHours(0, 0, 0, 0)
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  const weekIndex = Math.max(
+    0,
+    Math.floor((d.getTime() - start.getTime()) / 86400000 / 7),
+  )
+  const weekStart = new Date(start)
+  weekStart.setDate(start.getDate() + weekIndex * 7)
+  return weekStart
 }
 
-function isInCurrentWeek(iso: string) {
+function isInRelativeWeek(iso: string, phaseStartDate: string) {
   const date = new Date(iso)
-  const start = startOfWeek()
+  const start = startOfRelativeWeek(phaseStartDate)
   const end = new Date(start)
   end.setDate(end.getDate() + 7)
   return date >= start && date < end
@@ -40,25 +48,27 @@ export function buildAiExportPrompt(input: {
   habits: CustomHabit[]
   habitChecks: HabitChecks
   macroTargets: MacroTargets
-  process: ProcessSettings
+  goal: GoalSettings
+  phase: Phase
   workoutDays: WorkoutDay[]
 }): string {
-  const weekSets = input.setLogs.filter((s) => isInCurrentWeek(s.loggedAt))
-  const weekWeights = input.weightLogs.filter((w) => isInCurrentWeek(w.loggedAt))
-  const weekFoods = input.foodLogs.filter((f) => isInCurrentWeek(f.loggedAt))
+  const phaseStart = input.goal.startDate
+  const weekSets = input.setLogs.filter((s) =>
+    isInRelativeWeek(s.loggedAt, phaseStart),
+  )
+  const weekWeights = input.weightLogs.filter((w) =>
+    isInRelativeWeek(w.loggedAt, phaseStart),
+  )
+  const weekFoods = input.foodLogs.filter((f) =>
+    isInRelativeWeek(f.loggedAt, phaseStart),
+  )
 
-  const workoutsByDay = new Map<string, number>()
-  for (const s of weekSets) {
-    const day = s.loggedAt.slice(0, 10)
-    workoutsByDay.set(day, (workoutsByDay.get(day) ?? 0) + 1)
-  }
-
-  const workoutLines =
-    weekSets.length === 0
-      ? '- אין רישומי אימון השבוע'
-      : [...workoutsByDay.entries()]
-          .map(([day, count]) => `- ${day}: ${count} סטים`)
-          .join('\n')
+  const workoutDaysSet = new Set(
+    weekSets.map((s) => s.loggedAt.slice(0, 10)),
+  )
+  const workoutsThisWeek = workoutDaysSet.size
+  const targetPerWeek = 5
+  const metTarget = workoutsThisWeek >= targetPerWeek
 
   const topExercises = Object.entries(
     weekSets.reduce<Record<string, number>>((acc, s) => {
@@ -101,77 +111,73 @@ export function buildAiExportPrompt(input: {
     .filter((v): v is number => v != null)
   const avgWeight = average(weights)
   const avgFat = average(fats)
-  const latest = weekWeights.at(-1)
 
-  const habitIds = input.habits.map((h) => h.id)
-  const weekHabitDays = 7
-  let completedSlots = 0
-  let totalSlots = 0
-  const start = startOfWeek()
-  for (let i = 0; i < weekHabitDays; i++) {
-    const d = new Date(start)
-    d.setDate(start.getDate() + i)
-    const key = d.toISOString().slice(0, 10)
-    const done = new Set(input.habitChecks[key] ?? [])
-    for (const id of habitIds) {
-      totalSlots += 1
-      if (done.has(id)) completedSlots += 1
-    }
-  }
-  const habitRate =
-    totalSlots === 0 ? 0 : Math.round((completedSlots / totalSlots) * 100)
-
-  const startDate = new Date(input.process.startDate)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  startDate.setHours(0, 0, 0, 0)
-  const dayNum = Math.max(
-    1,
-    Math.floor((today.getTime() - startDate.getTime()) / 86400000) + 1,
+  const masterDay = calcProcessDay(
+    input.goal.masterStartDate,
+    input.goal.masterTotalDays,
   )
-  const processDay = Math.min(dayNum, input.process.totalDays)
+  const phaseDay = calcProcessDay(input.goal.startDate, input.goal.totalDays)
+  const relativeWeek = relativeWeekNumber(phaseStart)
+  const phaseLabel = PHASE_LABELS[input.phase]
 
-  return `אנא נתח את הנתונים השבועיים שלי לאימונים ותזונה ותן המלצות ממוקדות בעברית:
+  const masterWeight = input.goal.masterTargetWeightKg ?? 80
+  const masterFat = input.goal.masterTargetBodyFatPct ?? 9
+  const phaseWeight =
+    input.goal.targetWeightKg != null
+      ? `${input.goal.targetWeightKg} ק״ג`
+      : 'לא הוגדר'
+  const phaseFat =
+    input.goal.targetBodyFatPct != null
+      ? `${input.goal.targetBodyFatPct}%`
+      : 'לא הוגדר'
 
-## התקדמות בתהליך
-- יום ${processDay} מתוך ${input.process.totalDays}
-- תאריך התחלה: ${input.process.startDate}
+  const keyExercises =
+    topExercises ||
+    input.workoutDays
+      .flatMap((d) => d.exercises.slice(0, 2).map((e) => `- ${d.title}: ${e.name}`))
+      .slice(0, 8)
+      .join('\n') ||
+    '- אין תרגילים'
 
-## משקל ואחוזי שומן
-- ממוצע משקל השבוע: ${avgWeight ? avgWeight.toFixed(1) : 'אין נתונים'} ק״ג
-- ממוצע אחוזי שומן השבוע: ${avgFat ? `${avgFat.toFixed(1)}%` : 'אין נתונים'}
-- מדידה אחרונה: ${
-    latest
-      ? `${latest.weightKg} ק״ג${
-          latest.bodyFatPct != null ? ` · ${latest.bodyFatPct}% שומן` : ''
-        }`
-      : 'אין נתונים'
-  }
+  return `אנא נתח את הנתונים שלי לאימונים ותזונה ותן המלצות ממוקדות בעברית:
 
-## תזונה (ממוצעים יומיים בשבוע)
-- יעדים: ${input.macroTargets.calories} קק״ל · חלבון ${input.macroTargets.protein}ג׳ · פחמימות ${input.macroTargets.carbs}ג׳ · שומן ${input.macroTargets.fats}ג׳
+## מטרת על ארוכת טווח (Master Plan)
+- שם: גוף אל יווני
+- יעד: ${masterWeight} ק״ג ו-${masterFat}% שומן
+- יום ${masterDay} מתוך ${input.goal.masterTotalDays}
+- תאריך התחלה: ${input.goal.masterStartDate}
+
+## שלב נוכחי (Current Phase)
+- שלב פעיל: ${phaseLabel}
+- יום ${phaseDay} מתוך ${input.goal.totalDays}
+- שבוע יחסי: ${relativeWeek}
+- תאריך תחילת שלב: ${input.goal.startDate}
+- יעד משקל לשלב: ${phaseWeight}
+- יעד שומן לשלב: ${phaseFat}
+
+## אימונים ועקביות שבועית
+- ${workoutsThisWeek} מתוך ${targetPerWeek} אימונים השבוע
+- עמידה ביעד: ${metTarget ? 'כן' : 'לא'}
+- סה״כ סטים השבוע: ${weekSets.length}
+- תרגילים מרכזיים:
+${keyExercises}
+- תוכנית נוכחית: ${input.workoutDays.map((d) => `יום ${d.dayNumber} ${d.title}`).join(' | ')}
+
+## משקל, אחוזי שומן ומאקרו
+- ממוצע שקילה השבוע: ${avgWeight ? avgWeight.toFixed(1) : 'אין נתונים'} ק״ג (יעד שלב: ${phaseWeight})
+- ממוצע אחוזי שומן השבוע: ${avgFat ? `${avgFat.toFixed(1)}%` : 'אין נתונים'} (יעד שלב: ${phaseFat})
+- יעדי מאקרו לשלב: ${input.macroTargets.calories} קק״ל · חלבון ${input.macroTargets.protein}ג׳ · פחמימות ${input.macroTargets.carbs}ג׳ · שומן ${input.macroTargets.fats}ג׳
 - ממוצע קלוריות: ${avgCalories ? Math.round(avgCalories) : 'אין נתונים'} קק״ל
 - ממוצע חלבון: ${avgProtein ? Math.round(avgProtein) : 'אין נתונים'}ג׳
 - ממוצע פחמימות: ${avgCarbs ? Math.round(avgCarbs) : 'אין נתונים'}ג׳
 - ממוצע שומן: ${avgFats ? Math.round(avgFats) : 'אין נתונים'}ג׳
 - ימים עם רישום מזון: ${days.length}
 
-## אימונים
-- ימי אימון עם רישום: ${workoutsByDay.size}
-- סה״כ סטים השבוע: ${weekSets.length}
-${workoutLines}
-${topExercises ? `\nתרגילים בולטים:\n${topExercises}` : ''}
-- תוכנית נוכחית: ${input.workoutDays.map((d) => d.title).join(' | ')}
-
-## הרגלים
-- מספר הרגלים פעילים: ${input.habits.length}
-- אחוז השלמה שבועי: ${habitIds.length === 0 ? 'אין הרגלים' : `${habitRate}%`} (${completedSlots}/${totalSlots})
-
 ## בקשה
-1. הערך את מגמת המשקל ואחוזי השומן.
-2. בדוק התאמה בין צריכת המאקרו ליעדים.
-3. הערך את נפח האימונים והרגלים.
-4. הצע התאמות מעשיות לשבוע הבא בעברית קצרה.`
+1. הערך התקדמות מול מטרת העל (גוף אל יווני) ומול השלב הנוכחי.
+2. בדוק עקביות אימונים מול יעד 5 בשבוע.
+3. בדוק התאמה בין צריכת המאקרו ליעדי השלב.
+4. הצע התאמות מעשיות לשבוע היחסי הבא בעברית קצרה.`
 }
 
 export type ImportPayload = {

@@ -6,6 +6,7 @@ import {
   type GoalSettings,
   type Phase,
 } from '../../lib/types'
+import { relativeWeekNumber } from '../../lib/weeklyConsistency'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { IconButton } from '../ui/IconButton'
@@ -33,6 +34,7 @@ export function GoalPhaseCard({
   const [form, setForm] = useState(goal)
   const shortDay = calcProcessDay(goal.startDate, goal.totalDays)
   const masterDay = calcProcessDay(goal.masterStartDate, goal.masterTotalDays)
+  const relativeWeek = relativeWeekNumber(goal.startDate)
 
   useEffect(() => {
     if (open) setForm(goal)
@@ -96,9 +98,13 @@ export function GoalPhaseCard({
         <section className="rounded-xl border border-line bg-surface/70 p-3">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-semibold text-text">
-              מעקב קצר · {PHASE_LABELS[phase]}
+              שלב קצר · {PHASE_LABELS[phase]}
             </p>
-            <IconButton label="עריכת מעקב קצר" tone="accent" onClick={() => setOpen('short')}>
+            <IconButton
+              label="עריכת שלב"
+              tone="accent"
+              onClick={() => setOpen('short')}
+            >
               <Pencil className="size-4" strokeWidth={1.75} />
             </IconButton>
           </div>
@@ -106,14 +112,15 @@ export function GoalPhaseCard({
             יום {shortDay} מתוך {goal.totalDays}
           </p>
           <p className="mt-1 text-xs text-muted">
-            התחלה {new Date(goal.startDate).toLocaleDateString('he-IL')}
+            שבוע יחסי {relativeWeek} · התחלה{' '}
+            {new Date(goal.startDate).toLocaleDateString('he-IL')}
           </p>
           <div className="mt-3">
             <ProgressBar value={shortDay} max={goal.totalDays} color="primary" />
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
             <div>
-              <p className="text-xs text-muted">משקל יעד</p>
+              <p className="text-xs text-muted">משקל יעד לשלב</p>
               <p className="font-semibold text-text">
                 {goal.targetWeightKg != null ? `${goal.targetWeightKg} ק״ג` : '—'}
               </p>
@@ -122,7 +129,7 @@ export function GoalPhaseCard({
               </p>
             </div>
             <div>
-              <p className="text-xs text-muted">שומן יעד</p>
+              <p className="text-xs text-muted">שומן יעד לשלב</p>
               <p className="font-semibold text-text">
                 {goal.targetBodyFatPct != null
                   ? `${goal.targetBodyFatPct}%`
@@ -137,9 +144,12 @@ export function GoalPhaseCard({
 
         <section className="mt-3 rounded-xl border border-accent/30 bg-accent/5 p-3">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-semibold text-text">תוכנית על ארוכת טווח</p>
+            <div>
+              <p className="text-sm font-semibold text-text">מטרת על ארוכת טווח</p>
+              <p className="text-xs font-medium text-accent">גוף אל יווני</p>
+            </div>
             <IconButton
-              label="עריכת תוכנית על"
+              label="עריכת מטרת על"
               tone="accent"
               onClick={() => setOpen('master')}
             >
@@ -150,10 +160,8 @@ export function GoalPhaseCard({
             יום {masterDay} מתוך {goal.masterTotalDays}
           </p>
           <p className="mt-1 text-xs text-muted">
-            יעד שומן מאסטר:{' '}
-            {goal.masterTargetBodyFatPct != null
-              ? `${goal.masterTargetBodyFatPct}%`
-              : '9%'}
+            יעד קבוע: {goal.masterTargetWeightKg ?? 80} ק״ג ·{' '}
+            {goal.masterTargetBodyFatPct ?? 9}% שומן
           </p>
           <div className="mt-3">
             <ProgressBar
@@ -162,30 +170,12 @@ export function GoalPhaseCard({
               color="accent"
             />
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-            <div>
-              <p className="text-xs text-muted">משקל יעד מאסטר</p>
-              <p className="font-semibold text-text">
-                {goal.masterTargetWeightKg != null
-                  ? `${goal.masterTargetWeightKg} ק״ג`
-                  : '—'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-muted">שומן יעד מאסטר</p>
-              <p className="font-semibold text-text">
-                {goal.masterTargetBodyFatPct != null
-                  ? `${goal.masterTargetBodyFatPct}%`
-                  : '9%'}
-              </p>
-            </div>
-          </div>
         </section>
       </Card>
 
       <Modal
         open={open === 'short'}
-        title="עריכת מעקב קצר"
+        title="עריכת שלב נוכחי"
         onClose={() => setOpen(null)}
       >
         <form
@@ -196,7 +186,7 @@ export function GoalPhaseCard({
           }}
         >
           <label className="block text-xs text-muted">
-            תאריך התחלה
+            תאריך תחילת שלב
             <input
               type="date"
               value={form.startDate}
@@ -208,7 +198,7 @@ export function GoalPhaseCard({
             />
           </label>
           <label className="block text-xs text-muted">
-            סה״כ ימים
+            סה״כ ימי שלב
             <input
               inputMode="numeric"
               value={form.totalDays}
@@ -262,7 +252,7 @@ export function GoalPhaseCard({
 
       <Modal
         open={open === 'master'}
-        title="עריכת תוכנית על"
+        title="עריכת מטרת על · גוף אל יווני"
         onClose={() => setOpen(null)}
       >
         <form
@@ -273,7 +263,7 @@ export function GoalPhaseCard({
           }}
         >
           <label className="block text-xs text-muted">
-            תאריך התחלת מאסטר
+            תאריך התחלת מטרת על
             <input
               type="date"
               value={form.masterStartDate}
@@ -288,7 +278,7 @@ export function GoalPhaseCard({
             />
           </label>
           <label className="block text-xs text-muted">
-            סה״כ ימי מאסטר
+            סה״כ ימים (ברירת מחדל 1200)
             <input
               inputMode="numeric"
               value={form.masterTotalDays}
@@ -304,7 +294,7 @@ export function GoalPhaseCard({
           </label>
           <div className="grid grid-cols-2 gap-2">
             <label className="block text-xs text-muted">
-              משקל יעד מאסטר
+              משקל יעד (80 ק״ג)
               <input
                 inputMode="decimal"
                 value={form.masterTargetWeightKg ?? ''}
@@ -319,7 +309,7 @@ export function GoalPhaseCard({
               />
             </label>
             <label className="block text-xs text-muted">
-              שומן יעד מאסטר (%)
+              שומן יעד (9%)
               <input
                 inputMode="decimal"
                 value={form.masterTargetBodyFatPct ?? 9}

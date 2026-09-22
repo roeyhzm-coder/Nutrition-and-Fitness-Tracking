@@ -64,7 +64,7 @@ export function NutritionPage() {
             variant="surface"
             onClick={() => setTargetsOpen(true)}
           >
-            ערוך יעדי {PHASE_LABELS[phase]}
+            יעדי {PHASE_LABELS[phase]}
           </Button>
         </Card>
 

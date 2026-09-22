@@ -1,9 +1,13 @@
-import { buildWeeklyConsistency, weekTone } from '../../lib/weeklyConsistency'
+import { useMemo, useState } from 'react'
+import { buildRelativeWeeklyConsistency, weekTone } from '../../lib/weeklyConsistency'
 import type { SetLog } from '../../lib/types'
+import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
+import { Modal } from '../ui/Modal'
 
 type WeeklyConsistencyTrackerProps = {
   setLogs: SetLog[]
+  phaseStartDate: string
   targetPerWeek?: number
 }
 
@@ -19,60 +23,102 @@ const badgeClass = {
   amber: 'bg-warn/20 text-warn',
 }
 
-export function WeeklyConsistencyTracker({
-  setLogs,
-  targetPerWeek = 5,
-}: WeeklyConsistencyTrackerProps) {
-  const weeks = buildWeeklyConsistency(setLogs, 8, targetPerWeek)
+function WeekRow({
+  week,
+}: {
+  week: ReturnType<typeof buildRelativeWeeklyConsistency>[number]
+}) {
+  const tone = weekTone(week.completed, week.target)
+  const startLabel = week.start.toLocaleDateString('he-IL', {
+    day: 'numeric',
+    month: 'short',
+  })
+  const endLabel = week.end.toLocaleDateString('he-IL', {
+    day: 'numeric',
+    month: 'short',
+  })
 
   return (
-    <Card title="עקביות שבועית" action={<span className="text-xs text-muted">יעד {targetPerWeek}/שבוע</span>}>
-      <ul className="space-y-2">
-        {weeks.map((week) => {
-          const tone = weekTone(week.completed, week.target)
-          const startLabel = week.start.toLocaleDateString('he-IL', {
-            day: 'numeric',
-            month: 'short',
-          })
-          const endLabel = week.end.toLocaleDateString('he-IL', {
-            day: 'numeric',
-            month: 'short',
-          })
+    <li className={`rounded-xl border px-3 py-3 ${toneClass[tone]}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="font-semibold text-text">שבוע {week.weekNumber}</p>
+          <p className="mt-1 text-xs text-muted">
+            {startLabel} – {endLabel}
+          </p>
+        </div>
+        <span className={`rounded-lg px-2.5 py-1 text-xs font-bold ${badgeClass[tone]}`}>
+          {week.completed}/{week.target}
+        </span>
+      </div>
+      {week.dates.length > 0 ? (
+        <p className="mt-2 text-[11px] text-muted">
+          ימים: {week.dates.map((d) => d.slice(5)).join(' · ')}
+        </p>
+      ) : (
+        <p className="mt-2 text-[11px] text-muted">אין אימונים רשומים</p>
+      )}
+    </li>
+  )
+}
 
-          return (
-            <li
-              key={week.weekKey}
-              className={`rounded-xl border px-3 py-3 ${toneClass[tone]}`}
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-text">
-                    שבוע {week.weekNumber}
-                    <span className="ms-2 text-xs font-normal text-muted">
-                      {week.year}
-                    </span>
-                  </p>
-                  <p className="mt-1 text-xs text-muted">
-                    {startLabel} – {endLabel}
-                  </p>
-                </div>
-                <span
-                  className={`rounded-lg px-2.5 py-1 text-xs font-bold ${badgeClass[tone]}`}
-                >
-                  {week.completed}/{week.target}
-                </span>
-              </div>
-              {week.dates.length > 0 ? (
-                <p className="mt-2 text-[11px] text-muted">
-                  ימים: {week.dates.map((d) => d.slice(5)).join(' · ')}
-                </p>
-              ) : (
-                <p className="mt-2 text-[11px] text-muted">אין אימונים רשומים</p>
-              )}
-            </li>
-          )
-        })}
-      </ul>
-    </Card>
+export function WeeklyConsistencyTracker({
+  setLogs,
+  phaseStartDate,
+  targetPerWeek = 5,
+}: WeeklyConsistencyTrackerProps) {
+  const [historyOpen, setHistoryOpen] = useState(false)
+
+  const preview = useMemo(
+    () =>
+      buildRelativeWeeklyConsistency(setLogs, phaseStartDate, {
+        weeksBack: 3,
+        target: targetPerWeek,
+      }),
+    [setLogs, phaseStartDate, targetPerWeek],
+  )
+
+  const allWeeks = useMemo(
+    () =>
+      buildRelativeWeeklyConsistency(setLogs, phaseStartDate, {
+        weeksBack: 'all',
+        target: targetPerWeek,
+      }),
+    [setLogs, phaseStartDate, targetPerWeek],
+  )
+
+  return (
+    <>
+      <Card
+        title="עקביות שבועית"
+        action={<span className="text-xs text-muted">יעד {targetPerWeek}/שבוע</span>}
+      >
+        <ul className="space-y-2">
+          {preview.map((week) => (
+            <WeekRow key={week.weekKey} week={week} />
+          ))}
+        </ul>
+        <Button
+          className="mt-3 w-full"
+          variant="surface"
+          onClick={() => setHistoryOpen(true)}
+        >
+          הצג היסטוריה מלאה
+        </Button>
+      </Card>
+
+      <Modal
+        open={historyOpen}
+        title="היסטוריית עקביות מלאה"
+        onClose={() => setHistoryOpen(false)}
+        wide
+      >
+        <ul className="max-h-[70vh] space-y-2 overflow-y-auto">
+          {allWeeks.map((week) => (
+            <WeekRow key={week.weekKey} week={week} />
+          ))}
+        </ul>
+      </Modal>
+    </>
   )
 }

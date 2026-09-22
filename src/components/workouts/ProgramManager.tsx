@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Copy, Pencil, Settings2, Trash2 } from 'lucide-react'
+import { Pencil, Settings2, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
@@ -14,7 +14,6 @@ export function ProgramManager() {
     createProgram,
     renameProgram,
     deleteProgram,
-    duplicateProgram,
   } = useAppData()
 
   const [open, setOpen] = useState(false)
@@ -61,14 +60,7 @@ export function ProgramManager() {
                 className="rounded-xl border border-line bg-surface p-3"
               >
                 <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-right"
-                    onClick={() => {
-                      setActiveProgramId(p.id)
-                      setOpen(false)
-                    }}
-                  >
+                  <div className="min-w-0 flex-1 text-right">
                     <p className="font-semibold text-text">
                       {p.name}
                       {p.id === activeProgramId ? (
@@ -79,7 +71,7 @@ export function ProgramManager() {
                       {p.days.length} ימים · עודכן{' '}
                       {new Date(p.updatedAt).toLocaleDateString('he-IL')}
                     </p>
-                  </button>
+                  </div>
                   <IconButton
                     label="שנה שם"
                     tone="accent"
@@ -89,12 +81,6 @@ export function ProgramManager() {
                     }}
                   >
                     <Pencil className="size-3.5" strokeWidth={1.75} />
-                  </IconButton>
-                  <IconButton
-                    label="שכפל"
-                    onClick={() => duplicateProgram(p.id)}
-                  >
-                    <Copy className="size-3.5" strokeWidth={1.75} />
                   </IconButton>
                   <IconButton
                     label="מחק"

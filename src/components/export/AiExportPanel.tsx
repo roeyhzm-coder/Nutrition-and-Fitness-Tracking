@@ -12,7 +12,8 @@ export function AiExportPanel() {
     habits,
     habitChecks,
     macroTargets,
-    process,
+    goal,
+    phase,
     workoutDays,
   } = useAppData()
   const [copied, setCopied] = useState(false)
@@ -26,7 +27,8 @@ export function AiExportPanel() {
         habits,
         habitChecks,
         macroTargets,
-        process,
+        goal,
+        phase,
         workoutDays,
       }),
     [
@@ -36,7 +38,8 @@ export function AiExportPanel() {
       habits,
       habitChecks,
       macroTargets,
-      process,
+      goal,
+      phase,
       workoutDays,
     ],
   )
@@ -52,13 +55,13 @@ export function AiExportPanel() {
   }
 
   return (
-    <Card title="ייצוא לניתוח AI">
+    <Card title="ייצוא נתונים">
       <p className="mb-3 text-sm text-muted">
-        פרומפט שבועי בעברית שכולל משקל, אחוזי שומן, ממוצעי תזונה, אימונים
-        ואחוז השלמת הרגלים.
+        פרומפט מובנה בעברית: מטרת על, שלב נוכחי, עקביות שבועית ומאקרו מול
+        יעדים.
       </p>
       <Button className="w-full" variant="accent" onClick={copy}>
-        {copied ? 'הועתק ✓' : 'העתק פרומפט שבועי'}
+        {copied ? 'הועתק ✓' : 'העתק ייצוא נתונים'}
       </Button>
       <pre className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap rounded-xl border border-line bg-surface p-3 text-xs leading-relaxed text-muted">
         {prompt}

@@ -62,7 +62,11 @@ export function DashboardPage() {
           currentBodyFat={latest?.bodyFatPct}
         />
 
-        <WeeklyConsistencyTracker setLogs={setLogs} targetPerWeek={5} />
+        <WeeklyConsistencyTracker
+          setLogs={setLogs}
+          phaseStartDate={goal.startDate}
+          targetPerWeek={5}
+        />
 
         <Card title={`יעדי קלוריות היום · ${PHASE_LABELS[phase]}`}>
           <div className="mb-2 flex items-center justify-between text-sm">

@@ -149,8 +149,8 @@ export function normalizeGoal(goal: Partial<GoalSettings> | null | undefined): G
     targetWeightKg: goal?.targetWeightKg ?? null,
     targetBodyFatPct: goal?.targetBodyFatPct ?? null,
     masterStartDate: goal?.masterStartDate || start,
-    masterTotalDays: goal?.masterTotalDays ?? 365,
-    masterTargetWeightKg: goal?.masterTargetWeightKg ?? null,
+    masterTotalDays: goal?.masterTotalDays ?? 1200,
+    masterTargetWeightKg: goal?.masterTargetWeightKg ?? 80,
     masterTargetBodyFatPct: goal?.masterTargetBodyFatPct ?? 9,
   }
 }

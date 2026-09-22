@@ -39,8 +39,8 @@ export const DEFAULT_GOAL: GoalSettings = {
   targetWeightKg: null,
   targetBodyFatPct: null,
   masterStartDate: todayKey(),
-  masterTotalDays: 365,
-  masterTargetWeightKg: null,
+  masterTotalDays: 1200,
+  masterTargetWeightKg: 80,
   masterTargetBodyFatPct: 9,
 }
 

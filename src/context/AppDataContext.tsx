@@ -80,13 +80,17 @@ type AppDataContextValue = {
   workoutTemplates: WorkoutTemplate[]
   addWorkoutTemplate: (
     template: Omit<WorkoutTemplate, 'id' | 'updatedAt'>,
-  ) => void
+  ) => string
   updateWorkoutTemplate: (
     id: string,
     patch: Partial<Pick<WorkoutTemplate, 'name' | 'exercises'>>,
   ) => void
   deleteWorkoutTemplate: (id: string) => void
-  assignTemplateToDay: (dayId: string, templateId: string) => void
+  assignTemplateToDay: (
+    dayId: string,
+    templateId: string,
+    exercisesOverride?: Exercise[],
+  ) => void
   saveDayAsTemplate: (dayId: string, name: string) => void
   savedMeals: SavedMeal[]
   addSavedMeal: (meal: Omit<SavedMeal, 'id'>) => void
@@ -307,14 +311,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const addWorkoutTemplate = useCallback(
     (template: Omit<WorkoutTemplate, 'id' | 'updatedAt'>) => {
+      const id = uid()
       setWorkoutTemplates((prev) => [
         ...prev,
         {
           ...template,
-          id: uid(),
+          id,
           updatedAt: new Date().toISOString(),
         },
       ])
+      return id
     },
     [setWorkoutTemplates],
   )
@@ -343,17 +349,18 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   )
 
   const assignTemplateToDay = useCallback(
-    (dayId: string, templateId: string) => {
+    (dayId: string, templateId: string, exercisesOverride?: Exercise[]) => {
       if (!activeProgram) return
       const template = workoutTemplates.find((t) => t.id === templateId)
-      if (!template) return
+      const source = exercisesOverride ?? template?.exercises
+      if (!source) return
       setWorkoutPrograms((prev) =>
         updateActiveProgramDays(prev, activeProgram.id, (days) =>
           days.map((d) =>
             d.id === dayId
               ? {
                   ...d,
-                  exercises: template.exercises.map((ex) => ({
+                  exercises: source.map((ex) => ({
                     ...ex,
                     id: uid(),
                   })),
