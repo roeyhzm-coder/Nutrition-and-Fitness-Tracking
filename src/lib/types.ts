@@ -118,6 +118,11 @@ export type WorkoutTemplate = {
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snacks'
 
+export type FoodCategory = {
+  id: string
+  label: string
+}
+
 export type Recipe = {
   id: string
   name: string

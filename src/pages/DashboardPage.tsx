@@ -25,6 +25,9 @@ export function DashboardPage() {
     setPhase,
     stateSyncStatus,
     addWeight,
+    consistencyDayMarks,
+    toggleConsistencyDay,
+    setWeekConsistencyCount,
   } = useAppData()
 
   const [targetsOpen, setTargetsOpen] = useState(false)
@@ -65,6 +68,9 @@ export function DashboardPage() {
         <WeeklyConsistencyTracker
           setLogs={setLogs}
           phaseStartDate={goal.startDate}
+          dayMarks={consistencyDayMarks}
+          onToggleDay={toggleConsistencyDay}
+          onSetWeekCount={setWeekConsistencyCount}
           targetPerWeek={5}
         />
 

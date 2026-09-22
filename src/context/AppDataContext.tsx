@@ -16,15 +16,19 @@ import {
   DEFAULT_PHASE_MACROS,
   DEFAULT_SAVED_MEALS,
 } from '../data/defaults'
-import { DEFAULT_RECIPES } from '../data/recipes'
+import { DEFAULT_RECIPES, DEFAULT_FOOD_CATEGORIES } from '../data/recipes'
 import { ensureSeedTemplates } from '../data/workouts'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { pullAppState, pushAppState } from '../lib/appStateSync'
-import { fetchRecipesFromSupabase } from '../lib/recipesApi'
+import {
+  extractRecipeCategories,
+  fetchRecipesFromSupabase,
+} from '../lib/recipesApi'
 import { isSupabaseConfigured } from '../lib/supabase'
 import type {
   CustomHabit,
   Exercise,
+  FoodCategory,
   FoodLogEntry,
   GoalSettings,
   HabitChecks,
@@ -47,6 +51,10 @@ import {
   todayKey,
   uid,
 } from '../lib/types'
+import {
+  marksForWeekCount,
+  type ConsistencyDayMarks,
+} from '../lib/weeklyConsistency'
 
 type RecipesSyncStatus = 'idle' | 'loading' | 'synced' | 'error'
 
@@ -63,10 +71,17 @@ type AppDataContextValue = {
   macroTargets: MacroTargets
   setMacroTargets: (targets: MacroTargets) => void
   setLogs: SetLog[]
+  consistencyDayMarks: ConsistencyDayMarks
+  toggleConsistencyDay: (date: string) => void
+  setWeekConsistencyCount: (weekStart: Date, count: number) => void
   weightLogs: WeightEntry[]
   foodLogs: FoodLogEntry[]
   habitChecks: HabitChecks
   habits: CustomHabit[]
+  foodCategories: FoodCategory[]
+  addFoodCategory: (label: string) => void
+  updateFoodCategory: (id: string, label: string) => void
+  deleteFoodCategory: (id: string) => void
   workoutPrograms: WorkoutProgram[]
   activeProgramId: string
   activeProgram: WorkoutProgram | null
@@ -211,6 +226,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   )
 
   const [setLogs, setSetLogs] = useLocalStorage<SetLog[]>('tn.setLogs', [])
+  const [consistencyDayMarks, setConsistencyDayMarks] =
+    useLocalStorage<ConsistencyDayMarks>('tn.consistencyDayMarks.v1', {})
   const [weightLogs, setWeightLogs] = useLocalStorage<WeightEntry[]>(
     'tn.weightLogs',
     [],
@@ -224,6 +241,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     {},
   )
   const [habits, setHabits] = useLocalStorage<CustomHabit[]>('tn.habits', [])
+  const [foodCategories, setFoodCategories] = useLocalStorage<FoodCategory[]>(
+    'tn.foodCategories.v1',
+    DEFAULT_FOOD_CATEGORIES,
+  )
   const [savedMeals, setSavedMeals] = useLocalStorage<SavedMeal[]>(
     'tn.savedMeals.v2',
     DEFAULT_SAVED_MEALS,
@@ -547,6 +568,59 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [workoutPrograms, setWorkoutPrograms, setActiveProgramIdState],
   )
 
+  const toggleConsistencyDay = useCallback(
+    (date: string) => {
+      setConsistencyDayMarks((prev) => {
+        const logHas = setLogs.some((s) => s.loggedAt.startsWith(date))
+        const current = Object.prototype.hasOwnProperty.call(prev, date)
+          ? prev[date]
+          : logHas
+        return { ...prev, [date]: !current }
+      })
+    },
+    [setConsistencyDayMarks, setLogs],
+  )
+
+  const setWeekConsistencyCount = useCallback(
+    (weekStart: Date, count: number) => {
+      setConsistencyDayMarks((prev) => marksForWeekCount(weekStart, count, prev))
+    },
+    [setConsistencyDayMarks],
+  )
+
+  const addFoodCategory = useCallback(
+    (label: string) => {
+      const trimmed = label.trim()
+      if (!trimmed) return
+      setFoodCategories((prev) => {
+        if (prev.some((c) => c.label === trimmed)) return prev
+        return [...prev, { id: uid(), label: trimmed }]
+      })
+    },
+    [setFoodCategories],
+  )
+
+  const updateFoodCategory = useCallback(
+    (id: string, label: string) => {
+      const trimmed = label.trim()
+      if (!trimmed) return
+      setFoodCategories((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, label: trimmed } : c)),
+      )
+    },
+    [setFoodCategories],
+  )
+
+  const deleteFoodCategory = useCallback(
+    (id: string) => {
+      setFoodCategories((prev) => {
+        if (prev.length <= 1) return prev
+        return prev.filter((c) => c.id !== id)
+      })
+    },
+    [setFoodCategories],
+  )
+
   const syncRecipes = useCallback(async () => {
     if (!isSupabaseConfigured) {
       setRecipesSyncStatus('error')
@@ -559,6 +633,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     try {
       const remote = await fetchRecipesFromSupabase()
       if (remote.length > 0) setRecipes(remote)
+      const fromRecipes = extractRecipeCategories(remote)
+      if (fromRecipes.length > 0) {
+        setFoodCategories((prev) => {
+          const existing = new Set(prev.map((c) => c.label.toLowerCase()))
+          const extras = fromRecipes
+            .filter((label) => !existing.has(label.toLowerCase()))
+            .map((label) => ({ id: uid(), label }))
+          return extras.length ? [...prev, ...extras] : prev
+        })
+      }
       setRecipesSyncStatus('synced')
     } catch (err) {
       setRecipesSyncStatus('error')
@@ -566,7 +650,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         err instanceof Error ? err.message : 'סנכרון המתכונים נכשל',
       )
     }
-  }, [setRecipes])
+  }, [setRecipes, setFoodCategories])
 
   useEffect(() => {
     void syncRecipes()
@@ -602,6 +686,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           if (!librarySeeded) setLibrarySeeded(true)
         }
       }
+      if (remote.consistencyDayMarks) {
+        setConsistencyDayMarks(remote.consistencyDayMarks)
+      }
+      if (remote.foodCategories?.length) {
+        setFoodCategories(remote.foodCategories)
+      }
       setStateSyncStatus('synced')
       hydratedRef.current = true
     }
@@ -617,6 +707,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setActiveProgramIdState,
     setWorkoutTemplates,
     setLibrarySeeded,
+    setConsistencyDayMarks,
+    setFoodCategories,
   ])
 
   useEffect(() => {
@@ -636,6 +728,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         activeProgramId,
         workoutPrograms,
         workoutTemplates,
+        consistencyDayMarks,
+        foodCategories,
       }).then((ok) => setStateSyncStatus(ok ? 'synced' : 'error'))
     }, 800)
 
@@ -647,6 +741,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     activeProgramId,
     workoutPrograms,
     workoutTemplates,
+    consistencyDayMarks,
+    foodCategories,
   ])
 
   const addSetLog = useCallback(
@@ -802,10 +898,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       macroTargets,
       setMacroTargets,
       setLogs,
+      consistencyDayMarks,
+      toggleConsistencyDay,
+      setWeekConsistencyCount,
       weightLogs,
       foodLogs,
       habitChecks,
       habits,
+      foodCategories,
+      addFoodCategory,
+      updateFoodCategory,
+      deleteFoodCategory,
       workoutPrograms,
       activeProgramId: activeProgram?.id ?? activeProgramId,
       activeProgram,
@@ -859,10 +962,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       macroTargets,
       setMacroTargets,
       setLogs,
+      consistencyDayMarks,
+      toggleConsistencyDay,
+      setWeekConsistencyCount,
       weightLogs,
       foodLogs,
       habitChecks,
       habits,
+      foodCategories,
+      addFoodCategory,
+      updateFoodCategory,
+      deleteFoodCategory,
       workoutPrograms,
       activeProgramId,
       activeProgram,

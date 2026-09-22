@@ -6,6 +6,7 @@ import { FoodSearch } from '../components/nutrition/FoodSearch'
 import { RecipeCatalog } from '../components/nutrition/RecipeCatalog'
 import { SavedMeals } from '../components/nutrition/SavedMeals'
 import { ImportMealsModal } from '../components/nutrition/ImportMealsModal'
+import { FoodCategoriesManager } from '../components/nutrition/FoodCategoriesManager'
 import { EditTargetsModal } from '../components/dashboard/EditTargetsModal'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -115,6 +116,7 @@ export function NutritionPage() {
         </Card>
 
         <ImportMealsModal />
+        <FoodCategoriesManager />
         <RecipeCatalog />
       </div>
 

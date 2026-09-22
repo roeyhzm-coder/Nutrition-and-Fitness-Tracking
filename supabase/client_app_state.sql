@@ -15,6 +15,12 @@ create table if not exists public.client_app_state (
 alter table public.client_app_state
   add column if not exists workout_templates jsonb not null default '[]'::jsonb;
 
+alter table public.client_app_state
+  add column if not exists consistency_day_marks jsonb not null default '{}'::jsonb;
+
+alter table public.client_app_state
+  add column if not exists food_categories jsonb not null default '[]'::jsonb;
+
 alter table public.client_app_state enable row level security;
 
 drop policy if exists "client_app_state_all" on public.client_app_state;

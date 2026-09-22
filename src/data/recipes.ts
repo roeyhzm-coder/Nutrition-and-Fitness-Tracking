@@ -1,4 +1,4 @@
-import type { MealType, Recipe } from '../lib/types'
+import type { FoodCategory, MealType, Recipe } from '../lib/types'
 
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   breakfast: 'ארוחת בוקר',
@@ -6,6 +6,13 @@ export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   dinner: 'ארוחת ערב',
   snacks: 'נשנושים',
 }
+
+export const DEFAULT_FOOD_CATEGORIES: FoodCategory[] = [
+  { id: 'breakfast', label: 'ארוחת בוקר' },
+  { id: 'lunch', label: 'ארוחת צהריים' },
+  { id: 'dinner', label: 'ארוחת ערב' },
+  { id: 'snacks', label: 'נשנושים' },
+]
 
 /** מתכונים עתירי חלבון — ללא דגים/טונה, חרדל ובשר מעובד */
 export const DEFAULT_RECIPES: Recipe[] = [

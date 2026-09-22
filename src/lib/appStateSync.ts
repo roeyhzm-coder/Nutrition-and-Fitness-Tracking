@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from './supabase'
 import type {
+  FoodCategory,
   GoalSettings,
   Phase,
   PhaseMacroPresets,
@@ -7,6 +8,7 @@ import type {
   WorkoutTemplate,
 } from './types'
 import { normalizeGoal } from './types'
+import type { ConsistencyDayMarks } from './weeklyConsistency'
 
 const DEVICE_KEY = 'tn.deviceId'
 
@@ -26,6 +28,8 @@ export type SyncedAppState = {
   activeProgramId: string
   workoutPrograms: WorkoutProgram[]
   workoutTemplates: WorkoutTemplate[]
+  consistencyDayMarks: ConsistencyDayMarks
+  foodCategories: FoodCategory[]
   updatedAt: string
 }
 
@@ -38,7 +42,7 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
   const full = await supabase
     .from('client_app_state')
     .select(
-      'phase, goal, macro_presets, active_program_id, workout_programs, workout_templates, updated_at',
+      'phase, goal, macro_presets, active_program_id, workout_programs, workout_templates, consistency_day_marks, food_categories, updated_at',
     )
     .eq('device_id', deviceId)
     .maybeSingle()
@@ -47,12 +51,23 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
     const basic = await supabase
       .from('client_app_state')
       .select(
-        'phase, goal, macro_presets, active_program_id, workout_programs, updated_at',
+        'phase, goal, macro_presets, active_program_id, workout_programs, workout_templates, updated_at',
       )
       .eq('device_id', deviceId)
       .maybeSingle()
-    if (basic.error || !basic.data) return null
-    data = basic.data as Record<string, unknown>
+    if (basic.error || !basic.data) {
+      const older = await supabase
+        .from('client_app_state')
+        .select(
+          'phase, goal, macro_presets, active_program_id, workout_programs, updated_at',
+        )
+        .eq('device_id', deviceId)
+        .maybeSingle()
+      if (older.error || !older.data) return null
+      data = older.data as Record<string, unknown>
+    } else {
+      data = basic.data as Record<string, unknown>
+    }
   } else {
     if (!full.data) return null
     data = full.data as Record<string, unknown>
@@ -65,6 +80,9 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
     activeProgramId: data.active_program_id as string,
     workoutPrograms: data.workout_programs as WorkoutProgram[],
     workoutTemplates: (data.workout_templates as WorkoutTemplate[]) ?? [],
+    consistencyDayMarks:
+      (data.consistency_day_marks as ConsistencyDayMarks) ?? {},
+    foodCategories: (data.food_categories as FoodCategory[]) ?? [],
     updatedAt: data.updated_at as string,
   }
 }
@@ -77,7 +95,27 @@ export async function pushAppState(
   const deviceId = getDeviceId()
   const updatedAt = new Date().toISOString()
 
-  const { error } = await supabase.from('client_app_state').upsert(
+  const fullPayload = {
+    device_id: deviceId,
+    phase: state.phase,
+    goal: state.goal,
+    macro_presets: state.macroPresets,
+    active_program_id: state.activeProgramId,
+    workout_programs: state.workoutPrograms,
+    workout_templates: state.workoutTemplates,
+    consistency_day_marks: state.consistencyDayMarks,
+    food_categories: state.foodCategories,
+    updated_at: updatedAt,
+  }
+
+  const { error } = await supabase
+    .from('client_app_state')
+    .upsert(fullPayload, { onConflict: 'device_id' })
+
+  if (!error) return true
+
+  // Fallback if new columns are missing
+  const { error: basicError } = await supabase.from('client_app_state').upsert(
     {
       device_id: deviceId,
       phase: state.phase,
@@ -91,5 +129,5 @@ export async function pushAppState(
     { onConflict: 'device_id' },
   )
 
-  return !error
+  return !basicError
 }

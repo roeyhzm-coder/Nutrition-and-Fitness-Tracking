@@ -12,6 +12,7 @@ export type SupabaseRecipeRow = {
   id: string
   title: string
   image?: string | null
+  image_url?: string | null
   categories?: string[] | null
   equipment?: string[] | null
   ingredients?: SupabaseIngredient[] | string[] | null
@@ -51,6 +52,7 @@ function formatIngredient(ing: SupabaseIngredient | string): string {
 
 export function mapSupabaseRecipe(row: SupabaseRecipeRow): Recipe {
   const macros = row.macros ?? {}
+  const image = row.image_url || row.image || undefined
   return {
     id: row.id,
     name: row.title,
@@ -63,27 +65,53 @@ export function mapSupabaseRecipe(row: SupabaseRecipeRow): Recipe {
     tags: row.categories ?? [],
     ingredients: (row.ingredients ?? []).map(formatIngredient),
     steps: row.steps ?? [],
-    image: row.image ?? undefined,
+    image: image ?? undefined,
     categories: row.categories ?? [],
     equipment: row.equipment ?? [],
   }
 }
+
+const SELECT_WITH_URL =
+  'id, title, image, image_url, categories, equipment, ingredients, steps, macros, base_servings'
+const SELECT_BASIC =
+  'id, title, image, categories, equipment, ingredients, steps, macros, base_servings'
 
 export async function fetchRecipesFromSupabase(): Promise<Recipe[]> {
   if (!supabase) {
     throw new Error('Supabase אינו מוגדר')
   }
 
-  const { data, error } = await supabase
+  const full = await supabase
     .from('recipes')
-    .select(
-      'id, title, image, categories, equipment, ingredients, steps, macros, base_servings',
-    )
+    .select(SELECT_WITH_URL)
     .order('title', { ascending: true })
 
-  if (error) {
-    throw error
+  if (!full.error) {
+    return (full.data as SupabaseRecipeRow[] | null)?.map(mapSupabaseRecipe) ?? []
   }
 
-  return (data as SupabaseRecipeRow[] | null)?.map(mapSupabaseRecipe) ?? []
+  const basic = await supabase
+    .from('recipes')
+    .select(SELECT_BASIC)
+    .order('title', { ascending: true })
+
+  if (basic.error) throw basic.error
+
+  return (basic.data as SupabaseRecipeRow[] | null)?.map(mapSupabaseRecipe) ?? []
+}
+
+/** Unique category labels from synced recipes. */
+export function extractRecipeCategories(recipes: Recipe[]): string[] {
+  const set = new Set<string>()
+  for (const r of recipes) {
+    for (const c of r.categories ?? []) {
+      const t = c.trim()
+      if (t) set.add(t)
+    }
+    for (const t of r.tags ?? []) {
+      const x = t.trim()
+      if (x) set.add(x)
+    }
+  }
+  return [...set].sort((a, b) => a.localeCompare(b, 'he'))
 }

@@ -1,31 +1,61 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { UtensilsCrossed } from 'lucide-react'
 import { MEAL_TYPE_LABELS } from '../../data/recipes'
 import { useAppData } from '../../context/AppDataContext'
-import type { MealType, Recipe } from '../../lib/types'
+import type { Recipe } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 
-const filters: Array<{ id: 'all' | MealType; label: string }> = [
-  { id: 'all', label: 'הכל' },
-  { id: 'breakfast', label: MEAL_TYPE_LABELS.breakfast },
-  { id: 'lunch', label: MEAL_TYPE_LABELS.lunch },
-  { id: 'dinner', label: MEAL_TYPE_LABELS.dinner },
-  { id: 'snacks', label: MEAL_TYPE_LABELS.snacks },
-]
+function recipeMatchesCategory(recipe: Recipe, categoryLabel: string) {
+  const labels = [
+    ...(recipe.categories ?? []),
+    ...(recipe.tags ?? []),
+    MEAL_TYPE_LABELS[recipe.mealType],
+  ].map((s) => s.toLowerCase())
+  const q = categoryLabel.toLowerCase()
+  return labels.some((l) => l.includes(q) || q.includes(l))
+}
+
+function RecipeThumb({ src, alt }: { src?: string; alt: string }) {
+  const [failed, setFailed] = useState(false)
+  if (!src || failed) {
+    return (
+      <div
+        className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-card text-muted"
+        aria-hidden
+      >
+        <UtensilsCrossed className="size-6" strokeWidth={1.5} />
+      </div>
+    )
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="size-14 shrink-0 rounded-lg object-cover bg-card"
+      onError={() => setFailed(true)}
+    />
+  )
+}
 
 export function RecipeCatalog() {
   const {
     recipes,
+    foodCategories,
     addFood,
     recipesSyncStatus,
     recipesSyncError,
     syncRecipes,
   } = useAppData()
-  const [filter, setFilter] = useState<'all' | MealType>('all')
+  const [filter, setFilter] = useState<string>('all')
   const [openId, setOpenId] = useState<string | null>(null)
 
-  const list =
-    filter === 'all' ? recipes : recipes.filter((r) => r.mealType === filter)
+  const list = useMemo(() => {
+    if (filter === 'all') return recipes
+    const cat = foodCategories.find((c) => c.id === filter)
+    if (!cat) return recipes
+    return recipes.filter((r) => recipeMatchesCategory(r, cat.label))
+  }, [recipes, foodCategories, filter])
 
   function logRecipe(recipe: Recipe) {
     addFood({
@@ -45,16 +75,17 @@ export function RecipeCatalog() {
       action={
         <button
           type="button"
-          className="text-sm font-medium text-primary"
+          className="text-sm font-medium text-primary disabled:opacity-50"
+          disabled={recipesSyncStatus === 'loading'}
           onClick={() => void syncRecipes()}
         >
-          סנכרון
+          {recipesSyncStatus === 'loading' ? 'מסנכרן…' : 'סנכרן'}
         </button>
       }
     >
       <p className="mb-3 text-xs text-muted">
         {recipesSyncStatus === 'loading'
-          ? 'מסנכרן מתכונים מ-Supabase…'
+          ? 'מושך מתכונים וקטגוריות מ-Supabase…'
           : recipesSyncStatus === 'synced'
             ? `מסונכרן · ${recipes.length} מתכונים`
             : recipesSyncStatus === 'error'
@@ -63,19 +94,31 @@ export function RecipeCatalog() {
       </p>
 
       <div className="mb-3 flex flex-wrap gap-2">
-        {filters.map((f) => (
+        <button
+          type="button"
+          onClick={() => setFilter('all')}
+          className={[
+            'rounded-lg px-3 py-1.5 text-xs font-medium transition',
+            filter === 'all'
+              ? 'bg-primary text-white'
+              : 'bg-surface text-muted hover:text-text',
+          ].join(' ')}
+        >
+          הכל
+        </button>
+        {foodCategories.map((c) => (
           <button
-            key={f.id}
+            key={c.id}
             type="button"
-            onClick={() => setFilter(f.id)}
+            onClick={() => setFilter(c.id)}
             className={[
               'rounded-lg px-3 py-1.5 text-xs font-medium transition',
-              filter === f.id
+              filter === c.id
                 ? 'bg-primary text-white'
                 : 'bg-surface text-muted hover:text-text',
             ].join(' ')}
           >
-            {f.label}
+            {c.label}
           </button>
         ))}
       </div>
@@ -94,13 +137,7 @@ export function RecipeCatalog() {
                 onClick={() => setOpenId(open ? null : recipe.id)}
               >
                 <div className="flex items-start gap-3">
-                  {recipe.image ? (
-                    <img
-                      src={recipe.image}
-                      alt=""
-                      className="size-14 shrink-0 rounded-lg object-cover bg-card"
-                    />
-                  ) : null}
+                  <RecipeThumb src={recipe.image} alt={recipe.name} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <div>

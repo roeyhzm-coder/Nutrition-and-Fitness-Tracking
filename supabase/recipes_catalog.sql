@@ -6,6 +6,7 @@ create table if not exists public.recipes (
   user_id uuid references auth.users (id) on delete set null,
   title text not null,
   image text,
+  image_url text,
   categories text[] not null default '{}',
   equipment text[] not null default '{}',
   ingredients jsonb not null default '[]'::jsonb,
@@ -18,6 +19,9 @@ create table if not exists public.recipes (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.recipes
+  add column if not exists image_url text;
 
 alter table public.recipes enable row level security;
 
