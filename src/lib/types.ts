@@ -72,6 +72,61 @@ export type SavedMeal = {
   fats: number
 }
 
+export type UserProfile = {
+  age: number | null
+  heightCm: number | null
+  startWeightKg: number | null
+  estimatedBodyFatPct: number | null
+  avoidFoods: string
+  allergies: string
+  supplements: string
+  injuries: string
+}
+
+export const EMPTY_PROFILE: UserProfile = {
+  age: null,
+  heightCm: null,
+  startWeightKg: null,
+  estimatedBodyFatPct: null,
+  avoidFoods: '',
+  allergies: '',
+  supplements: '',
+  injuries: '',
+}
+
+export function normalizeProfile(
+  profile: Partial<UserProfile> | null | undefined,
+): UserProfile {
+  return { ...EMPTY_PROFILE, ...(profile ?? {}) }
+}
+
+export type Intensity = 'low' | 'moderate' | 'high'
+
+export const INTENSITY_LABELS: Record<Intensity, string> = {
+  low: 'קלה',
+  moderate: 'בינונית',
+  high: 'גבוהה',
+}
+
+export type ActivityLog = {
+  id: string
+  sport: string
+  durationMin: number
+  intensity: Intensity | null
+  notes?: string
+  loggedAt: string
+}
+
+export type LifestyleEntry = {
+  steps: number | null
+  sleepHours: number | null
+  /** 1–10 subjective recovery score */
+  recovery: number | null
+}
+
+/** Keyed by YYYY-MM-DD */
+export type LifestyleLogs = Record<string, LifestyleEntry>
+
 /** @deprecated use GoalSettings */
 export type ProcessSettings = GoalSettings
 

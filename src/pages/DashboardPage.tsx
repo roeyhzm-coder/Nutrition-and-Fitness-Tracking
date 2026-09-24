@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Flame, Percent, Scale } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Button } from '../components/ui/Button'
@@ -9,6 +10,8 @@ import { AddFoodModal } from '../components/dashboard/AddFoodModal'
 import { GoalPhaseCard } from '../components/dashboard/GoalPhaseCard'
 import { WeightFatTracker } from '../components/dashboard/WeightFatTracker'
 import { WeeklyConsistencyTracker } from '../components/dashboard/WeeklyConsistencyTracker'
+import { LifestyleCard } from '../components/dashboard/LifestyleCard'
+import { FoodLogList } from '../components/nutrition/FoodLogList'
 import { useAppData } from '../context/AppDataContext'
 import { PHASE_LABELS, todayKey } from '../lib/types'
 
@@ -105,6 +108,28 @@ export function DashboardPage() {
           </p>
         </Card>
 
+        <Card
+          title={`יומן מזון היום · ${todayFood.length}`}
+          action={
+            <Link
+              to="/nutrition#food-log"
+              className="text-xs font-semibold text-primary hover:underline"
+            >
+              ליומן המלא
+            </Link>
+          }
+        >
+          <FoodLogList
+            entries={[...todayFood].reverse().slice(0, 5)}
+            compact
+          />
+          {todayFood.length > 5 ? (
+            <p className="mt-2 text-xs text-muted">
+              מוצגות 5 הרשומות האחרונות מתוך {todayFood.length}
+            </p>
+          ) : null}
+        </Card>
+
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-2xl border border-line bg-card p-4">
             <div className="flex items-center justify-between">
@@ -133,6 +158,7 @@ export function DashboardPage() {
         </div>
 
         <WeightFatTracker entries={weightLogs} onAdd={addWeight} />
+        <LifestyleCard />
       </div>
 
       <EditTargetsModal

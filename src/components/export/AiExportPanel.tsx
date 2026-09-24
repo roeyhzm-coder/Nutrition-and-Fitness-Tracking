@@ -15,6 +15,9 @@ export function AiExportPanel() {
     goal,
     phase,
     workoutDays,
+    profile,
+    activityLogs,
+    lifestyleLogs,
   } = useAppData()
   const [copied, setCopied] = useState(false)
 
@@ -30,6 +33,9 @@ export function AiExportPanel() {
         goal,
         phase,
         workoutDays,
+        profile,
+        activityLogs,
+        lifestyleLogs,
       }),
     [
       setLogs,
@@ -41,6 +47,9 @@ export function AiExportPanel() {
       goal,
       phase,
       workoutDays,
+      profile,
+      activityLogs,
+      lifestyleLogs,
     ],
   )
 
@@ -57,8 +66,8 @@ export function AiExportPanel() {
   return (
     <Card title="ייצוא נתונים">
       <p className="mb-3 text-sm text-muted">
-        פרומפט מובנה בעברית: מטרת על, שלב נוכחי, עקביות שבועית ומאקרו מול
-        יעדים.
+        פרומפט מובנה בעברית: מדדי גוף, מטרת על ושלב נוכחי, פילוח ענפי ספורט,
+        אורח חיים, מאקרו מול יעדים ומגבלות תזונה ובריאות.
       </p>
       <Button className="w-full" variant="accent" onClick={copy}>
         {copied ? 'הועתק ✓' : 'העתק ייצוא נתונים'}

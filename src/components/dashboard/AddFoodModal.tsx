@@ -1,6 +1,9 @@
 import { useState } from 'react'
+import { Check, Pencil, Plus, Settings2, Trash2, X } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
+import type { SavedMeal } from '../../lib/types'
 import { Button } from '../ui/Button'
+import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 
 type AddFoodModalProps = {
@@ -8,104 +11,333 @@ type AddFoodModalProps = {
   onClose: () => void
 }
 
-export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
-  const { addFood, savedMeals, logSavedMeal } = useAppData()
-  const [name, setName] = useState('')
-  const [calories, setCalories] = useState('')
-  const [protein, setProtein] = useState('')
-  const [carbs, setCarbs] = useState('')
-  const [fats, setFats] = useState('')
+type MacroForm = {
+  name: string
+  calories: string
+  protein: string
+  carbs: string
+  fats: string
+}
 
-  function reset() {
-    setName('')
-    setCalories('')
-    setProtein('')
-    setCarbs('')
-    setFats('')
+const EMPTY_FORM: MacroForm = {
+  name: '',
+  calories: '',
+  protein: '',
+  carbs: '',
+  fats: '',
+}
+
+const MACRO_FIELDS = [
+  ['calories', 'קלוריות', 'numeric'],
+  ['protein', 'חלבון', 'decimal'],
+  ['carbs', 'פחמימות', 'decimal'],
+  ['fats', 'שומנים', 'decimal'],
+] as const
+
+const inputClass =
+  'w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary'
+
+function toForm(meal: SavedMeal): MacroForm {
+  return {
+    name: meal.name,
+    calories: String(meal.calories),
+    protein: String(meal.protein),
+    carbs: String(meal.carbs),
+    fats: String(meal.fats),
+  }
+}
+
+function toMacros(form: MacroForm): Omit<SavedMeal, 'id'> {
+  return {
+    name: form.name.trim(),
+    calories: Number(form.calories) || 0,
+    protein: Number(form.protein) || 0,
+    carbs: Number(form.carbs) || 0,
+    fats: Number(form.fats) || 0,
+  }
+}
+
+function MacroFields({
+  form,
+  onChange,
+  namePlaceholder,
+}: {
+  form: MacroForm
+  onChange: (patch: Partial<MacroForm>) => void
+  namePlaceholder: string
+}) {
+  return (
+    <>
+      <input
+        value={form.name}
+        onChange={(e) => onChange({ name: e.target.value })}
+        placeholder={namePlaceholder}
+        className={inputClass}
+        required
+      />
+      <div className="grid grid-cols-2 gap-2">
+        {MACRO_FIELDS.map(([key, label, mode]) => (
+          <label key={key} className="block text-xs text-muted">
+            {label}
+            <input
+              inputMode={mode}
+              value={form[key]}
+              onChange={(e) => onChange({ [key]: e.target.value })}
+              placeholder="0"
+              className={`mt-1 ${inputClass}`}
+            />
+          </label>
+        ))}
+      </div>
+    </>
+  )
+}
+
+export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
+  const {
+    addFood,
+    savedMeals,
+    logSavedMeal,
+    addSavedMeal,
+    updateSavedMeal,
+    deleteSavedMeal,
+  } = useAppData()
+  const [form, setForm] = useState<MacroForm>(EMPTY_FORM)
+  const [saveAsPreset, setSaveAsPreset] = useState(false)
+  const [manage, setManage] = useState(false)
+  /** null = closed, 'new' = creating, otherwise the preset id being edited */
+  const [editorTarget, setEditorTarget] = useState<string | null>(null)
+  const [editorForm, setEditorForm] = useState<MacroForm>(EMPTY_FORM)
+  const [notice, setNotice] = useState<string | null>(null)
+
+  function flash(message: string) {
+    setNotice(message)
+    window.setTimeout(() => setNotice(null), 2000)
+  }
+
+  function close() {
+    setForm(EMPTY_FORM)
+    setSaveAsPreset(false)
+    setManage(false)
+    setEditorTarget(null)
+    setNotice(null)
+    onClose()
+  }
+
+  function openEditor(meal?: SavedMeal) {
+    setEditorTarget(meal ? meal.id : 'new')
+    setEditorForm(meal ? toForm(meal) : EMPTY_FORM)
+  }
+
+  function saveEditor() {
+    const payload = toMacros(editorForm)
+    if (!payload.name) return
+    if (editorTarget === 'new') addSavedMeal(payload)
+    else if (editorTarget) updateSavedMeal(editorTarget, payload)
+    setEditorTarget(null)
+    flash(editorTarget === 'new' ? 'התבנית נוספה' : 'התבנית עודכנה')
+  }
+
+  function presetExists(name: string) {
+    return savedMeals.some((m) => m.name.trim() === name)
+  }
+
+  function saveManualAsPreset() {
+    const payload = toMacros(form)
+    if (!payload.name) return
+    const existing = savedMeals.find((m) => m.name.trim() === payload.name)
+    if (existing) updateSavedMeal(existing.id, payload)
+    else addSavedMeal(payload)
+    flash(existing ? 'התבנית הקיימת עודכנה' : 'נשמר כתבנית קבועה')
   }
 
   return (
-    <Modal open={open} title="הוספת מזון / ארוחה" onClose={onClose} wide>
+    <Modal open={open} title="הוספת מזון / ארוחה" onClose={close} wide>
       <div className="space-y-4">
-        {savedMeals.length > 0 ? (
-          <div>
-            <p className="mb-2 text-xs font-medium text-muted">ארוחות קבועות</p>
-            <div className="flex flex-wrap gap-2">
-              {savedMeals.map((m) => (
-                <Button
-                  key={m.id}
-                  variant="surface"
-                  onClick={() => {
-                    logSavedMeal(m.id)
-                    onClose()
-                  }}
+        <section>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-muted">ארוחות קבועות</p>
+            <div className="flex items-center gap-1">
+              <IconButton
+                label="תבנית חדשה"
+                tone="accent"
+                onClick={() => openEditor()}
+              >
+                <Plus className="size-4" strokeWidth={1.75} />
+              </IconButton>
+              {savedMeals.length > 0 ? (
+                <IconButton
+                  label={manage ? 'סיום ניהול' : 'ניהול תבניות'}
+                  tone="accent"
+                  className={manage ? 'bg-primary/10 text-primary' : ''}
+                  onClick={() => setManage((v) => !v)}
                 >
-                  {m.name}
-                </Button>
-              ))}
+                  <Settings2 className="size-4" strokeWidth={1.75} />
+                </IconButton>
+              ) : null}
             </div>
           </div>
-        ) : null}
+
+          {editorTarget ? (
+            <form
+              className="mb-3 space-y-2 rounded-xl border border-primary/40 bg-surface/60 p-3"
+              onSubmit={(e) => {
+                e.preventDefault()
+                saveEditor()
+              }}
+            >
+              <p className="text-xs font-semibold text-text">
+                {editorTarget === 'new' ? 'תבנית חדשה' : 'עריכת תבנית'}
+              </p>
+              <MacroFields
+                form={editorForm}
+                onChange={(patch) => setEditorForm((p) => ({ ...p, ...patch }))}
+                namePlaceholder="למשל: ארוחת ערב, ארוחת בוטנים, נשנוש ביניים"
+              />
+              <div className="flex gap-2">
+                <Button type="submit" variant="accent" className="flex-1">
+                  <Check className="size-3.5" strokeWidth={2} />
+                  שמור תבנית
+                </Button>
+                <Button variant="surface" onClick={() => setEditorTarget(null)}>
+                  <X className="size-3.5" strokeWidth={2} />
+                  ביטול
+                </Button>
+              </div>
+            </form>
+          ) : null}
+
+          {savedMeals.length === 0 ? (
+            <p className="text-sm text-muted">
+              אין תבניות עדיין. הוסף תבנית חדשה או שמור ארוחה ידנית כתבנית.
+            </p>
+          ) : manage ? (
+            <ul className="space-y-2">
+              {savedMeals.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-text">
+                      {m.name}
+                    </p>
+                    <p className="text-xs text-muted">
+                      {m.calories} קק״ל · ח {m.protein} · פ {m.carbs} · ש{' '}
+                      {m.fats}
+                    </p>
+                  </div>
+                  <IconButton
+                    label="ערוך תבנית"
+                    tone="accent"
+                    onClick={() => openEditor(m)}
+                  >
+                    <Pencil className="size-3.5" strokeWidth={1.75} />
+                  </IconButton>
+                  <IconButton
+                    label="מחק תבנית"
+                    tone="danger"
+                    onClick={() => {
+                      if (window.confirm(`למחוק את "${m.name}"?`)) {
+                        deleteSavedMeal(m.id)
+                        if (editorTarget === m.id) setEditorTarget(null)
+                      }
+                    }}
+                  >
+                    <Trash2 className="size-3.5" strokeWidth={1.75} />
+                  </IconButton>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {savedMeals.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-stretch overflow-hidden rounded-xl border border-line bg-surface"
+                >
+                  <button
+                    type="button"
+                    className="px-3 py-1.5 text-right transition hover:bg-line"
+                    title="מילוי השדות לעריכה לפני הוספה"
+                    onClick={() => {
+                      setForm(toForm(m))
+                      setSaveAsPreset(false)
+                    }}
+                  >
+                    <span className="block text-sm font-semibold text-text">
+                      {m.name}
+                    </span>
+                    <span className="block text-[10px] text-muted">
+                      {m.calories} קק״ל · ח {m.protein}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`הוסף ${m.name} ישירות ליומן`}
+                    title="הוסף ישירות ליומן"
+                    className="flex items-center border-s border-line px-2 text-accent transition hover:bg-accent hover:text-bg"
+                    onClick={() => {
+                      logSavedMeal(m.id)
+                      close()
+                    }}
+                  >
+                    <Plus className="size-4" strokeWidth={2} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {!manage && savedMeals.length > 0 ? (
+            <p className="mt-2 text-[10px] text-muted">
+              לחיצה על שם ממלאת את השדות · לחיצה על + מוסיפה ישירות ליומן
+            </p>
+          ) : null}
+          {notice ? (
+            <p className="mt-2 text-xs font-medium text-accent">{notice}</p>
+          ) : null}
+        </section>
 
         <form
           className="space-y-3 border-t border-line pt-3"
           onSubmit={(e) => {
             e.preventDefault()
-            if (!name.trim()) return
-            addFood({
-              name: name.trim(),
-              grams: 1,
-              calories: Number(calories) || 0,
-              protein: Number(protein) || 0,
-              carbs: Number(carbs) || 0,
-              fats: Number(fats) || 0,
-              source: 'manual',
-            })
-            reset()
-            onClose()
+            const payload = toMacros(form)
+            if (!payload.name) return
+            addFood({ ...payload, grams: 1, source: 'manual' })
+            if (saveAsPreset) saveManualAsPreset()
+            close()
           }}
         >
           <p className="text-xs font-medium text-muted">הוספה ידנית</p>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="שם המזון / הארוחה"
-            className="w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-            required
+          <MacroFields
+            form={form}
+            onChange={(patch) => setForm((p) => ({ ...p, ...patch }))}
+            namePlaceholder="שם המזון / הארוחה"
           />
-          <div className="grid grid-cols-2 gap-2">
+          <label className="flex items-center gap-2 text-xs text-muted">
             <input
-              inputMode="numeric"
-              value={calories}
-              onChange={(e) => setCalories(e.target.value)}
-              placeholder="קלוריות"
-              className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              type="checkbox"
+              checked={saveAsPreset}
+              onChange={(e) => setSaveAsPreset(e.target.checked)}
+              className="size-4 accent-primary"
             />
-            <input
-              inputMode="decimal"
-              value={protein}
-              onChange={(e) => setProtein(e.target.value)}
-              placeholder="חלבון"
-              className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-            />
-            <input
-              inputMode="decimal"
-              value={carbs}
-              onChange={(e) => setCarbs(e.target.value)}
-              placeholder="פחמימות"
-              className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-            />
-            <input
-              inputMode="decimal"
-              value={fats}
-              onChange={(e) => setFats(e.target.value)}
-              placeholder="שומנים"
-              className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-            />
+            {presetExists(form.name.trim())
+              ? 'עדכן גם את התבנית הקבועה בשם זה'
+              : 'שמור גם כתבנית קבועה לשימוש עתידי'}
+          </label>
+          <div className="flex gap-2">
+            <Button type="submit" className="flex-1" variant="accent">
+              הוסף ליומן
+            </Button>
+            <Button
+              variant="surface"
+              disabled={!form.name.trim()}
+              onClick={saveManualAsPreset}
+            >
+              שמור כתבנית בלבד
+            </Button>
           </div>
-          <Button type="submit" className="w-full" variant="accent">
-            הוסף ליומן
-          </Button>
         </form>
       </div>
     </Modal>

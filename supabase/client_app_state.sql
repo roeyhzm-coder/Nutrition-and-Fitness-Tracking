@@ -21,6 +21,21 @@ alter table public.client_app_state
 alter table public.client_app_state
   add column if not exists food_categories jsonb not null default '[]'::jsonb;
 
+alter table public.client_app_state
+  add column if not exists saved_meals jsonb not null default '[]'::jsonb;
+
+alter table public.client_app_state
+  add column if not exists user_profile jsonb;
+
+alter table public.client_app_state
+  add column if not exists activity_logs jsonb not null default '[]'::jsonb;
+
+alter table public.client_app_state
+  add column if not exists lifestyle_logs jsonb not null default '{}'::jsonb;
+
+alter table public.client_app_state
+  add column if not exists food_logs jsonb not null default '[]'::jsonb;
+
 alter table public.client_app_state enable row level security;
 
 drop policy if exists "client_app_state_all" on public.client_app_state;

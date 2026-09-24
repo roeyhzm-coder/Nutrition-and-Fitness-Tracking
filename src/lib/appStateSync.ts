@@ -1,13 +1,18 @@
 import { supabase, isSupabaseConfigured } from './supabase'
 import type {
+  ActivityLog,
   FoodCategory,
+  FoodLogEntry,
   GoalSettings,
+  LifestyleLogs,
   Phase,
   PhaseMacroPresets,
+  SavedMeal,
+  UserProfile,
   WorkoutProgram,
   WorkoutTemplate,
 } from './types'
-import { normalizeGoal } from './types'
+import { normalizeGoal, normalizeProfile } from './types'
 import type { ConsistencyDayMarks } from './weeklyConsistency'
 
 const DEVICE_KEY = 'tn.deviceId'
@@ -30,48 +35,51 @@ export type SyncedAppState = {
   workoutTemplates: WorkoutTemplate[]
   consistencyDayMarks: ConsistencyDayMarks
   foodCategories: FoodCategory[]
+  /** Undefined when the remote table lacks the extended columns. */
+  savedMeals?: SavedMeal[]
+  foodLogs?: FoodLogEntry[]
+  profile?: UserProfile
+  activityLogs?: ActivityLog[]
+  lifestyleLogs?: LifestyleLogs
   updatedAt: string
 }
+
+const BASE_COLUMNS =
+  'phase, goal, macro_presets, active_program_id, workout_programs, updated_at'
+const TEMPLATE_COLUMNS = `${BASE_COLUMNS}, workout_templates`
+const FULL_COLUMNS = `${TEMPLATE_COLUMNS}, consistency_day_marks, food_categories`
+const EXTENDED_COLUMNS = `${FULL_COLUMNS}, saved_meals, user_profile, activity_logs, lifestyle_logs`
+const FOOD_LOG_COLUMNS = `${EXTENDED_COLUMNS}, food_logs`
 
 export async function pullAppState(): Promise<SyncedAppState | null> {
   if (!isSupabaseConfigured || !supabase) return null
 
   const deviceId = getDeviceId()
   let data: Record<string, unknown> | null = null
+  let hasExtended = false
+  let hasFoodLogs = false
 
-  const full = await supabase
-    .from('client_app_state')
-    .select(
-      'phase, goal, macro_presets, active_program_id, workout_programs, workout_templates, consistency_day_marks, food_categories, updated_at',
-    )
-    .eq('device_id', deviceId)
-    .maybeSingle()
-
-  if (full.error) {
-    const basic = await supabase
+  for (const columns of [
+    FOOD_LOG_COLUMNS,
+    EXTENDED_COLUMNS,
+    FULL_COLUMNS,
+    TEMPLATE_COLUMNS,
+    BASE_COLUMNS,
+  ]) {
+    const res = await supabase
       .from('client_app_state')
-      .select(
-        'phase, goal, macro_presets, active_program_id, workout_programs, workout_templates, updated_at',
-      )
+      .select(columns)
       .eq('device_id', deviceId)
       .maybeSingle()
-    if (basic.error || !basic.data) {
-      const older = await supabase
-        .from('client_app_state')
-        .select(
-          'phase, goal, macro_presets, active_program_id, workout_programs, updated_at',
-        )
-        .eq('device_id', deviceId)
-        .maybeSingle()
-      if (older.error || !older.data) return null
-      data = older.data as Record<string, unknown>
-    } else {
-      data = basic.data as Record<string, unknown>
-    }
-  } else {
-    if (!full.data) return null
-    data = full.data as Record<string, unknown>
+    if (res.error) continue
+    if (!res.data) return null
+    data = res.data as unknown as Record<string, unknown>
+    hasFoodLogs = columns === FOOD_LOG_COLUMNS
+    hasExtended = hasFoodLogs || columns === EXTENDED_COLUMNS
+    break
   }
+
+  if (!data) return null
 
   return {
     phase: data.phase as Phase,
@@ -83,6 +91,21 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
     consistencyDayMarks:
       (data.consistency_day_marks as ConsistencyDayMarks) ?? {},
     foodCategories: (data.food_categories as FoodCategory[]) ?? [],
+    ...(hasExtended
+      ? {
+          savedMeals: (data.saved_meals as SavedMeal[] | null) ?? undefined,
+          profile: data.user_profile
+            ? normalizeProfile(data.user_profile as Partial<UserProfile>)
+            : undefined,
+          activityLogs:
+            (data.activity_logs as ActivityLog[] | null) ?? undefined,
+          lifestyleLogs:
+            (data.lifestyle_logs as LifestyleLogs | null) ?? undefined,
+        }
+      : {}),
+    ...(hasFoodLogs
+      ? { foodLogs: (data.food_logs as FoodLogEntry[] | null) ?? undefined }
+      : {}),
     updatedAt: data.updated_at as string,
   }
 }
@@ -95,7 +118,7 @@ export async function pushAppState(
   const deviceId = getDeviceId()
   const updatedAt = new Date().toISOString()
 
-  const fullPayload = {
+  const basePayload = {
     device_id: deviceId,
     phase: state.phase,
     goal: state.goal,
@@ -103,31 +126,36 @@ export async function pushAppState(
     active_program_id: state.activeProgramId,
     workout_programs: state.workoutPrograms,
     workout_templates: state.workoutTemplates,
-    consistency_day_marks: state.consistencyDayMarks,
-    food_categories: state.foodCategories,
     updated_at: updatedAt,
   }
+  const fullPayload = {
+    ...basePayload,
+    consistency_day_marks: state.consistencyDayMarks,
+    food_categories: state.foodCategories,
+  }
+  const extendedPayload = {
+    ...fullPayload,
+    saved_meals: state.savedMeals ?? [],
+    user_profile: state.profile ?? null,
+    activity_logs: state.activityLogs ?? [],
+    lifestyle_logs: state.lifestyleLogs ?? {},
+  }
+  const foodLogPayload = {
+    ...extendedPayload,
+    food_logs: state.foodLogs ?? [],
+  }
 
-  const { error } = await supabase
-    .from('client_app_state')
-    .upsert(fullPayload, { onConflict: 'device_id' })
-
-  if (!error) return true
-
-  // Fallback if new columns are missing
-  const { error: basicError } = await supabase.from('client_app_state').upsert(
-    {
-      device_id: deviceId,
-      phase: state.phase,
-      goal: state.goal,
-      macro_presets: state.macroPresets,
-      active_program_id: state.activeProgramId,
-      workout_programs: state.workoutPrograms,
-      workout_templates: state.workoutTemplates,
-      updated_at: updatedAt,
-    },
-    { onConflict: 'device_id' },
-  )
-
-  return !basicError
+  // Fall back progressively if newer columns are missing
+  for (const payload of [
+    foodLogPayload,
+    extendedPayload,
+    fullPayload,
+    basePayload,
+  ]) {
+    const { error } = await supabase
+      .from('client_app_state')
+      .upsert(payload, { onConflict: 'device_id' })
+    if (!error) return true
+  }
+  return false
 }

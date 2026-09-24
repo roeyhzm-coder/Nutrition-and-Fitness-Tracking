@@ -26,18 +26,22 @@ import {
 } from '../lib/recipesApi'
 import { isSupabaseConfigured } from '../lib/supabase'
 import type {
+  ActivityLog,
   CustomHabit,
   Exercise,
   FoodCategory,
   FoodLogEntry,
   GoalSettings,
   HabitChecks,
+  LifestyleEntry,
+  LifestyleLogs,
   MacroTargets,
   Phase,
   PhaseMacroPresets,
   Recipe,
   SavedMeal,
   SetLog,
+  UserProfile,
   WeightEntry,
   WorkoutDay,
   WorkoutProgram,
@@ -45,7 +49,9 @@ import type {
 } from '../lib/types'
 import {
   dayAllExercises,
+  EMPTY_PROFILE,
   normalizeGoal,
+  normalizeProfile,
   normalizeWorkoutDay,
   normalizeWorkoutProgram,
   todayKey,
@@ -145,11 +151,25 @@ type AppDataContextValue = {
     note?: string
   }) => void
   addFood: (entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) => void
+  updateFood: (
+    id: string,
+    patch: Partial<Omit<FoodLogEntry, 'id' | 'loggedAt'>>,
+  ) => void
+  deleteFood: (id: string) => void
   logSavedMeal: (mealId: string) => void
   addHabit: (label: string) => void
   updateHabit: (id: string, label: string) => void
   deleteHabit: (id: string) => void
   toggleHabit: (itemId: string) => void
+  profile: UserProfile
+  setProfile: (profile: UserProfile) => void
+  activityLogs: ActivityLog[]
+  addActivityLog: (entry: Omit<ActivityLog, 'id' | 'loggedAt'> & {
+    loggedAt?: string
+  }) => void
+  deleteActivityLog: (id: string) => void
+  lifestyleLogs: LifestyleLogs
+  setLifestyleEntry: (date: string, entry: LifestyleEntry) => void
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null)
@@ -252,6 +272,23 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [recipes, setRecipes] = useLocalStorage<Recipe[]>(
     'tn.recipes.v3',
     DEFAULT_RECIPES,
+  )
+  const [profileRaw, setProfileRaw] = useLocalStorage<UserProfile>(
+    'tn.profile.v1',
+    EMPTY_PROFILE,
+  )
+  const profile = useMemo(() => normalizeProfile(profileRaw), [profileRaw])
+  const setProfile = useCallback(
+    (next: UserProfile) => setProfileRaw(normalizeProfile(next)),
+    [setProfileRaw],
+  )
+  const [activityLogs, setActivityLogs] = useLocalStorage<ActivityLog[]>(
+    'tn.activityLogs.v1',
+    [],
+  )
+  const [lifestyleLogs, setLifestyleLogs] = useLocalStorage<LifestyleLogs>(
+    'tn.lifestyleLogs.v1',
+    {},
   )
   const [recipesSyncStatus, setRecipesSyncStatus] =
     useState<RecipesSyncStatus>('idle')
@@ -692,6 +729,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (remote.foodCategories?.length) {
         setFoodCategories(remote.foodCategories)
       }
+      if (remote.savedMeals?.length) setSavedMeals(remote.savedMeals)
+      if (remote.foodLogs?.length) setFoodLogs(remote.foodLogs)
+      if (remote.profile) setProfileRaw(remote.profile)
+      if (remote.activityLogs?.length) setActivityLogs(remote.activityLogs)
+      if (remote.lifestyleLogs && Object.keys(remote.lifestyleLogs).length) {
+        setLifestyleLogs(remote.lifestyleLogs)
+      }
       setStateSyncStatus('synced')
       hydratedRef.current = true
     }
@@ -709,6 +753,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setLibrarySeeded,
     setConsistencyDayMarks,
     setFoodCategories,
+    setSavedMeals,
+    setFoodLogs,
+    setProfileRaw,
+    setActivityLogs,
+    setLifestyleLogs,
   ])
 
   useEffect(() => {
@@ -730,6 +779,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         workoutTemplates,
         consistencyDayMarks,
         foodCategories,
+        savedMeals,
+        foodLogs,
+        profile,
+        activityLogs,
+        lifestyleLogs,
       }).then((ok) => setStateSyncStatus(ok ? 'synced' : 'error'))
     }, 800)
 
@@ -743,6 +797,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     workoutTemplates,
     consistencyDayMarks,
     foodCategories,
+    savedMeals,
+    foodLogs,
+    profile,
+    activityLogs,
+    lifestyleLogs,
   ])
 
   const addSetLog = useCallback(
@@ -781,6 +840,22 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         ...prev,
         { ...entry, id: uid(), loggedAt: new Date().toISOString() },
       ])
+    },
+    [setFoodLogs],
+  )
+
+  const updateFood = useCallback(
+    (id: string, patch: Partial<Omit<FoodLogEntry, 'id' | 'loggedAt'>>) => {
+      setFoodLogs((prev) =>
+        prev.map((f) => (f.id === id ? { ...f, ...patch } : f)),
+      )
+    },
+    [setFoodLogs],
+  )
+
+  const deleteFood = useCallback(
+    (id: string) => {
+      setFoodLogs((prev) => prev.filter((f) => f.id !== id))
     },
     [setFoodLogs],
   )
@@ -885,6 +960,39 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [setHabitChecks],
   )
 
+  const addActivityLog = useCallback(
+    (
+      entry: Omit<ActivityLog, 'id' | 'loggedAt'> & { loggedAt?: string },
+    ) => {
+      const sport = entry.sport.trim()
+      if (!sport) return
+      setActivityLogs((prev) => [
+        ...prev,
+        {
+          ...entry,
+          sport,
+          id: uid(),
+          loggedAt: entry.loggedAt ?? new Date().toISOString(),
+        },
+      ])
+    },
+    [setActivityLogs],
+  )
+
+  const deleteActivityLog = useCallback(
+    (id: string) => {
+      setActivityLogs((prev) => prev.filter((a) => a.id !== id))
+    },
+    [setActivityLogs],
+  )
+
+  const setLifestyleEntry = useCallback(
+    (date: string, entry: LifestyleEntry) => {
+      setLifestyleLogs((prev) => ({ ...prev, [date]: entry }))
+    },
+    [setLifestyleLogs],
+  )
+
   const value = useMemo(
     () => ({
       phase,
@@ -946,11 +1054,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       addSetLog,
       addWeight,
       addFood,
+      updateFood,
+      deleteFood,
       logSavedMeal,
       addHabit,
       updateHabit,
       deleteHabit,
       toggleHabit,
+      profile,
+      setProfile,
+      activityLogs,
+      addActivityLog,
+      deleteActivityLog,
+      lifestyleLogs,
+      setLifestyleEntry,
     }),
     [
       phase,
@@ -1010,11 +1127,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       addSetLog,
       addWeight,
       addFood,
+      updateFood,
+      deleteFood,
       logSavedMeal,
       addHabit,
       updateHabit,
       deleteHabit,
       toggleHabit,
+      profile,
+      setProfile,
+      activityLogs,
+      addActivityLog,
+      deleteActivityLog,
+      lifestyleLogs,
+      setLifestyleEntry,
     ],
   )
 

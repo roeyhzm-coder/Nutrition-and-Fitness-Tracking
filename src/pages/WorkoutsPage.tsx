@@ -4,6 +4,7 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { SetLogger } from '../components/workouts/SetLogger'
 import { ProgramManager } from '../components/workouts/ProgramManager'
 import { WorkoutLibrary } from '../components/workouts/WorkoutLibrary'
+import { ActivityLogCard } from '../components/workouts/ActivityLogCard'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { IconButton } from '../components/ui/IconButton'
@@ -154,8 +155,9 @@ export function WorkoutsPage() {
     return (
       <>
         <PageHeader title="אימונים" subtitle="אין ימי אימון" />
-        <div className="px-4 py-4">
+        <div className="space-y-4 px-4 py-4">
           <ProgramManager />
+          <ActivityLogCard />
         </div>
       </>
     )
@@ -274,6 +276,8 @@ export function WorkoutsPage() {
             onLog={addSetLog}
           />
         ) : null}
+
+        <ActivityLogCard />
       </div>
 
       <Modal
