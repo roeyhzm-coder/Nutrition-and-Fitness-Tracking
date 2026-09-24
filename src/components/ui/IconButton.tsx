@@ -2,7 +2,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   label: string
-  tone?: 'default' | 'danger' | 'accent'
+  tone?: 'default' | 'danger' | 'accent' | 'dangerSolid' | 'accentSolid'
   children: ReactNode
 }
 
@@ -10,6 +10,8 @@ const tones = {
   default: 'text-muted hover:bg-surface hover:text-text',
   danger: 'text-muted hover:bg-danger/10 hover:text-danger',
   accent: 'text-muted hover:bg-primary/10 hover:text-primary',
+  dangerSolid: 'bg-danger/15 text-danger hover:bg-danger/25',
+  accentSolid: 'bg-primary/15 text-primary hover:bg-primary/25',
 }
 
 export function IconButton({

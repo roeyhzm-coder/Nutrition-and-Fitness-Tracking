@@ -189,21 +189,17 @@ export function FoodLogList({ entries, compact }: FoodLogListProps) {
             </div>
             <IconButton
               label={`ערוך ${f.name}`}
-              tone="accent"
+              tone="accentSolid"
               onClick={() => setEditing(f)}
             >
-              <Pencil className="size-3.5" strokeWidth={1.75} />
+              <Pencil className="size-4" strokeWidth={2} />
             </IconButton>
             <IconButton
               label={`מחק ${f.name}`}
-              tone="danger"
-              onClick={() => {
-                if (window.confirm(`למחוק את "${f.name}" מהיומן?`)) {
-                  deleteFood(f.id)
-                }
-              }}
+              tone="dangerSolid"
+              onClick={() => deleteFood(f.id)}
             >
-              <Trash2 className="size-3.5" strokeWidth={1.75} />
+              <Trash2 className="size-4" strokeWidth={2} />
             </IconButton>
           </li>
         ))}
