@@ -5,7 +5,9 @@ export type MacroTargets = {
   fats: number
 }
 
-export type Phase = 'bulk' | 'cut'
+export type Phase = 'bulk' | 'cut' | 'maintain'
+
+export const PHASES: Phase[] = ['bulk', 'cut', 'maintain']
 
 export type GoalSettings = {
   /** Short-term phase tracker */
@@ -20,9 +22,20 @@ export type GoalSettings = {
   masterTargetBodyFatPct: number | null
 }
 
-export type PhaseMacroPresets = {
-  bulk: MacroTargets
-  cut: MacroTargets
+export type PhaseMacroPresets = Record<Phase, MacroTargets>
+
+export type PhaseHistoryEntry = {
+  id: string
+  phase: Phase
+  startDate: string
+  endDate: string
+  plannedDays: number
+  actualDays: number
+  startWeightKg: number | null
+  endWeightKg: number | null
+  avgCalories: number | null
+  targetWeightKg: number | null
+  macroTargets: MacroTargets
 }
 
 export type SetLog = {
@@ -283,4 +296,15 @@ export function normalizeWorkoutProgram(program: WorkoutProgram): WorkoutProgram
 export const PHASE_LABELS: Record<Phase, string> = {
   bulk: 'מסה',
   cut: 'חיטוב',
+  maintain: 'תחזוקה',
+}
+
+export const PHASE_ACTIVE_CLASS: Record<Phase, string> = {
+  bulk: 'bg-primary text-white',
+  cut: 'bg-accent text-bg',
+  maintain: 'bg-warn text-bg',
+}
+
+export function isPhase(value: unknown): value is Phase {
+  return typeof value === 'string' && (PHASES as string[]).includes(value)
 }

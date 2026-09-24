@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Pencil } from 'lucide-react'
+import { Flag, Pencil } from 'lucide-react'
 import {
   calcProcessDay,
+  PHASE_ACTIVE_CLASS,
   PHASE_LABELS,
+  PHASES,
   type GoalSettings,
   type Phase,
 } from '../../lib/types'
@@ -20,6 +22,7 @@ type GoalPhaseCardProps = {
   onSaveGoal: (goal: GoalSettings) => void
   currentWeight?: number | null
   currentBodyFat?: number | null
+  onFinishPhase: () => void
 }
 
 export function GoalPhaseCard({
@@ -29,6 +32,7 @@ export function GoalPhaseCard({
   onSaveGoal,
   currentWeight,
   currentBodyFat,
+  onFinishPhase,
 }: GoalPhaseCardProps) {
   const [open, setOpen] = useState<'short' | 'master' | null>(null)
   const [form, setForm] = useState(goal)
@@ -75,8 +79,8 @@ export function GoalPhaseCard({
         title="מטרת על ותהליך"
         className="border-primary/30 bg-gradient-to-b from-primary/10 to-card"
       >
-        <div className="mb-4 grid grid-cols-2 gap-2 rounded-xl bg-surface p-1">
-          {(['bulk', 'cut'] as Phase[]).map((p) => (
+        <div className="mb-4 grid grid-cols-3 gap-2 rounded-xl bg-surface p-1">
+          {PHASES.map((p) => (
             <button
               key={p}
               type="button"
@@ -84,9 +88,7 @@ export function GoalPhaseCard({
               className={[
                 'rounded-lg px-3 py-2 text-sm font-bold transition',
                 phase === p
-                  ? p === 'bulk'
-                    ? 'bg-primary text-white'
-                    : 'bg-accent text-bg'
+                  ? PHASE_ACTIVE_CLASS[p]
                   : 'text-muted hover:text-text',
               ].join(' ')}
             >
@@ -140,6 +142,14 @@ export function GoalPhaseCard({
               </p>
             </div>
           </div>
+          <Button
+            className="mt-3 w-full"
+            variant="surface"
+            onClick={onFinishPhase}
+          >
+            <Flag className="size-4" strokeWidth={1.75} />
+            סיום שלב נוכחי והגדרת שלב חדש
+          </Button>
         </section>
 
         <section className="mt-3 rounded-xl border border-accent/30 bg-accent/5 p-3">

@@ -9,6 +9,7 @@ import type {
   LifestyleLogs,
   MacroTargets,
   Phase,
+  PhaseHistoryEntry,
   Recipe,
   SavedMeal,
   SetLog,
@@ -23,6 +24,7 @@ import {
   PHASE_LABELS,
 } from './types'
 import { relativeWeekNumber } from './weeklyConsistency'
+import { summarizePhase } from './phaseHistory'
 
 function average(nums: number[]) {
   if (nums.length === 0) return 0
@@ -52,6 +54,17 @@ function isInRelativeWeek(iso: string, phaseStartDate: string) {
 }
 
 const NA = 'לא צוין'
+
+const SYSTEM_CONTEXT_BLOCK = `---
+[SYSTEM_CONTEXT_FOR_AI]
+- Project: Nutrition & Fitness PWA Tracker
+- Repository: GitHub (Nutrition-and-Fitness-Tracking)
+- Hosting: Netlify (fitpwa-tracker.netlify.app)
+- Stack: React + Vite, TypeScript, PWA (Service Worker)
+- Database & Auth: Supabase (food_logs, user_profiles, phases_history)
+- Local Workspace: fitpwa
+- Purpose: 1200-day body transformation tracking across dynamic phases
+---`
 
 function localDateKey(d: Date) {
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -137,6 +150,7 @@ export function buildAiExportPrompt(input: {
   profile: UserProfile
   activityLogs: ActivityLog[]
   lifestyleLogs: LifestyleLogs
+  phaseHistory: PhaseHistoryEntry[]
 }): string {
   const phaseStart = input.goal.startDate
   const { profile } = input
@@ -281,6 +295,28 @@ export function buildAiExportPrompt(input: {
     })
     .join(' | ')
 
+  const currentSummary = summarizePhase({
+    phase: input.phase,
+    goal: input.goal,
+    macroTargets: input.macroTargets,
+    weightLogs: input.weightLogs,
+    foodLogs: input.foodLogs,
+  })
+  const historySection = input.phaseHistory.length
+    ? input.phaseHistory
+        .map((h, i) => {
+          const delta =
+            h.startWeightKg != null && h.endWeightKg != null
+              ? ` (${h.endWeightKg - h.startWeightKg > 0 ? '+' : ''}${(h.endWeightKg - h.startWeightKg).toFixed(1)} ק״ג)`
+              : ''
+          return `${i + 1}. ${PHASE_LABELS[h.phase]} · ${h.startDate} – ${h.endDate} · ${h.actualDays} ימים בפועל (מתוכנן ${h.plannedDays})
+   - משקל התחלה → סיום: ${fmtNum(h.startWeightKg, ' ק״ג', 1)} → ${fmtNum(h.endWeightKg, ' ק״ג', 1)}${delta}
+   - ממוצע קלוריות: ${fmtNum(h.avgCalories, ' קק״ל')} · יעד קלוריות: ${fmtNum(h.macroTargets?.calories, ' קק״ל')}
+   - משקל יעד לשלב: ${fmtNum(h.targetWeightKg, ' ק״ג', 1)}`
+        })
+        .join('\n')
+    : `- ${NA} (אין שלבים שהסתיימו עדיין)`
+
   const sportsSection = sportSummaries.length
     ? sportSummaries.map(formatSport).join('\n\n')
     : `- ${NA} (לא תועדו פעילויות השבוע)`
@@ -314,6 +350,13 @@ export function buildAiExportPrompt(input: {
 - תאריך תחילת שלב: ${input.goal.startDate}
 - יעד משקל לשלב: ${phaseWeight}
 - יעד שומן לשלב: ${phaseFat}
+- משקל בתחילת השלב: ${fmtNum(currentSummary.startWeightKg, ' ק״ג', 1)}
+- ממוצע קלוריות בשלב עד כה: ${fmtNum(currentSummary.avgCalories, ' קק״ל')}
+
+## היסטוריית שלבים (Phase History)
+היסטוריית שלבים קודמים:
+${historySection}
+- שלב פעיל כעת: ${phaseLabel} · ${input.goal.startDate} – היום · יום ${phaseDay} מתוך ${input.goal.totalDays}
 
 ## אימונים ועקביות שבועית
 - טווח השבוע: ${localDateKey(weekStart)} – ${localDateKey(weekEnd)}
@@ -351,11 +394,13 @@ ${sportsSection}
 - ימים עם רישום מזון: ${days.length}
 
 ## בקשה
-1. הערך התקדמות מול מטרת העל (גוף אל יווני) ומול השלב הנוכחי.
+1. הערך התקדמות מול מטרת העל (גוף אל יווני) ומול השלב הנוכחי, בהשוואה לשלבים הקודמים.
 2. בדוק עקביות אימונים מול יעד 5 בשבוע, כולל איזון בין ענפי הספורט והעומס המצטבר.
 3. בדוק התאמה בין צריכת המאקרו ליעדי השלב בהתחשב בהוצאה האנרגטית (אימונים + צעדים).
 4. התחשב במגבלות, אלרגיות, תוספים ופציעות שצוינו.
-5. הצע התאמות מעשיות לשבוע היחסי הבא בעברית קצרה.`
+5. הצע התאמות מעשיות לשבוע היחסי הבא בעברית קצרה.
+
+${SYSTEM_CONTEXT_BLOCK}`
 }
 
 export type ImportPayload = {

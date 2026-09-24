@@ -15,7 +15,16 @@ import {
   DEFAULT_PHASE,
   DEFAULT_PHASE_MACROS,
   DEFAULT_SAVED_MEALS,
+  normalizeMacroPresets,
 } from '../data/defaults'
+import {
+  createHistoryEntry,
+  deleteRemotePhaseHistory,
+  pullPhaseHistory,
+  pushPhaseHistory,
+  sortHistory,
+  summarizePhase,
+} from '../lib/phaseHistory'
 import { DEFAULT_RECIPES, DEFAULT_FOOD_CATEGORIES } from '../data/recipes'
 import { ensureSeedTemplates } from '../data/workouts'
 import { useLocalStorage } from '../hooks/useLocalStorage'
@@ -37,6 +46,7 @@ import type {
   LifestyleLogs,
   MacroTargets,
   Phase,
+  PhaseHistoryEntry,
   PhaseMacroPresets,
   Recipe,
   SavedMeal,
@@ -170,6 +180,17 @@ type AppDataContextValue = {
   deleteActivityLog: (id: string) => void
   lifestyleLogs: LifestyleLogs
   setLifestyleEntry: (date: string, entry: LifestyleEntry) => void
+  phaseHistory: PhaseHistoryEntry[]
+  finishPhase: (next: NewPhaseInput) => PhaseHistoryEntry
+  deletePhaseHistory: (id: string) => void
+}
+
+export type NewPhaseInput = {
+  phase: Phase
+  totalDays: number
+  targetWeightKg: number | null
+  targetBodyFatPct: number | null
+  macros: MacroTargets
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null)
@@ -205,9 +226,29 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     (next: GoalSettings) => setGoalRaw(normalizeGoal(next)),
     [setGoalRaw],
   )
-  const [macroPresets, setMacroPresets] = useLocalStorage<PhaseMacroPresets>(
-    'tn.macroPresets.v1',
-    DEFAULT_PHASE_MACROS,
+  const [macroPresetsRaw, setMacroPresetsRaw] =
+    useLocalStorage<PhaseMacroPresets>('tn.macroPresets.v1', DEFAULT_PHASE_MACROS)
+  const macroPresets = useMemo(
+    () => normalizeMacroPresets(macroPresetsRaw),
+    [macroPresetsRaw],
+  )
+  const setMacroPresets = useCallback(
+    (
+      next:
+        | PhaseMacroPresets
+        | ((prev: PhaseMacroPresets) => PhaseMacroPresets),
+    ) => {
+      setMacroPresetsRaw((prev) =>
+        normalizeMacroPresets(
+          typeof next === 'function' ? next(normalizeMacroPresets(prev)) : next,
+        ),
+      )
+    },
+    [setMacroPresetsRaw],
+  )
+  const [phaseHistory, setPhaseHistory] = useLocalStorage<PhaseHistoryEntry[]>(
+    'tn.phaseHistory.v1',
+    [],
   )
   const [workoutProgramsRaw, setWorkoutProgramsRaw] = useLocalStorage<
     WorkoutProgram[]
@@ -960,6 +1001,61 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [setHabitChecks],
   )
 
+  useEffect(() => {
+    let cancelled = false
+    void pullPhaseHistory().then((remote) => {
+      if (cancelled || !remote) return
+      setPhaseHistory((local) => {
+        const remoteIds = new Set(remote.map((e) => e.id))
+        const localOnly = local.filter((e) => !remoteIds.has(e.id))
+        if (localOnly.length) void pushPhaseHistory(localOnly)
+        return sortHistory([...remote, ...localOnly])
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [setPhaseHistory])
+
+  const finishPhase = useCallback(
+    (next: NewPhaseInput) => {
+      const entry = createHistoryEntry(
+        summarizePhase({ phase, goal, macroTargets, weightLogs, foodLogs }),
+      )
+      setPhaseHistory((prev) => sortHistory([...prev, entry]))
+      void pushPhaseHistory([entry])
+      setMacroPresets((prev) => ({ ...prev, [next.phase]: next.macros }))
+      setPhaseState(next.phase)
+      setGoal({
+        ...goal,
+        startDate: todayKey(),
+        totalDays: Math.max(1, Math.round(next.totalDays) || 1),
+        targetWeightKg: next.targetWeightKg,
+        targetBodyFatPct: next.targetBodyFatPct,
+      })
+      return entry
+    },
+    [
+      phase,
+      goal,
+      macroTargets,
+      weightLogs,
+      foodLogs,
+      setPhaseHistory,
+      setMacroPresets,
+      setPhaseState,
+      setGoal,
+    ],
+  )
+
+  const deletePhaseHistory = useCallback(
+    (id: string) => {
+      setPhaseHistory((prev) => prev.filter((e) => e.id !== id))
+      void deleteRemotePhaseHistory(id)
+    },
+    [setPhaseHistory],
+  )
+
   const addActivityLog = useCallback(
     (
       entry: Omit<ActivityLog, 'id' | 'loggedAt'> & { loggedAt?: string },
@@ -1068,6 +1164,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       deleteActivityLog,
       lifestyleLogs,
       setLifestyleEntry,
+      phaseHistory,
+      finishPhase,
+      deletePhaseHistory,
     }),
     [
       phase,
@@ -1141,6 +1240,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       deleteActivityLog,
       lifestyleLogs,
       setLifestyleEntry,
+      phaseHistory,
+      finishPhase,
+      deletePhaseHistory,
     ],
   )
 

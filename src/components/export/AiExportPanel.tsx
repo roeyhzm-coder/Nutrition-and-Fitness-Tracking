@@ -18,6 +18,7 @@ export function AiExportPanel() {
     profile,
     activityLogs,
     lifestyleLogs,
+    phaseHistory,
   } = useAppData()
   const [copied, setCopied] = useState(false)
 
@@ -36,6 +37,7 @@ export function AiExportPanel() {
         profile,
         activityLogs,
         lifestyleLogs,
+        phaseHistory,
       }),
     [
       setLogs,
@@ -50,6 +52,7 @@ export function AiExportPanel() {
       profile,
       activityLogs,
       lifestyleLogs,
+      phaseHistory,
     ],
   )
 

@@ -11,6 +11,8 @@ import { GoalPhaseCard } from '../components/dashboard/GoalPhaseCard'
 import { WeightFatTracker } from '../components/dashboard/WeightFatTracker'
 import { WeeklyConsistencyTracker } from '../components/dashboard/WeeklyConsistencyTracker'
 import { LifestyleCard } from '../components/dashboard/LifestyleCard'
+import { FinishPhaseModal } from '../components/dashboard/FinishPhaseModal'
+import { PhaseHistoryCard } from '../components/dashboard/PhaseHistoryCard'
 import { FoodLogList } from '../components/nutrition/FoodLogList'
 import { useAppData } from '../context/AppDataContext'
 import { PHASE_LABELS, todayKey } from '../lib/types'
@@ -35,6 +37,7 @@ export function DashboardPage() {
 
   const [targetsOpen, setTargetsOpen] = useState(false)
   const [foodOpen, setFoodOpen] = useState(false)
+  const [finishOpen, setFinishOpen] = useState(false)
 
   const today = todayKey()
   const todayFood = foodLogs.filter((f) => f.loggedAt.startsWith(today))
@@ -66,7 +69,9 @@ export function DashboardPage() {
           onSaveGoal={setGoal}
           currentWeight={latest?.weightKg}
           currentBodyFat={latest?.bodyFatPct}
+          onFinishPhase={() => setFinishOpen(true)}
         />
+        <PhaseHistoryCard />
 
         <WeeklyConsistencyTracker
           setLogs={setLogs}
@@ -169,6 +174,10 @@ export function DashboardPage() {
         title={`עריכת יעדי ${PHASE_LABELS[phase]}`}
       />
       <AddFoodModal open={foodOpen} onClose={() => setFoodOpen(false)} />
+      <FinishPhaseModal
+        open={finishOpen}
+        onClose={() => setFinishOpen(false)}
+      />
     </>
   )
 }

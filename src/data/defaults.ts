@@ -24,11 +24,25 @@ export const DEFAULT_MACRO_CUT: MacroTargets = {
   fats: 55,
 }
 
+export const DEFAULT_MACRO_MAINTAIN: MacroTargets = {
+  calories: 2400,
+  protein: 180,
+  carbs: 240,
+  fats: 70,
+}
+
 export const DEFAULT_MACRO_TARGETS = DEFAULT_MACRO_BULK
 
 export const DEFAULT_PHASE_MACROS: PhaseMacroPresets = {
   bulk: DEFAULT_MACRO_BULK,
   cut: DEFAULT_MACRO_CUT,
+  maintain: DEFAULT_MACRO_MAINTAIN,
+}
+
+export function normalizeMacroPresets(
+  presets: Partial<PhaseMacroPresets> | null | undefined,
+): PhaseMacroPresets {
+  return { ...DEFAULT_PHASE_MACROS, ...(presets ?? {}) }
 }
 
 export const DEFAULT_PHASE: Phase = 'bulk'

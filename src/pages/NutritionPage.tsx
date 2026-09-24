@@ -13,7 +13,12 @@ import { EditTargetsModal } from '../components/dashboard/EditTargetsModal'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { useAppData } from '../context/AppDataContext'
-import { PHASE_LABELS, type Phase, todayKey } from '../lib/types'
+import {
+  PHASE_ACTIVE_CLASS,
+  PHASE_LABELS,
+  PHASES,
+  todayKey,
+} from '../lib/types'
 
 export function NutritionPage() {
   const {
@@ -48,8 +53,8 @@ export function NutritionPage() {
       />
       <div className="space-y-4 px-4 py-4">
         <Card title="שלב תזונה">
-          <div className="mb-3 grid grid-cols-2 gap-2 rounded-xl bg-surface p-1">
-            {(['bulk', 'cut'] as Phase[]).map((p) => (
+          <div className="mb-3 grid grid-cols-3 gap-2 rounded-xl bg-surface p-1">
+            {PHASES.map((p) => (
               <button
                 key={p}
                 type="button"
@@ -57,9 +62,7 @@ export function NutritionPage() {
                 className={[
                   'rounded-lg px-3 py-2 text-sm font-bold transition',
                   phase === p
-                    ? p === 'bulk'
-                      ? 'bg-primary text-white'
-                      : 'bg-accent text-bg'
+                    ? PHASE_ACTIVE_CLASS[p]
                     : 'text-muted hover:text-text',
                 ].join(' ')}
               >
@@ -68,7 +71,8 @@ export function NutritionPage() {
             ))}
           </div>
           <p className="text-xs text-muted">
-            מעבר בין מסה לחיטוב מחליף אוטומטית את יעדי המאקרו השמורים לכל שלב.
+            מעבר בין מסה, חיטוב ותחזוקה מחליף אוטומטית את יעדי המאקרו השמורים
+            לכל שלב.
           </p>
           <Button
             className="mt-3 w-full"

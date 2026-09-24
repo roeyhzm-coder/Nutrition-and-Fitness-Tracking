@@ -3,7 +3,7 @@
 
 create table if not exists public.client_app_state (
   device_id text primary key,
-  phase text not null check (phase in ('bulk', 'cut')),
+  phase text not null check (phase in ('bulk', 'cut', 'maintain')),
   goal jsonb not null default '{}'::jsonb,
   macro_presets jsonb not null default '{}'::jsonb,
   active_program_id text,
@@ -35,6 +35,13 @@ alter table public.client_app_state
 
 alter table public.client_app_state
   add column if not exists food_logs jsonb not null default '[]'::jsonb;
+
+alter table public.client_app_state
+  drop constraint if exists client_app_state_phase_check;
+
+alter table public.client_app_state
+  add constraint client_app_state_phase_check
+  check (phase in ('bulk', 'cut', 'maintain'));
 
 alter table public.client_app_state enable row level security;
 
