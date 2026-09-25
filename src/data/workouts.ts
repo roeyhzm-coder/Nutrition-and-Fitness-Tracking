@@ -5,7 +5,7 @@ import type {
   WorkoutProgram,
   WorkoutTemplate,
 } from '../lib/types'
-import { uid } from '../lib/types'
+import { uid, WEEKDAYS } from '../lib/types'
 import { EXERCISE_MEDIA } from './exerciseMedia.generated'
 
 type SeedExercise = Omit<Exercise, 'id'>
@@ -358,7 +358,7 @@ const OFFICIAL_TEMPLATE_IDS = [
 ]
 
 /** Bump to force the official plan onto existing local + Supabase state again. */
-export const OFFICIAL_PLAN_VERSION = 4
+export const OFFICIAL_PLAN_VERSION = 5
 
 /** Same exercise name always maps to the same demo across the PDFs. */
 const SEED_MEDIA_BY_NAME = new Map(
@@ -385,41 +385,44 @@ function sessionFromSeed(templateId: string): DaySession {
   }
 }
 
-function day(dayNumber: number, focus: string, templateId: string): WorkoutDay {
-  return {
-    id: `day-${dayNumber}`,
-    dayNumber,
-    title: `יום ${dayNumber}`,
-    focus,
-    sessions: [sessionFromSeed(templateId)],
-    exercises: [],
-  }
+const FOCUS_BY_KIND = {
+  pull: 'כוח משיכה',
+  push: 'כוח דחיפה ורגליים',
+  combo: 'כוח עליון משולב',
+} as const
+
+type DayKind = keyof typeof FOCUS_BY_KIND | 'rest'
+
+/** Weekly schedule from the PDF, Sunday → Saturday. */
+const OFFICIAL_WEEK: DayKind[] = ['pull', 'push', 'pull', 'push', 'rest', 'combo', 'rest']
+
+function weekDays(block: 1 | 2): WorkoutDay[] {
+  return OFFICIAL_WEEK.map((kind, i) => {
+    const dayNumber = i + 1
+    const base = { id: `day-${dayNumber}`, dayNumber, title: WEEKDAYS[i], exercises: [] }
+    if (kind === 'rest') {
+      return { ...base, focus: 'מנוחה', isRest: true, sessions: [] }
+    }
+    return {
+      ...base,
+      focus: FOCUS_BY_KIND[kind],
+      isRest: false,
+      sessions: [sessionFromSeed(`tpl-b${block}-${kind}`)],
+    }
+  })
 }
 
-function block1Days(): WorkoutDay[] {
-  return [
-    day(1, 'משיכה 1 · כוח משיכה', 'tpl-b1-pull'),
-    day(2, 'דחיפה 1 · כוח דחיפה ורגליים', 'tpl-b1-push'),
-    day(3, 'משולב 1 · כוח עליון משולב', 'tpl-b1-combo'),
-  ]
-}
-
-function block2Days(): WorkoutDay[] {
-  return [
-    day(1, 'משיכה 2 · כוח משיכה', 'tpl-b2-pull'),
-    day(2, 'דחיפה 2 · כוח דחיפה ורגליים', 'tpl-b2-push'),
-    day(3, 'משולב 2 · כוח עליון משולב', 'tpl-b2-combo'),
-  ]
-}
-
-export const DEFAULT_WORKOUT_DAYS: WorkoutDay[] = block1Days()
+export const DEFAULT_WORKOUT_DAYS: WorkoutDay[] = weekDays(1)
 
 export function createOfficialPrograms(): WorkoutProgram[] {
   const now = new Date().toISOString()
-  return [
-    { id: OFFICIAL_PROGRAM_IDS[0], name: 'בלוק 1', days: block1Days(), updatedAt: now },
-    { id: OFFICIAL_PROGRAM_IDS[1], name: 'בלוק 2', days: block2Days(), updatedAt: now },
-  ]
+  return ([1, 2] as const).map((block, i) => ({
+    id: OFFICIAL_PROGRAM_IDS[i],
+    name: `בלוק ${block}`,
+    days: weekDays(block),
+    updatedAt: now,
+    planVersion: OFFICIAL_PLAN_VERSION,
+  }))
 }
 
 export type WorkoutPlanState = {
@@ -439,7 +442,11 @@ export function isStalePlan(state: Omit<WorkoutPlanState, 'activeProgramId'>): b
   const templateIds = new Set(state.templates.map((t) => t.id))
   return (
     state.programs.some(isObsoleteProgram) ||
-    !OFFICIAL_PROGRAM_IDS.every((id) => state.programs.some((p) => p.id === id)) ||
+    !OFFICIAL_PROGRAM_IDS.every((id) =>
+      state.programs.some(
+        (p) => p.id === id && (p.planVersion ?? 0) >= OFFICIAL_PLAN_VERSION,
+      ),
+    ) ||
     state.templates.some(isLegacyTemplate) ||
     !OFFICIAL_TEMPLATE_IDS.every((id) => templateIds.has(id))
   )

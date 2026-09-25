@@ -167,9 +167,11 @@ export type DaySession = {
 
 export type WorkoutDay = {
   id: string
+  /** 1 = Sunday … 7 = Saturday */
   dayNumber: number
   title: string
   focus: string
+  isRest?: boolean
   /** Modular slotted workouts (e.g. Push + Swim on the same day). */
   sessions: DaySession[]
   /** Standalone exercises not part of a slotted session. */
@@ -181,7 +183,69 @@ export type WorkoutProgram = {
   name: string
   days: WorkoutDay[]
   updatedAt: string
+  /** Set on built-in programs; older versions get replaced on load. */
+  planVersion?: number
 }
+
+export type DayPlan =
+  | { type: 'empty' }
+  | { type: 'rest' }
+  | { type: 'template'; templateId: string }
+
+export const WEEKDAYS = [
+  'ראשון',
+  'שני',
+  'שלישי',
+  'רביעי',
+  'חמישי',
+  'שישי',
+  'שבת',
+] as const
+
+export const WEEKDAY_SHORT = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳'] as const
+
+/** dayNumber (1–7) of the given date's weekday. */
+export function weekdayNumber(d = new Date()) {
+  return d.getDay() + 1
+}
+
+export function localDateKey(d = new Date()) {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+export type LoggedSet = {
+  weightKg: number | null
+  reps: number | null
+  done: boolean
+}
+
+export type LoggedExercise = {
+  exerciseId: string
+  name: string
+  targetSets: number
+  targetReps: string
+  targetWeight?: string
+  rest?: string
+  imageUrl?: string
+  sets: LoggedSet[]
+}
+
+export type WorkoutLog = {
+  id: string
+  programId: string
+  programName: string
+  dayId: string
+  dayNumber: number
+  workoutName: string
+  startedAt: string
+  completedAt: string
+  exercises: LoggedExercise[]
+}
+
+export type ActiveWorkout = Omit<WorkoutLog, 'completedAt'>
 
 export type WorkoutTemplate = {
   id: string
@@ -270,6 +334,7 @@ export function normalizeWorkoutDay(
       dayNumber: day.dayNumber,
       title: day.title,
       focus: day.focus ?? '',
+      isRest: false,
       sessions: [
         {
           id: `${day.id}-session-legacy`,
@@ -287,16 +352,25 @@ export function normalizeWorkoutDay(
     dayNumber: day.dayNumber,
     title: day.title,
     focus: day.focus ?? '',
+    isRest: day.isRest ?? false,
     sessions,
     exercises,
   }
 }
 
+/** Always Sunday–Saturday; older N-day programs fill from Sunday onward. */
 export function normalizeWorkoutProgram(program: WorkoutProgram): WorkoutProgram {
-  return {
-    ...program,
-    days: program.days.map((d) => normalizeWorkoutDay(d)),
-  }
+  const byNumber = new Map(program.days.map((d) => [d.dayNumber, d]))
+  const days = WEEKDAYS.map((name, i) => {
+    const dayNumber = i + 1
+    const existing = byNumber.get(dayNumber)
+    return normalizeWorkoutDay({
+      ...(existing ?? { id: `day-${dayNumber}`, focus: '' }),
+      dayNumber,
+      title: name,
+    })
+  })
+  return { ...program, days }
 }
 
 export const PHASE_LABELS: Record<Phase, string> = {

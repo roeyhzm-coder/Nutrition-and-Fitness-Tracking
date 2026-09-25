@@ -33,7 +33,8 @@ export type SyncedAppState = {
   macroPresets: PhaseMacroPresets
   activeProgramId: string
   workoutPrograms: WorkoutProgram[]
-  workoutTemplates: WorkoutTemplate[]
+  /** Undefined when the remote table lacks the workout_templates column. */
+  workoutTemplates?: WorkoutTemplate[]
   consistencyDayMarks: ConsistencyDayMarks
   foodCategories: FoodCategory[]
   /** Undefined when the remote table lacks the extended columns. */
@@ -59,6 +60,7 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
   let data: Record<string, unknown> | null = null
   let hasExtended = false
   let hasFoodLogs = false
+  let hasTemplates = false
 
   for (const columns of [
     FOOD_LOG_COLUMNS,
@@ -77,6 +79,7 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
     data = res.data as unknown as Record<string, unknown>
     hasFoodLogs = columns === FOOD_LOG_COLUMNS
     hasExtended = hasFoodLogs || columns === EXTENDED_COLUMNS
+    hasTemplates = columns !== BASE_COLUMNS
     break
   }
 
@@ -99,7 +102,9 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
     ),
     activeProgramId: data.active_program_id as string,
     workoutPrograms: data.workout_programs as WorkoutProgram[],
-    workoutTemplates: (data.workout_templates as WorkoutTemplate[]) ?? [],
+    workoutTemplates: hasTemplates
+      ? ((data.workout_templates as WorkoutTemplate[] | null) ?? [])
+      : undefined,
     consistencyDayMarks:
       (data.consistency_day_marks as ConsistencyDayMarks) ?? {},
     foodCategories: (data.food_categories as FoodCategory[]) ?? [],
@@ -137,11 +142,14 @@ export async function pushAppState(
     macro_presets: state.macroPresets,
     active_program_id: state.activeProgramId,
     workout_programs: state.workoutPrograms,
-    workout_templates: state.workoutTemplates,
     updated_at: updatedAt,
   }
-  const fullPayload = {
+  const templatePayload = {
     ...basePayload,
+    workout_templates: state.workoutTemplates ?? [],
+  }
+  const fullPayload = {
+    ...templatePayload,
     consistency_day_marks: state.consistencyDayMarks,
     food_categories: state.foodCategories,
   }
@@ -157,7 +165,13 @@ export async function pushAppState(
     food_logs: state.foodLogs ?? [],
   }
 
-  const payloads = [foodLogPayload, extendedPayload, fullPayload, basePayload]
+  const payloads = [
+    foodLogPayload,
+    extendedPayload,
+    fullPayload,
+    templatePayload,
+    basePayload,
+  ]
   // Older tables only allow bulk/cut in the phase column; the real phase
   // still round-trips via goal.activePhase.
   const phaseColumns =

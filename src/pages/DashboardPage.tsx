@@ -13,6 +13,8 @@ import { WeeklyConsistencyTracker } from '../components/dashboard/WeeklyConsiste
 import { LifestyleCard } from '../components/dashboard/LifestyleCard'
 import { FinishPhaseModal } from '../components/dashboard/FinishPhaseModal'
 import { PhaseHistoryCard } from '../components/dashboard/PhaseHistoryCard'
+import { TodayWorkoutCard } from '../components/dashboard/TodayWorkoutCard'
+import { WorkoutHistoryCard } from '../components/workouts/WorkoutHistoryCard'
 import { FoodLogList } from '../components/nutrition/FoodLogList'
 import { useAppData } from '../context/AppDataContext'
 import { PHASE_LABELS, todayKey } from '../lib/types'
@@ -71,6 +73,7 @@ export function DashboardPage() {
           currentBodyFat={latest?.bodyFatPct}
           onFinishPhase={() => setFinishOpen(true)}
         />
+        <TodayWorkoutCard />
         <PhaseHistoryCard />
 
         <WeeklyConsistencyTracker
@@ -162,6 +165,7 @@ export function DashboardPage() {
           </div>
         </div>
 
+        <WorkoutHistoryCard limit={3} />
         <WeightFatTracker entries={weightLogs} onAdd={addWeight} />
         <LifestyleCard />
       </div>

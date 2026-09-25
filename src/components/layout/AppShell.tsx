@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
+import { ActiveWorkoutTracker } from '../workouts/ActiveWorkoutTracker'
 
 export function AppShell() {
   return (
@@ -8,6 +9,7 @@ export function AppShell() {
         <Outlet />
       </div>
       <BottomNav />
+      <ActiveWorkoutTracker />
     </div>
   )
 }

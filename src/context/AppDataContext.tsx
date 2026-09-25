@@ -58,6 +58,7 @@ import type {
   SetLog,
   UserProfile,
   WeightEntry,
+  DayPlan,
   WorkoutDay,
   WorkoutProgram,
   WorkoutTemplate,
@@ -147,6 +148,8 @@ type AppDataContextValue = {
     exercisesOverride?: Exercise[],
   ) => void
   saveDayAsTemplate: (dayId: string, name: string) => void
+  /** Set a weekday to a library workout, rest, or empty. */
+  setDayPlan: (dayId: string, plan: DayPlan) => void
   savedMeals: SavedMeal[]
   addSavedMeal: (meal: Omit<SavedMeal, 'id'>) => void
   updateSavedMeal: (id: string, patch: Partial<SavedMeal>) => void
@@ -605,6 +608,44 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const attachTemplateToDay = assignTemplateToDay
 
+  const setDayPlan = useCallback(
+    (dayId: string, plan: DayPlan) => {
+      if (!activeProgram) return
+      const template =
+        plan.type === 'template'
+          ? workoutTemplates.find((t) => t.id === plan.templateId)
+          : undefined
+      if (plan.type === 'template' && !template) return
+      setWorkoutPrograms((prev) =>
+        updateActiveProgramDays(prev, activeProgram.id, (days) =>
+          days.map((d) => {
+            if (d.id !== dayId) return d
+            if (plan.type === 'rest') {
+              return { ...d, isRest: true, focus: 'מנוחה', sessions: [], exercises: [] }
+            }
+            if (!template) {
+              return { ...d, isRest: false, focus: '', sessions: [], exercises: [] }
+            }
+            return {
+              ...d,
+              isRest: false,
+              focus: template.name,
+              sessions: [
+                {
+                  id: uid(),
+                  name: template.name,
+                  sourceTemplateId: template.id,
+                  exercises: template.exercises.map((ex) => ({ ...ex, id: uid() })),
+                },
+              ],
+            }
+          }),
+        ),
+      )
+    },
+    [activeProgram, workoutTemplates, setWorkoutPrograms],
+  )
+
   const saveDayAsTemplate = useCallback(
     (dayId: string, name: string) => {
       const day = activeProgram?.days.find((d) => d.id === dayId)
@@ -776,7 +817,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setMacroPresets(remote.macroPresets)
       const remotePlan = {
         programs: (remote.workoutPrograms ?? []).map(normalizeWorkoutProgram),
-        templates: remote.workoutTemplates ?? [],
+        // Tables without the templates column keep the local library.
+        templates:
+          remote.workoutTemplates ?? readStored<WorkoutTemplate[]>(TEMPLATES_KEY, []),
         activeProgramId: remote.activeProgramId,
       }
       const remoteStale = isStalePlan(remotePlan)
@@ -1163,6 +1206,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       assignTemplateToDay,
       attachTemplateToDay,
       saveDayAsTemplate,
+      setDayPlan,
       savedMeals,
       addSavedMeal,
       updateSavedMeal,
@@ -1239,6 +1283,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       assignTemplateToDay,
       attachTemplateToDay,
       saveDayAsTemplate,
+      setDayPlan,
       savedMeals,
       addSavedMeal,
       updateSavedMeal,
