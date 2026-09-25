@@ -27,10 +27,10 @@ import {
 } from '../lib/phaseHistory'
 import { DEFAULT_RECIPES, DEFAULT_FOOD_CATEGORIES } from '../data/recipes'
 import {
-  LIBRARY_SEED_VERSION,
+  OFFICIAL_PLAN_VERSION,
+  applyOfficialPlan,
   backfillProgramMedia,
-  migrateSeedTemplates,
-  needsSeedMigration,
+  isStalePlan,
 } from '../data/workouts'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { pullAppState, pushAppState } from '../lib/appStateSync'
@@ -216,7 +216,43 @@ function updateActiveProgramDays(
   )
 }
 
+const PROGRAMS_KEY = 'tn.workoutPrograms.v1'
+const ACTIVE_PROGRAM_KEY = 'tn.activeProgramId.v1'
+const TEMPLATES_KEY = 'tn.workoutTemplates.v1'
+const PLAN_VERSION_KEY = 'tn.officialPlanVersion'
+
+function readStored<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key)
+    return raw == null ? fallback : (JSON.parse(raw) as T)
+  } catch {
+    return fallback
+  }
+}
+
+/**
+ * Runs before the stored workout state is read, so the first render already
+ * shows the official plan instead of stale defaults.
+ */
+function migrateStoredPlan() {
+  const version = Number(localStorage.getItem(PLAN_VERSION_KEY) ?? 0)
+  const stored = {
+    programs: readStored<WorkoutProgram[]>(PROGRAMS_KEY, []),
+    templates: readStored<WorkoutTemplate[]>(TEMPLATES_KEY, []),
+    activeProgramId: readStored<string>(ACTIVE_PROGRAM_KEY, ''),
+  }
+  if (version >= OFFICIAL_PLAN_VERSION && !isStalePlan(stored)) return
+  const plan = applyOfficialPlan(stored)
+  localStorage.setItem(PROGRAMS_KEY, JSON.stringify(plan.programs))
+  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(plan.templates))
+  localStorage.setItem(ACTIVE_PROGRAM_KEY, JSON.stringify(plan.activeProgramId))
+  localStorage.setItem(PLAN_VERSION_KEY, String(OFFICIAL_PLAN_VERSION))
+  localStorage.removeItem('tn.librarySeeded.v1')
+  localStorage.removeItem('tn.librarySeedVersion.v1')
+}
+
 export function AppDataProvider({ children }: { children: ReactNode }) {
+  useState(migrateStoredPlan)
   const defaults = useMemo(() => createDefaultPrograms(), [])
   const [phase, setPhaseState] = useLocalStorage<Phase>(
     'tn.phase',
@@ -257,19 +293,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   )
   const [workoutProgramsRaw, setWorkoutProgramsRaw] = useLocalStorage<
     WorkoutProgram[]
-  >('tn.workoutPrograms.v1', defaults)
+  >(PROGRAMS_KEY, defaults)
   const [activeProgramId, setActiveProgramIdState] = useLocalStorage<string>(
-    'tn.activeProgramId.v1',
+    ACTIVE_PROGRAM_KEY,
     defaults[0]?.id ?? '',
   )
   const [workoutTemplates, setWorkoutTemplates] = useLocalStorage<
     WorkoutTemplate[]
-  >('tn.workoutTemplates.v1', [])
-  const [librarySeedVersion, setLibrarySeedVersion] = useLocalStorage<number>(
-    'tn.librarySeedVersion.v1',
-    0,
-  )
-  const initialLibrarySeedVersion = useRef(librarySeedVersion)
+  >(TEMPLATES_KEY, [])
 
   const setWorkoutPrograms = useCallback(
     (
@@ -353,18 +384,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const workoutDays = activeProgram?.days ?? []
   const macroTargets = macroPresets[phase]
-
-  useEffect(() => {
-    if (librarySeedVersion >= LIBRARY_SEED_VERSION) return
-    setWorkoutTemplates(migrateSeedTemplates)
-    setWorkoutPrograms(backfillProgramMedia)
-    setLibrarySeedVersion(LIBRARY_SEED_VERSION)
-  }, [
-    librarySeedVersion,
-    setWorkoutTemplates,
-    setWorkoutPrograms,
-    setLibrarySeedVersion,
-  ])
 
   const setPhase = useCallback(
     (next: Phase) => {
@@ -755,28 +774,25 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setPhaseState(remote.phase)
       setGoal(normalizeGoal(remote.goal))
       setMacroPresets(remote.macroPresets)
-      if (remote.workoutPrograms?.length) {
-        setWorkoutPrograms(
-          backfillProgramMedia(
-            remote.workoutPrograms.map(normalizeWorkoutProgram),
-          ),
-        )
-        setActiveProgramIdState(
-          remote.activeProgramId || remote.workoutPrograms[0].id,
-        )
+      const remotePlan = {
+        programs: (remote.workoutPrograms ?? []).map(normalizeWorkoutProgram),
+        templates: remote.workoutTemplates ?? [],
+        activeProgramId: remote.activeProgramId,
       }
-      if (remote.workoutTemplates) {
-        const shouldMigrate =
-          initialLibrarySeedVersion.current < LIBRARY_SEED_VERSION ||
-          needsSeedMigration(remote.workoutTemplates)
-        setWorkoutTemplates(
-          shouldMigrate
-            ? migrateSeedTemplates(remote.workoutTemplates)
-            : remote.workoutTemplates,
-        )
-        setLibrarySeedVersion(LIBRARY_SEED_VERSION)
-        if (shouldMigrate) skipNextPush.current = false
-      }
+      const remoteStale = isStalePlan(remotePlan)
+      const plan = remoteStale
+        ? applyOfficialPlan(remotePlan)
+        : {
+            ...remotePlan,
+            programs: backfillProgramMedia(remotePlan.programs),
+            activeProgramId:
+              remotePlan.activeProgramId || remotePlan.programs[0].id,
+          }
+      // Push the repaired plan back so Supabase stops serving the old data.
+      if (remoteStale) skipNextPush.current = false
+      setWorkoutPrograms(plan.programs)
+      setActiveProgramIdState(plan.activeProgramId)
+      setWorkoutTemplates(plan.templates)
       if (remote.consistencyDayMarks) {
         setConsistencyDayMarks(remote.consistencyDayMarks)
       }
@@ -804,7 +820,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setWorkoutPrograms,
     setActiveProgramIdState,
     setWorkoutTemplates,
-    setLibrarySeedVersion,
     setConsistencyDayMarks,
     setFoodCategories,
     setSavedMeals,

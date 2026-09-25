@@ -8,7 +8,7 @@ import type {
   WorkoutProgram,
 } from '../lib/types'
 import { normalizeWorkoutDay, todayKey, uid } from '../lib/types'
-import { DEFAULT_WORKOUT_DAYS } from './workouts'
+import { DEFAULT_WORKOUT_DAYS, createOfficialPrograms } from './workouts'
 
 export const DEFAULT_MACRO_BULK: MacroTargets = {
   calories: 2800,
@@ -61,51 +61,11 @@ export const DEFAULT_GOAL: GoalSettings = {
 /** @deprecated */
 export const DEFAULT_PROCESS = DEFAULT_GOAL
 
-function mapDayExercises(
-  day: WorkoutDay,
-  mapEx: (sets: number) => number,
-): WorkoutDay {
-  return {
-    ...day,
-    sessions: day.sessions.map((s) => ({
-      ...s,
-      id: uid(),
-      exercises: s.exercises.map((ex) => ({
-        ...ex,
-        id: uid(),
-        sets: mapEx(ex.sets),
-      })),
-    })),
-    exercises: day.exercises.map((ex) => ({
-      ...ex,
-      id: uid(),
-      sets: mapEx(ex.sets),
-    })),
-  }
-}
-
 export function createDefaultPrograms(): WorkoutProgram[] {
-  const now = new Date().toISOString()
-  return [
-    {
-      id: 'program-bulk',
-      name: 'תוכנית מסה',
-      days: structuredClone(DEFAULT_WORKOUT_DAYS).map((d) =>
-        normalizeWorkoutDay(d),
-      ),
-      updatedAt: now,
-    },
-    {
-      id: 'program-cut',
-      name: 'תוכנית חיטוב',
-      days: structuredClone(DEFAULT_WORKOUT_DAYS).map((day) =>
-        normalizeWorkoutDay(
-          mapDayExercises(day, (sets) => Math.max(2, sets - 1)),
-        ),
-      ),
-      updatedAt: now,
-    },
-  ]
+  return createOfficialPrograms().map((p) => ({
+    ...p,
+    days: p.days.map((d) => normalizeWorkoutDay(d)),
+  }))
 }
 
 export const DEFAULT_SAVED_MEALS: SavedMeal[] = [

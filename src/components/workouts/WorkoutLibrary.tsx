@@ -63,7 +63,7 @@ export function WorkoutLibrary({
         }
       >
         <p className="mb-3 text-xs text-muted">
-          ספרייה מובנית (דחיפה, משיכה, שחייה) — ערוך, מחק, או הוסף תבניות
+          ספרייה מובנית (בלוק 1 ובלוק 2: משיכה, דחיפה, משולב) — ערוך, מחק, או הוסף תבניות
           והצמד כמה אימונים לאותו יום.
         </p>
         <div className="flex flex-wrap gap-2">

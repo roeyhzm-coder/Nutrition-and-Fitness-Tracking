@@ -342,11 +342,23 @@ export const SEED_WORKOUT_TEMPLATES: WorkoutTemplate[] = [
   ]),
 ]
 
-/** Bump when the built-in library changes in a way existing users should receive. */
-export const LIBRARY_SEED_VERSION = 3
+const LEGACY_TEMPLATE_IDS = new Set(['tpl-push', 'tpl-pull'])
+const LEGACY_TEMPLATE_NAMES = new Set(['אימון דחיפה', 'אימון משיכה', 'אימון משולב'])
+const OBSOLETE_PROGRAM_IDS = new Set(['program-bulk', 'program-cut'])
+const OBSOLETE_PROGRAM_NAMES = new Set(['תוכנית מסה', 'תוכנית חיטוב'])
 
-const LEGACY_SEED_IDS = new Set(['tpl-push', 'tpl-pull'])
-const LEGACY_SEED_NAMES = new Set(['אימון דחיפה', 'אימון משיכה', 'אימון משולב'])
+export const OFFICIAL_PROGRAM_IDS = ['program-block-1', 'program-block-2'] as const
+const OFFICIAL_TEMPLATE_IDS = [
+  'tpl-b1-pull',
+  'tpl-b1-push',
+  'tpl-b1-combo',
+  'tpl-b2-pull',
+  'tpl-b2-push',
+  'tpl-b2-combo',
+]
+
+/** Bump to force the official plan onto existing local + Supabase state again. */
+export const OFFICIAL_PLAN_VERSION = 4
 
 /** Same exercise name always maps to the same demo across the PDFs. */
 const SEED_MEDIA_BY_NAME = new Map(
@@ -360,53 +372,6 @@ function withSeedMedia(ex: Exercise): Exercise {
   const media = SEED_MEDIA_BY_NAME.get(ex.name.trim())
   if (!media) return ex
   return { ...ex, imageUrl: media.imageUrl, mediaUrl: ex.mediaUrl ?? media.mediaUrl }
-}
-
-export function needsSeedMigration(templates: WorkoutTemplate[]): boolean {
-  return templates.some(
-    (t) =>
-      LEGACY_SEED_IDS.has(t.id) ||
-      t.exercises.some((ex) => withSeedMedia(ex) !== ex),
-  )
-}
-
-/** Fill missing images/videos on saved program exercises that match a seed exercise. */
-export function backfillProgramMedia(
-  programs: WorkoutProgram[],
-): WorkoutProgram[] {
-  return programs.map((p) => ({
-    ...p,
-    days: p.days.map((d) => ({
-      ...d,
-      sessions: d.sessions.map((s) => ({
-        ...s,
-        exercises: s.exercises.map(withSeedMedia),
-      })),
-      exercises: d.exercises.map(withSeedMedia),
-    })),
-  }))
-}
-
-/**
- * Drop the legacy default workouts and add any missing built-in templates.
- * Keeps user-created templates and user edits to current seeds.
- */
-export function migrateSeedTemplates(
-  existing: WorkoutTemplate[],
-): WorkoutTemplate[] {
-  const kept = existing
-    .filter(
-      (t) => !LEGACY_SEED_IDS.has(t.id) && !LEGACY_SEED_NAMES.has(t.name.trim()),
-    )
-    .map((t) => ({ ...t, exercises: t.exercises.map(withSeedMedia) }))
-  const byId = new Map(kept.map((t) => [t.id, t]))
-  const seeds = SEED_WORKOUT_TEMPLATES.map(
-    (s) => byId.get(s.id) ?? structuredClone(s),
-  )
-  const custom = kept.filter(
-    (t) => !SEED_WORKOUT_TEMPLATES.some((s) => s.id === t.id),
-  )
-  return [...seeds, ...custom]
 }
 
 function sessionFromSeed(templateId: string): DaySession {
@@ -431,11 +396,92 @@ function day(dayNumber: number, focus: string, templateId: string): WorkoutDay {
   }
 }
 
-export const DEFAULT_WORKOUT_DAYS: WorkoutDay[] = [
-  day(1, 'כוח משיכה - בלוק 1', 'tpl-b1-pull'),
-  day(2, 'כוח דחיפה ורגליים - בלוק 1', 'tpl-b1-push'),
-  day(3, 'כוח עליון משולב - בלוק 1', 'tpl-b1-combo'),
-  day(4, 'כוח משיכה - בלוק 2', 'tpl-b2-pull'),
-  day(5, 'כוח דחיפה ורגליים - בלוק 2', 'tpl-b2-push'),
-  day(6, 'כוח עליון משולב - בלוק 2', 'tpl-b2-combo'),
-]
+function block1Days(): WorkoutDay[] {
+  return [
+    day(1, 'משיכה 1 · כוח משיכה', 'tpl-b1-pull'),
+    day(2, 'דחיפה 1 · כוח דחיפה ורגליים', 'tpl-b1-push'),
+    day(3, 'משולב 1 · כוח עליון משולב', 'tpl-b1-combo'),
+  ]
+}
+
+function block2Days(): WorkoutDay[] {
+  return [
+    day(1, 'משיכה 2 · כוח משיכה', 'tpl-b2-pull'),
+    day(2, 'דחיפה 2 · כוח דחיפה ורגליים', 'tpl-b2-push'),
+    day(3, 'משולב 2 · כוח עליון משולב', 'tpl-b2-combo'),
+  ]
+}
+
+export const DEFAULT_WORKOUT_DAYS: WorkoutDay[] = block1Days()
+
+export function createOfficialPrograms(): WorkoutProgram[] {
+  const now = new Date().toISOString()
+  return [
+    { id: OFFICIAL_PROGRAM_IDS[0], name: 'בלוק 1', days: block1Days(), updatedAt: now },
+    { id: OFFICIAL_PROGRAM_IDS[1], name: 'בלוק 2', days: block2Days(), updatedAt: now },
+  ]
+}
+
+export type WorkoutPlanState = {
+  programs: WorkoutProgram[]
+  templates: WorkoutTemplate[]
+  activeProgramId: string
+}
+
+const isObsoleteProgram = (p: WorkoutProgram) =>
+  OBSOLETE_PROGRAM_IDS.has(p.id) || OBSOLETE_PROGRAM_NAMES.has(p.name.trim())
+
+const isLegacyTemplate = (t: WorkoutTemplate) =>
+  LEGACY_TEMPLATE_IDS.has(t.id) || LEGACY_TEMPLATE_NAMES.has(t.name.trim())
+
+/** True when saved state still holds the old defaults or lacks the official plan. */
+export function isStalePlan(state: Omit<WorkoutPlanState, 'activeProgramId'>): boolean {
+  const templateIds = new Set(state.templates.map((t) => t.id))
+  return (
+    state.programs.some(isObsoleteProgram) ||
+    !OFFICIAL_PROGRAM_IDS.every((id) => state.programs.some((p) => p.id === id)) ||
+    state.templates.some(isLegacyTemplate) ||
+    !OFFICIAL_TEMPLATE_IDS.every((id) => templateIds.has(id))
+  )
+}
+
+/**
+ * Force the official Block 1 / Block 2 plan: fresh official programs and
+ * library workouts, obsolete defaults removed, Block 1 active.
+ * User-created programs and templates are kept.
+ */
+export function applyOfficialPlan(state: WorkoutPlanState): WorkoutPlanState {
+  const official = createOfficialPrograms()
+  const officialIds = new Set<string>(OFFICIAL_PROGRAM_IDS)
+  const customPrograms = state.programs
+    .filter((p) => !officialIds.has(p.id) && !isObsoleteProgram(p))
+    .map((p) => backfillProgramMedia([p])[0])
+
+  const seedIds = new Set(SEED_WORKOUT_TEMPLATES.map((t) => t.id))
+  const customTemplates = state.templates
+    .filter((t) => !seedIds.has(t.id) && !isLegacyTemplate(t))
+    .map((t) => ({ ...t, exercises: t.exercises.map(withSeedMedia) }))
+
+  return {
+    programs: [...official, ...customPrograms],
+    templates: [...structuredClone(SEED_WORKOUT_TEMPLATES), ...customTemplates],
+    activeProgramId: OFFICIAL_PROGRAM_IDS[0],
+  }
+}
+
+/** Fill missing images/videos on saved program exercises that match a seed exercise. */
+export function backfillProgramMedia(
+  programs: WorkoutProgram[],
+): WorkoutProgram[] {
+  return programs.map((p) => ({
+    ...p,
+    days: p.days.map((d) => ({
+      ...d,
+      sessions: (d.sessions ?? []).map((s) => ({
+        ...s,
+        exercises: s.exercises.map(withSeedMedia),
+      })),
+      exercises: (d.exercises ?? []).map(withSeedMedia),
+    })),
+  }))
+}
