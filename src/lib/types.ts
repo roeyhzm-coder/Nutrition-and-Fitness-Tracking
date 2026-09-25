@@ -148,7 +148,13 @@ export type Exercise = {
   name: string
   sets: number
   reps: string
+  /** Free text, e.g. "2-3 דקות", "60 שניות" */
+  rest?: string
+  weight?: string
   notes?: string
+  /** Demo video / external link */
+  mediaUrl?: string
+  imageUrl?: string
 }
 
 /** A full workout block slotted into a day (from library or custom). */

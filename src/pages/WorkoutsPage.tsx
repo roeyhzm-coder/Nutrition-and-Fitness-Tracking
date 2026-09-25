@@ -5,6 +5,11 @@ import { SetLogger } from '../components/workouts/SetLogger'
 import { ProgramManager } from '../components/workouts/ProgramManager'
 import { WorkoutLibrary } from '../components/workouts/WorkoutLibrary'
 import { ActivityLogCard } from '../components/workouts/ActivityLogCard'
+import {
+  ExerciseDetails,
+  ExerciseFormFields,
+  ExerciseMedia,
+} from '../components/workouts/ExerciseFields'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { IconButton } from '../components/ui/IconButton'
@@ -12,6 +17,12 @@ import { Modal } from '../components/ui/Modal'
 import { useAppData } from '../context/AppDataContext'
 import type { DaySession, Exercise } from '../lib/types'
 import { dayAllExercises } from '../lib/types'
+import type { ExerciseForm } from '../lib/exerciseForm'
+import {
+  EMPTY_EXERCISE_FORM,
+  exerciseToForm,
+  formToExercise,
+} from '../lib/exerciseForm'
 
 export function WorkoutsPage() {
   const {
@@ -38,12 +49,7 @@ export function WorkoutsPage() {
 
   const [dayTitle, setDayTitle] = useState('')
   const [dayFocus, setDayFocus] = useState('')
-  const [exForm, setExForm] = useState({
-    name: '',
-    sets: '3',
-    reps: '8–10',
-    notes: '',
-  })
+  const [exForm, setExForm] = useState<ExerciseForm>(EMPTY_EXERCISE_FORM)
 
   useEffect(() => {
     setDayId(activeProgram?.days[0]?.id ?? '')
@@ -61,25 +67,21 @@ export function WorkoutsPage() {
   function openAddExercise(sessionId?: string | null) {
     setAddSessionId(sessionId ?? null)
     setEditExercise(null)
-    setExForm({ name: '', sets: '3', reps: '8–10', notes: '' })
+    setExForm(EMPTY_EXERCISE_FORM)
     setAddOpen(true)
   }
 
   function openEditExercise(ex: Exercise) {
     setEditExercise(ex)
     setAddSessionId(null)
-    setExForm({
-      name: ex.name,
-      sets: String(ex.sets),
-      reps: ex.reps,
-      notes: ex.notes ?? '',
-    })
+    setExForm(exerciseToForm(ex))
   }
 
   function renderExerciseRow(ex: Exercise) {
     return (
       <li key={ex.id} className="rounded-xl border border-line bg-bg/40">
-        <div className="flex items-start gap-1 px-3 py-2.5">
+        <div className="flex items-start gap-2 px-3 py-2.5">
+          <ExerciseMedia exercise={ex} />
           <button
             type="button"
             className="min-w-0 flex-1 text-right"
@@ -88,10 +90,7 @@ export function WorkoutsPage() {
             }
           >
             <p className="font-semibold text-text">{ex.name}</p>
-            <p className="mt-0.5 text-xs text-muted">
-              {ex.sets} סטים · {ex.reps}
-              {ex.notes ? ` · ${ex.notes}` : ''}
-            </p>
+            <ExerciseDetails exercise={ex} />
           </button>
           <IconButton
             label="עריכת תרגיל"
@@ -360,12 +359,7 @@ export function WorkoutsPage() {
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault()
-            const payload = {
-              name: exForm.name.trim(),
-              sets: Math.max(1, Number(exForm.sets) || 1),
-              reps: exForm.reps.trim() || '8–10',
-              notes: exForm.notes.trim() || undefined,
-            }
+            const payload = formToExercise(exForm)
             if (!payload.name) return
             if (editExercise) {
               updateExercise(day.id, editExercise.id, payload)
@@ -377,40 +371,7 @@ export function WorkoutsPage() {
             setAddSessionId(null)
           }}
         >
-          <input
-            value={exForm.name}
-            onChange={(e) => setExForm((p) => ({ ...p, name: e.target.value }))}
-            placeholder="שם התרגיל"
-            className="w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-            required
-          />
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              inputMode="numeric"
-              value={exForm.sets}
-              onChange={(e) =>
-                setExForm((p) => ({ ...p, sets: e.target.value }))
-              }
-              placeholder="סטים"
-              className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-            />
-            <input
-              value={exForm.reps}
-              onChange={(e) =>
-                setExForm((p) => ({ ...p, reps: e.target.value }))
-              }
-              placeholder="חזרות"
-              className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-            />
-          </div>
-          <input
-            value={exForm.notes}
-            onChange={(e) =>
-              setExForm((p) => ({ ...p, notes: e.target.value }))
-            }
-            placeholder="הערות (אופציונלי)"
-            className="w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-          />
+          <ExerciseFormFields form={exForm} setForm={setExForm} />
           <Button type="submit" className="w-full" variant="accent">
             שמור תרגיל
           </Button>

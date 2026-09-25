@@ -2,9 +2,20 @@ import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { Exercise, WorkoutDay, WorkoutTemplate } from '../../lib/types'
 import { uid } from '../../lib/types'
+import type { ExerciseForm } from '../../lib/exerciseForm'
+import {
+  EMPTY_EXERCISE_FORM,
+  exerciseToForm,
+  formToExercise,
+} from '../../lib/exerciseForm'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
+import {
+  ExerciseDetails,
+  ExerciseFormFields,
+  ExerciseMedia,
+} from './ExerciseFields'
 
 type TemplateEditorProps = {
   open: boolean
@@ -48,12 +59,7 @@ export function TemplateEditor({
   const [name, setName] = useState('')
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [editingEx, setEditingEx] = useState<Exercise | null>(null)
-  const [exForm, setExForm] = useState({
-    name: '',
-    sets: '3',
-    reps: '8–10',
-    notes: '',
-  })
+  const [exForm, setExForm] = useState<ExerciseForm>(EMPTY_EXERCISE_FORM)
   const [applyOpen, setApplyOpen] = useState(false)
 
   useEffect(() => {
@@ -87,10 +93,7 @@ export function TemplateEditor({
   function saveEx() {
     const payload: Exercise = {
       id: editingEx?.id ?? uid(),
-      name: exForm.name.trim(),
-      sets: Math.max(1, Number(exForm.sets) || 1),
-      reps: exForm.reps.trim() || '8–10',
-      notes: exForm.notes.trim() || undefined,
+      ...formToExercise(exForm),
     }
     if (!payload.name) return
     setExercises((prev) => {
@@ -100,7 +103,7 @@ export function TemplateEditor({
         : [...prev, payload]
     })
     setEditingEx(null)
-    setExForm({ name: '', sets: '3', reps: '8–10', notes: '' })
+    setExForm(EMPTY_EXERCISE_FORM)
   }
 
   return (
@@ -130,7 +133,7 @@ export function TemplateEditor({
               tone="accent"
               onClick={() => {
                 setEditingEx(emptyEx())
-                setExForm({ name: '', sets: '3', reps: '8–10', notes: '' })
+                setExForm(EMPTY_EXERCISE_FORM)
               }}
             >
               <Plus className="size-4" strokeWidth={1.75} />
@@ -144,26 +147,19 @@ export function TemplateEditor({
               {exercises.map((ex, index) => (
                 <li
                   key={ex.id}
-                  className="flex items-start gap-1 rounded-xl border border-line bg-surface px-3 py-2"
+                  className="flex items-start gap-2 rounded-xl border border-line bg-surface px-3 py-2"
                 >
+                  <ExerciseMedia exercise={ex} />
                   <button
                     type="button"
                     className="min-w-0 flex-1 text-right"
                     onClick={() => {
                       setEditingEx(ex)
-                      setExForm({
-                        name: ex.name,
-                        sets: String(ex.sets),
-                        reps: ex.reps,
-                        notes: ex.notes ?? '',
-                      })
+                      setExForm(exerciseToForm(ex))
                     }}
                   >
                     <p className="font-medium text-text">{ex.name}</p>
-                    <p className="text-xs text-muted">
-                      {ex.sets} סטים · {ex.reps}
-                      {ex.notes ? ` · ${ex.notes}` : ''}
-                    </p>
+                    <ExerciseDetails exercise={ex} />
                   </button>
                   <IconButton label="העלה" onClick={() => move(index, -1)}>
                     <ArrowUp className="size-3.5" strokeWidth={1.75} />
@@ -176,12 +172,7 @@ export function TemplateEditor({
                     tone="accent"
                     onClick={() => {
                       setEditingEx(ex)
-                      setExForm({
-                        name: ex.name,
-                        sets: String(ex.sets),
-                        reps: ex.reps,
-                        notes: ex.notes ?? '',
-                      })
+                      setExForm(exerciseToForm(ex))
                     }}
                   >
                     <Pencil className="size-3.5" strokeWidth={1.75} />
@@ -254,34 +245,7 @@ export function TemplateEditor({
             saveEx()
           }}
         >
-          <input
-            value={exForm.name}
-            onChange={(e) => setExForm((p) => ({ ...p, name: e.target.value }))}
-            placeholder="שם התרגיל"
-            className="w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-            required
-          />
-          <div className="grid grid-cols-2 gap-2">
-            <input
-              inputMode="numeric"
-              value={exForm.sets}
-              onChange={(e) => setExForm((p) => ({ ...p, sets: e.target.value }))}
-              placeholder="סטים"
-              className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-            />
-            <input
-              value={exForm.reps}
-              onChange={(e) => setExForm((p) => ({ ...p, reps: e.target.value }))}
-              placeholder="חזרות"
-              className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-            />
-          </div>
-          <input
-            value={exForm.notes}
-            onChange={(e) => setExForm((p) => ({ ...p, notes: e.target.value }))}
-            placeholder="הערות"
-            className="w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
-          />
+          <ExerciseFormFields form={exForm} setForm={setExForm} />
           <Button type="submit" className="w-full" variant="accent">
             שמור תרגיל
           </Button>

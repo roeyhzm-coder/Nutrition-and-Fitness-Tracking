@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>ניסוי הרגלי קריאה: מפת 12 הקטגוריות</title>
+  <style>
+    @page { size: A4 portrait; margin: 8mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+    body { background-color: #f8fafc; color: #0f172a; line-height: 1.35; font-size: 11px; }
+    .page { width: 100%; max-width: 194mm; height: 281mm; margin: 0 auto; background: #fff; padding: 12px; page-break-after: always; display: flex; flex-direction: column; justify-content: space-between; }
+    .header-banner { background: #0f172a; color: #fff; padding: 10px 14px; border-radius: 8px; text-align: center; margin-bottom: 8px; }
+    .header-banner h1 { font-size: 17px; margin-bottom: 3px; color: #38bdf8; }
+    .header-banner p { font-size: 10.5px; color: #94a3b8; }
+    .rules-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 8px; }
+    .rule-card { border: 1px solid #bae6fd; background: #f0f9ff; padding: 6px 8px; border-radius: 6px; }
+    .rule-card h4 { color: #0369a1; font-size: 10.5px; margin-bottom: 2px; }
+    .rule-card p { font-size: 9px; color: #334155; }
+    .section-title { font-size: 12px; font-weight: bold; color: #0284c7; border-right: 4px solid #0284c7; padding-right: 6px; margin: 5px 0; background: #f1f5f9; padding-top: 2px; padding-bottom: 2px; border-radius: 0 4px 4px 0; }
+    .cards-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+    .category-card { border: 1px solid #cbd5e1; border-radius: 6px; padding: 7px 9px; background: #fff; }
+    .card-top { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #f1f5f9; padding-bottom: 2px; margin-bottom: 3px; }
+    .card-num { font-size: 11px; font-weight: bold; background: #0f172a; color: #fff; border-radius: 4px; padding: 1px 4px; }
+    .card-title { font-size: 11.5px; font-weight: bold; color: #0f172a; }
+    .card-en { font-size: 8.5px; color: #64748b; }
+    .card-desc { font-size: 9.5px; color: #475569; margin-bottom: 3px; }
+    .card-box { background: #f0fdf4; border-right: 3px solid #16a34a; padding: 3px 5px; border-radius: 2px; margin-bottom: 3px; font-size: 9px; color: #166534; }
+    .card-book { background: #f8fafc; border: 1px solid #e2e8f0; padding: 3px 5px; border-radius: 4px; font-size: 9.5px; color: #0369a1; font-weight: 600; }
+    .callout { background: #f0fdf4; border: 1px solid #86efac; color: #166534; font-size: 9.5px; padding: 5px 8px; border-radius: 6px; text-align: center; margin: 4px 0; font-weight: 600; }
+    table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: 9px; }
+    th, td { border: 1px solid #cbd5e1; padding: 4px 5px; text-align: right; }
+    th { background: #0f172a; color: #fff; font-weight: 600; }
+    tr:nth-child(even) { background: #f8fafc; }
+    .principles-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 5px; }
+    .p-card { border: 1px solid #e2e8f0; background: #f8fafc; padding: 5px 7px; border-radius: 6px; }
+    .p-card h5 { color: #0284c7; font-size: 10px; margin-bottom: 2px; }
+    .p-card p { font-size: 9px; color: #475569; }
+  </style>
+</head>
+<body>
+
+  <!-- עמוד 1 -->
+  <div class="page">
+    <div>
+      <div class="header-banner">
+        <h1>ניסוי הרגלי קריאה: מפת 12 הקטגוריות והספרים הנבחרים</h1>
+        <p>מהדורה מעודכנת ומסוננת: ספרים מודרניים, חדים וקצביים (עד כ-250 עמ') ללא ארכאיות וללא מריחות.</p>
+      </div>
+
+      <div class="rules-grid">
+        <div class="rule-card">
+          <h4>1. שגרת מיקרו (10 עמ')</h4>
+          <p>יעד יומי מוגדר וקל: 10 עמודים או 15 דק'. ללא עומס וללא פשרות על עקביות.</p>
+        </div>
+        <div class="rule-card">
+          <h4>2. חוק 50 העמודים</h4>
+          <p>הספר לא תפס אותך עד עמוד 50? נוטשים מיד וללא אשמה. זהו מידע חיוני לניסוי.</p>
+        </div>
+        <div class="rule-card">
+          <h4>3. בדיקת ז'אנר ממוקדת</h4>
+          <p>הספרים ברשימה מייצגים את שיא הז'אנר כדי לקבל תמונה אמיתית על כל תחום.</p>
+        </div>
+        <div class="rule-card">
+          <h4>4. דירוג והמשכיות</h4>
+          <p>מתעדים בטבלה. קטגוריה שקיבלה ציון 4–5 הופכת לבסיס הקריאה המרכזי שלך הלאה.</p>
+        </div>
+      </div>
+
+      <div class="section-title">חלק א': תחומי העניין המקוריים (בסיס הניסוי)</div>
+      <div class="cards-grid">
+        <div class="category-card">
+          <div class="card-top"><span class="card-title">01 כלים מעשיים והרגלים</span><span class="card-num">01</span></div>
+          <div class="card-en">Practical Habits & Systems</div>
+          <div class="card-desc">ספרים שמפרקים התנהגות אנושית לפעולות חדות, מסגרות עבודה ותהליכים מדידים ללא תיאוריות מיותרות.</div>
+          <div class="card-box"><strong>למה זה עובד:</strong> מתמקד בפעולה האחת שביצועה הופך את כל השאר לקל או מיותר.</div>
+          <div class="card-book">ספר נבחר לניסוי: "הדבר האחד" (The ONE Thing) / גארי קלר (~240 עמ')</div>
+        </div>
+        <div class="category-card">
+          <div class="card-top"><span class="card-title">02 משלים עם מסר</span><span class="card-num">02</span></div>
+          <div class="card-en">Business & Life Parables</div>
+          <div class="card-desc">סיפורים קצרים, קולחים וממוקדים, המעבירים עקרונות פסיכולוגיים ועסקיים דרך עלילה פשוטה שאינה מעייפת.</div>
+          <div class="card-box"><strong>למה זה עובד:</strong> מאותו מחבר של "מי גנב את הגבינה שלי?", מסתיים בערב אחד (110 עמ').</div>
+          <div class="card-book">ספר נבחר לניסוי: "דקה אחת למנהל" / קן בלנצ'רד וספנסר ג'ונסון (~110 עמ')</div>
+        </div>
+        <div class="category-card">
+          <div class="card-top"><span class="card-title">03 פנטזיה ועולמות דמיוניים</span><span class="card-num">03</span></div>
+          <div class="card-en">Immersive Fantasy & Adventure</div>
+          <div class="card-desc">הרפתקה אפית, מסעות גבורה וקונפליקטים מוחשיים בעולם עשיר, בקצב עלילתי ברור ומהיר.</div>
+          <div class="card-box"><strong>למה זה עובד:</strong> מסע הרפתקה ישיר וסוחף מהעמוד הראשון, ללא כבדות או תיאורים ארכאיים.</div>
+          <div class="card-book">ספר נבחר לניסוי: "ההוביט" / ג'.ר.ר טולקין (~260 עמ')</div>
+        </div>
+        <div class="category-card">
+          <div class="card-top"><span class="card-title">04 שפת גוף והתנהגות לא-מילולית</span><span class="card-num">04</span></div>
+          <div class="card-en">Body Language & Behavioral Cues</div>
+          <div class="card-desc">פענוח כוונות, תנועות גוף, מימיקות ורמזים סמויים באינטראקציות, מתוך ניסיון שטח מעשי ומחקרי.</div>
+          <div class="card-box"><strong>למה זה עובד:</strong> נכתב ע"י 3 חוקרי CIA בכירים; כלים מדויקים לזיהוי שקרים ורמזי שפת גוף.</div>
+          <div class="card-book">ספר נבחר לניסוי: Spy the Lie ("איך לזהות שקרים") / יוסטון ופלויד (~240 עמ')</div>
+        </div>
+      </div>
+
+      <div class="callout">כלל זהב לניסוי: כל הספרים ברשימה נבחרו באורך של עד כ-250 עמודים כדי לאפשר לך לסיים ספרים במהירות ולבדוק את המשיכה הטבעית שלך לכל ז'אנר.</div>
+
+      <div class="section-title">חלק ב': קצה היכולת ופיצוח מערכות (ביצועים ובנייה)</div>
+      <div class="cards-grid">
+        <div class="category-card">
+          <div class="card-top"><span class="card-title">05 חוסן קיצוני וקצה היכולת</span><span class="card-num">05</span></div>
+          <div class="card-en">Extreme Grit & Resilience</div>
+          <div class="card-desc">אוטוביוגרפיות וסיפורי שטח של לוחמי עלית וספורטאי קצה. כתיבה ישירה ולא מתייפייפת על משמעת, כאב ואיפוק.</div>
+          <div class="card-box"><strong>למה זה עובד:</strong> פסקאות קצרות כמו פקודות מבצע של מפקד אריות הים; אפס תיאוריות.</div>
+          <div class="card-book">ספר נבחר לניסוי: "משמעת שווה חופש" / ג'וקו וילינק (~200 עמ')</div>
+        </div>
+        <div class="category-card">
+          <div class="card-top"><span class="card-title">06 פריצות דרך ובנייה מאפס</span><span class="card-num">06</span></div>
+          <div class="card-en">Breakthroughs & Building</div>
+          <div class="card-desc">ספרים שמפרקים שלב אחר שלב איך בונים משהו חדש לחלוטין שלא היה קיים, ואיך משיגים יתרון תחרותי מוחלט.</div>
+          <div class="card-box"><strong>למה זה עובד:</strong> ספר היזמות הממוקד והתמציתי ביותר שיצא; רעיונות מקוריים ללא מריחות.</div>
+          <div class="card-book">ספר נבחר לניסוי: "מאפס לאחד" (Zero to One) / פיטר ת'יל (~210 עמ')</div>
+        </div>
+        <div class="category-card">
+          <div class="card-top"><span class="card-title">07 משא ומתן וטקטיקה מעשית</span><span class="card-num">07</span></div>
+          <div class="card-en">Tactical Negotiation & Influence</div>
+          <div class="card-desc">טקטיקות תקשורת במצבי קונפליקט אמיתיים. עקרונות פסיכולוגיים מעשיים לניהול שיחות קשות, שכנוע והובלת אינטראקציות.</div>
+          <div class="card-box"><strong>למה זה עובד:</strong> נכתב ע"י ראש צוות מו"מ לחטופים ב-FBI; מותחן פסיכולוגי מהשטח עם כלים פרקטיים.</div>
+          <div class="card-book">ספר נבחר לניסוי: "לפצח את המשא ומתן" / כריס ווס (~270 עמ')</div>
+        </div>
+        <div class="category-card">
+          <div class="card-top"><span class="card-title">08 מתח ריאליסטי בקצב מהיר</span><span class="card-num">08</span></div>
+          <div class="card-en">Fast-Paced Realistic Fiction</div>
+          <div class="card-desc">מותחן פשע ריאליסטי ומחוספס ללא תיאורים איטיים. מתח טהור בקצב גבוה שמתחיל מהעמוד הראשון ומחזיק עד הסוף.</div>
+          <div class="card-box"><strong>למה זה עובד:</strong> מותחן מרדף עוצר נשימה; כתיבה קצבית וחדה ללא שום מילה מיותרת.</div>
+          <div class="card-book">ספר נבחר לניסוי: "לא ארץ לזקנים" / קורמאק מקארתי (~240 עמ')</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- עמוד 2 -->
+  <div class="page">
+    <div>
+      <div class="section-title">חלק ג': אסטרטגיה, מדע ומציאות (חשיבה והישרדות)</div>
+      <div class="cards-grid">
+        <div class="category-card">
+          <div class="card-top"><span class="card-title">09 מנגנוני כסף ועושר</span><span class="card-num">09</span></div>
+          <div class="card-en">Money Mechanics & Wealth Mindset</div>
+          <div class="card-desc">פירוק מנגנוני הכלכלה והפסיכולוגיה שמאחורי צבירת הון וניהול סיכונים (המשך ישיר ל"אבא עשיר אבא עני").</div>
+          <div class="card-box"><strong>למה זה עובד:</strong> בנוי מ-20 פרקים קצרים ועצמאיים (10–12 עמ' לפרק); קל לקריאה יומית.</div>
+          <div class="card-book">ספר נבחר לניסוי: "הפסיכולוגיה של הכסף" / מורגן האוזל (~240 עמ')</div>
+        </div>
+        <div class="category-card">
+          <div class="card-top"><span class="card-title">10 אסטרטגיה ותורת המשחקים</span><span class="card-num">10</span></div>
+          <div class="card-en">Strategy & Game Theory</div>
+          <div class="card-desc">קבלת החלטות בתנאי אי-ודאות, תורת המשחקים, חישוב סיכונים וחשיבה קרה דרך עולם הפוקר המקצועי ועסקים.</div>
+          <div class="card-box"><strong>למה זה עובד:</strong> אלופת פוקר עולמית שמפרקת איך לחשוב בהסתברויות בלי ליפול בהטיות.</div>
+          <div class="card-book">ספר נבחר לניסוי: "לחשוב בהימורים" (Thinking in Bets) / אנני דיוק (~260 עמ')</div>
+        </div>
+        <div class="category-card">
+          <div class="card-top"><span class="card-title">11 הישרדות ומסעות אמיתיים</span><span class="card-num">11</span></div>
+          <div class="card-en">True Survival & Extreme Expeditions</div>
+          <div class="card-desc">תיעוד היסטורי של מסעות קיצוניים והישרדות מול כוחות הטבע. כוח סבל ומנהיגות בתנאים שאין מהם מוצא.</div>
+          <div class="card-box"><strong>למה זה עובד:</strong> סיפור אמיתי ומטלטל מהרי האנדים; קצב אינטנסיבי שמתחיל בעמוד הראשון.</div>
+          <div class="card-book">ספר נבחר לניסוי: "לגעת בריק" (Touching the Void) / ג'ו סימפסון (~210 עמ')</div>
+        </div>
+        <div class="category-card">
+          <div class="card-top"><span class="card-title">12 מדע פופולרי ופיצוח מערכות</span><span class="card-num">12</span></div>
+          <div class="card-en">Popular Science & System Decoding</div>
+          <div class="card-desc">הסברים קולחים על האופן שבו המוח פועל, איך מערכות קבלת החלטות פועלות ומה מוביל להצלחה, ללא כובד אקדמי.</div>
+          <div class="card-box"><strong>למה זה עובד:</strong> פיצוח מנגנון החשיבה המהירה ("2 השניות הראשונות") דרך סיפורי שטח מרתקים.</div>
+          <div class="card-book">ספר נבחר לניסוי: "הבזק" (Blink) / מלקולם גלדוול (~250 עמ')</div>
+        </div>
+      </div>
+
+      <div class="section-title">טבלת מעקב לניסוי הקריאה (12 הספרים הנבחרים מראש)</div>
+      <p style="font-size: 9px; color: #64748b; margin-bottom: 3px;">הספרים שובצו מראש. מלא תאריך, סמן אם הגעת לסיום או עצרת בעמוד 50, ותן ציון אישי כדי לדייק את הטעם שלך!</p>
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 5%;">#</th>
+            <th style="width: 25%;">קטגוריה</th>
+            <th style="width: 35%;">הספר הנבחר והמחבר (עד ~250 עמ')</th>
+            <th style="width: 12%;">תאריך התחלה</th>
+            <th style="width: 13%;">סטטוס (הושלם / עמ' 50)</th>
+            <th style="width: 10%;">ציון (1-5) והמשכיות</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>01</td><td>כלים מעשיים והרגלים</td><td>"הדבר האחד" / גארי קלר (~240 עמ')</td><td></td><td></td><td></td></tr>
+          <tr><td>02</td><td>משלים עם מסר</td><td>"דקה אחת למנהל" / קן בלנצ'רד (~110 עמ')</td><td></td><td></td><td></td></tr>
+          <tr><td>03</td><td>פנטזיה ועולמות דמיוניים</td><td>"ההוביט" / ג'.ר.ר טולקין (~260 עמ')</td><td></td><td></td><td></td></tr>
+          <tr><td>04</td><td>שפת גוף והתנהגות</td><td>Spy the Lie ("זיהוי שקרים") / יוסטון (~240 עמ')</td><td></td><td></td><td></td></tr>
+          <tr><td>05</td><td>חוסן קיצוני וקצה היכולת</td><td>"משמעת שווה חופש" / ג'וקו וילינק (~200 עמ')</td><td></td><td></td><td></td></tr>
+          <tr><td>06</td><td>פריצות דרך ובנייה מאפס</td><td>"מאפס לאחד" / פיטר ת'יל (~210 עמ')</td><td></td><td></td><td></td></tr>
+          <tr><td>07</td><td>משא ומתן וטקטיקה מעשית</td><td>"לפצח את המשא ומתן" / כריס ווס (~270 עמ')</td><td></td><td></td><td></td></tr>
+          <tr><td>08</td><td>מתח ריאליסטי בקצב מהיר</td><td>"לא ארץ לזקנים" / קורמאק מקארתי (~240 עמ')</td><td></td><td></td><td></td></tr>
+          <tr><td>09</td><td>מנגנוני כסף ועושר</td><td>"הפסיכולוגיה של הכסף" / מורגן האוזל (~240 עמ')</td><td></td><td></td><td></td></tr>
+          <tr><td>10</td><td>אסטרטגיה ותורת המשחקים</td><td>"לחשוב בהימורים" / אנני דיוק (~260 עמ')</td><td></td><td></td><td></td></tr>
+          <tr><td>11</td><td>הישרדות ומסעות אמיתיים</td><td>"לגעת בריק" / ג'ו סימפסון (~210 עמ')</td><td></td><td></td><td></td></tr>
+          <tr><td>12</td><td>מדע פופולרי ופיצוח מערכות</td><td>"הבזק" (Blink) / מלקולם גלדוול (~250 עמ')</td><td></td><td></td><td></td></tr>
+        </tbody>
+      </table>
+
+      <div class="section-title" style="margin-top: 8px;">פרוטוקול מעשי: 4 עקרונות לשבירת מחסום הנטישה</div>
+      <div class="principles-grid">
+        <div class="p-card">
+          <h5>1. שעת עוגן בלו"ז (Habit Stacking)</h5>
+          <p>קשור את הקריאה להרגל יומי קיים שאינך מפספס: מיד אחרי הקפה בבוקר, או 15 דקות במיטה לפני השינה.</p>
+        </div>
+        <div class="p-card">
+          <h5>2. אזור ללא סמארטפון (Friction Removal)</h5>
+          <p>הנח את הנייד בחדר אחר במצב שקט בזמן הקריאה. הסחת דעת קלה קוטעת את המיקוד ומזמינה נטישה מהירה.</p>
+        </div>
+        <div class="p-card">
+          <h5>3. חוק ה-50: נטישה ללא אשם</h5>
+          <p>הזמן יקר מכדי להיאבק בספרים שאינם מדברים אליך. לא נתפסת עד עמוד 50? סגור, תעד בטבלה ועבור לבא.</p>
+        </div>
+        <div class="p-card">
+          <h5>4. גמישות בפורמט (מודפס / שמע)</h5>
+          <p>ספר עיוני מרגיש כבד בעיניים? האזן לו בפורמט שמע (Audiobook) במהלך פעילות או נסיעה. התוכן נקלט מצוין.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

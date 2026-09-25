@@ -26,7 +26,12 @@ import {
   summarizePhase,
 } from '../lib/phaseHistory'
 import { DEFAULT_RECIPES, DEFAULT_FOOD_CATEGORIES } from '../data/recipes'
-import { ensureSeedTemplates } from '../data/workouts'
+import {
+  LIBRARY_SEED_VERSION,
+  backfillProgramMedia,
+  migrateSeedTemplates,
+  needsSeedMigration,
+} from '../data/workouts'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { pullAppState, pushAppState } from '../lib/appStateSync'
 import {
@@ -260,10 +265,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [workoutTemplates, setWorkoutTemplates] = useLocalStorage<
     WorkoutTemplate[]
   >('tn.workoutTemplates.v1', [])
-  const [librarySeeded, setLibrarySeeded] = useLocalStorage<boolean>(
-    'tn.librarySeeded.v1',
-    false,
+  const [librarySeedVersion, setLibrarySeedVersion] = useLocalStorage<number>(
+    'tn.librarySeedVersion.v1',
+    0,
   )
+  const initialLibrarySeedVersion = useRef(librarySeedVersion)
 
   const setWorkoutPrograms = useCallback(
     (
@@ -349,13 +355,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const macroTargets = macroPresets[phase]
 
   useEffect(() => {
-    if (librarySeeded) return
-    setWorkoutTemplates((prev) => {
-      const { templates } = ensureSeedTemplates(prev, false)
-      return templates
-    })
-    setLibrarySeeded(true)
-  }, [librarySeeded, setWorkoutTemplates, setLibrarySeeded])
+    if (librarySeedVersion >= LIBRARY_SEED_VERSION) return
+    setWorkoutTemplates(migrateSeedTemplates)
+    setWorkoutPrograms(backfillProgramMedia)
+    setLibrarySeedVersion(LIBRARY_SEED_VERSION)
+  }, [
+    librarySeedVersion,
+    setWorkoutTemplates,
+    setWorkoutPrograms,
+    setLibrarySeedVersion,
+  ])
 
   const setPhase = useCallback(
     (next: Phase) => {
@@ -748,21 +757,25 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setMacroPresets(remote.macroPresets)
       if (remote.workoutPrograms?.length) {
         setWorkoutPrograms(
-          remote.workoutPrograms.map(normalizeWorkoutProgram),
+          backfillProgramMedia(
+            remote.workoutPrograms.map(normalizeWorkoutProgram),
+          ),
         )
         setActiveProgramIdState(
           remote.activeProgramId || remote.workoutPrograms[0].id,
         )
       }
       if (remote.workoutTemplates) {
-        if (!librarySeeded && remote.workoutTemplates.length === 0) {
-          const { templates, seeded } = ensureSeedTemplates([], false)
-          setWorkoutTemplates(templates)
-          setLibrarySeeded(seeded)
-        } else {
-          setWorkoutTemplates(remote.workoutTemplates)
-          if (!librarySeeded) setLibrarySeeded(true)
-        }
+        const shouldMigrate =
+          initialLibrarySeedVersion.current < LIBRARY_SEED_VERSION ||
+          needsSeedMigration(remote.workoutTemplates)
+        setWorkoutTemplates(
+          shouldMigrate
+            ? migrateSeedTemplates(remote.workoutTemplates)
+            : remote.workoutTemplates,
+        )
+        setLibrarySeedVersion(LIBRARY_SEED_VERSION)
+        if (shouldMigrate) skipNextPush.current = false
       }
       if (remote.consistencyDayMarks) {
         setConsistencyDayMarks(remote.consistencyDayMarks)
@@ -791,7 +804,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setWorkoutPrograms,
     setActiveProgramIdState,
     setWorkoutTemplates,
-    setLibrarySeeded,
+    setLibrarySeedVersion,
     setConsistencyDayMarks,
     setFoodCategories,
     setSavedMeals,
