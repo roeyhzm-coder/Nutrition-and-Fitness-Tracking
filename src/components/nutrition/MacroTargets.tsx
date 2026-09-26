@@ -34,7 +34,7 @@ export function MacroTargetsView({
       max: targets.calories,
       unit: 'קק״ל',
       color: 'warn' as const,
-      chip: 'bg-orange-400/10 text-orange-300',
+      chip: 'bg-orange-50 text-orange-700',
     },
     {
       label: 'חלבון',
@@ -42,7 +42,7 @@ export function MacroTargetsView({
       max: targets.protein,
       unit: 'ג׳',
       color: 'violet' as const,
-      chip: 'bg-violet-500/10 text-violet-300',
+      chip: 'bg-violet-50 text-violet-700',
     },
     {
       label: 'פחמימות',
@@ -50,7 +50,7 @@ export function MacroTargetsView({
       max: targets.carbs,
       unit: 'ג׳',
       color: 'accent' as const,
-      chip: 'bg-cyan-400/10 text-cyan-300',
+      chip: 'bg-cyan-50 text-cyan-700',
     },
     {
       label: 'שומנים',
@@ -58,7 +58,7 @@ export function MacroTargetsView({
       max: targets.fats,
       unit: 'ג׳',
       color: 'warn' as const,
-      chip: 'bg-orange-400/10 text-orange-300',
+      chip: 'bg-orange-50 text-orange-700',
     },
   ]
 

@@ -1,11 +1,32 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Nutrition & Fitness Tracker">
-  <rect width="512" height="512" rx="108" fill="#0f172a"/>
-  <rect x="78" y="176" width="54" height="160" rx="18" fill="#5b8cff"/>
-  <rect x="122" y="200" width="46" height="112" rx="14" fill="#7aa3ff"/>
-  <rect x="160" y="232" width="192" height="48" rx="14" fill="#e8edf7"/>
-  <rect x="344" y="200" width="46" height="112" rx="14" fill="#7aa3ff"/>
-  <rect x="380" y="176" width="54" height="160" rx="18" fill="#5b8cff"/>
-  <path fill="#22c58e" d="M286 302c52-8 86 18 102 62-48 10-90-8-108-48-4-8-2-13 6-14z"/>
-  <path fill="#1aa874" d="M292 318c28 6 52 24 64 46-32 4-58-10-70-32-3-6-1-10 6-14z"/>
-  <path stroke="#0f172a" stroke-width="6" stroke-linecap="round" d="M304 328c22 8 40 24 50 42"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Nutrition and Fitness Tracker">
+  <defs>
+    <linearGradient id="plate" x1="80" y1="40" x2="460" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#f8fafc"/>
+    </linearGradient>
+    <linearGradient id="barbell" x1="96" y1="140" x2="416" y2="372" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3b82f6"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="energy" x1="140" y1="400" x2="420" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#06b6d4"/>
+      <stop offset="1" stop-color="#0891b2"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#plate)"/>
+  <circle cx="256" cy="256" r="176" fill="#eff6ff"/>
+  <path
+    d="M140 338a142 142 0 1 1 196 74"
+    fill="none"
+    stroke="url(#energy)"
+    stroke-width="28"
+    stroke-linecap="round"
+  />
+  <circle cx="336" cy="412" r="16" fill="#0891b2"/>
+  <rect x="108" y="178" width="46" height="156" rx="16" fill="url(#barbell)"/>
+  <rect x="148" y="202" width="38" height="108" rx="12" fill="#60a5fa"/>
+  <rect x="176" y="230" width="160" height="52" rx="16" fill="url(#barbell)"/>
+  <rect x="326" y="202" width="38" height="108" rx="12" fill="#60a5fa"/>
+  <rect x="358" y="178" width="46" height="156" rx="16" fill="url(#barbell)"/>
+  <rect x="238" y="244" width="36" height="24" rx="8" fill="#dbeafe"/>
 </svg>

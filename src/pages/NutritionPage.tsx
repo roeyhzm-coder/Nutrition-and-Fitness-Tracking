@@ -53,7 +53,7 @@ export function NutritionPage() {
       />
       <div className="space-y-5 px-4 py-5">
         <Card title="שלב תזונה">
-          <div className="mb-3 grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-950/50 p-1.5">
+          <div className="mb-3 grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-50 p-1.5">
             {PHASES.map((p) => (
               <button
                 key={p}
@@ -63,7 +63,7 @@ export function NutritionPage() {
                   'min-h-11 rounded-xl px-3 py-2 text-sm font-bold transition',
                   phase === p
                     ? PHASE_ACTIVE_CLASS[p]
-                    : 'text-muted hover:bg-slate-800/60 hover:text-text',
+                    : 'text-muted hover:bg-slate-100 hover:text-text',
                 ].join(' ')}
               >
                 {PHASE_LABELS[p]}

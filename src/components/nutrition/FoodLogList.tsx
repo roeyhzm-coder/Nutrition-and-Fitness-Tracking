@@ -168,7 +168,7 @@ export function FoodLogList({ entries, compact }: FoodLogListProps) {
         {entries.map((f) => (
           <li
             key={f.id}
-            className="flex min-h-14 items-center gap-2 rounded-2xl bg-slate-950/40 px-3 py-3 text-sm"
+            className="flex min-h-14 items-center gap-2 rounded-2xl bg-slate-50 px-3 py-3 text-sm"
           >
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium text-text">{f.name}</p>

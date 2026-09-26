@@ -57,12 +57,12 @@ export function HabitManager() {
               const checked = done.has(habit.id)
               return (
                 <li key={habit.id}>
-                  <div className="flex items-start gap-2 rounded-2xl border border-slate-800/60 bg-slate-950/40 px-4 py-3.5">
+                  <div className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5">
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={() => toggleHabit(habit.id)}
-                      className="mt-1 size-5 accent-emerald-400"
+                      className="mt-1 size-5 accent-blue-600"
                     />
                     <button
                       type="button"

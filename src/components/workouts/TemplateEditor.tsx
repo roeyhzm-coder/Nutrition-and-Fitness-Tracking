@@ -147,7 +147,7 @@ export function TemplateEditor({
               {exercises.map((ex, index) => (
                 <li
                   key={ex.id}
-                  className="flex items-start gap-2 rounded-2xl border border-slate-800/60 bg-slate-950/40 px-3 py-3"
+                  className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"
                 >
                   <ExerciseMedia exercise={ex} />
                   <button
@@ -191,7 +191,7 @@ export function TemplateEditor({
             </ul>
           )}
 
-          <div className="flex flex-col gap-2 border-t border-slate-800/60 pt-4">
+          <div className="flex flex-col gap-2 border-t border-slate-200 pt-4">
             <Button
               variant="accent"
               className="w-full"
@@ -262,7 +262,7 @@ export function TemplateEditor({
             <li key={d.id}>
               <button
                 type="button"
-                className="w-full min-h-14 rounded-2xl border border-slate-800/60 bg-slate-950/40 px-4 py-3.5 text-right transition hover:border-cyan-400/50"
+                className="w-full min-h-14 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-right transition hover:border-blue-300"
                 onClick={() => {
                   if (!template?.id) return
                   onSave({

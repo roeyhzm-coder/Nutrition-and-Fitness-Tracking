@@ -5,19 +5,19 @@
   --font-sans: 'Heebo', sans-serif;
   --font-display: 'Rubik', 'Heebo', sans-serif;
 
-  --color-bg: #020617;
-  --color-card: #0f172acc;
-  --color-surface: #1e293b;
-  --color-primary: #34d399;
-  --color-accent: #22d3ee;
-  --color-text: #f8fafc;
-  --color-muted: #94a3b8;
-  --color-line: #1e293b99;
-  --color-danger: #fb7185;
-  --color-warn: #fb923c;
-  --color-week-blue: #22d3ee;
-  --color-week-green: #34d399;
-  --color-week-amber: #fb923c;
+  --color-bg: #f8fafc;
+  --color-card: #ffffff;
+  --color-surface: #f1f5f9;
+  --color-primary: #2563eb;
+  --color-accent: #0891b2;
+  --color-text: #0f172a;
+  --color-muted: #64748b;
+  --color-line: #e2e8f0;
+  --color-danger: #e11d48;
+  --color-warn: #ea580c;
+  --color-week-blue: #2563eb;
+  --color-week-green: #059669;
+  --color-week-amber: #d97706;
 }
 
 * {
@@ -34,11 +34,11 @@ body {
   margin: 0;
   font-family: var(--font-sans);
   color: var(--color-text);
-  background-color: #020617;
+  background-color: #f8fafc;
   background-image:
-    radial-gradient(ellipse 90% 55% at 50% -18%, rgba(52, 211, 153, 0.14), transparent 55%),
-    radial-gradient(ellipse 55% 40% at 100% 0%, rgba(34, 211, 238, 0.08), transparent 50%),
-    radial-gradient(ellipse 45% 35% at 0% 20%, rgba(139, 92, 246, 0.07), transparent 50%);
+    radial-gradient(ellipse 90% 55% at 50% -18%, rgba(37, 99, 235, 0.08), transparent 55%),
+    radial-gradient(ellipse 55% 40% at 100% 0%, rgba(8, 145, 178, 0.06), transparent 50%),
+    radial-gradient(ellipse 45% 35% at 0% 20%, rgba(14, 165, 233, 0.05), transparent 50%);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -67,12 +67,12 @@ button:not([aria-label]):not(.icon-hit) {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: #cbd5e1;
   border-radius: 999px;
 }
 
 @layer components {
   .field {
-    @apply w-full min-h-11 rounded-2xl border border-slate-800/60 bg-slate-950/60 px-3.5 py-2.5 text-sm text-text outline-none transition placeholder:text-muted/70 focus:border-cyan-400/60 focus:ring-2 focus:ring-cyan-400/15;
+    @apply w-full min-h-11 rounded-2xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-text outline-none transition placeholder:text-muted/70 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15;
   }
 }

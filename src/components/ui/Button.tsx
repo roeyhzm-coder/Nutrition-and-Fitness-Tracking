@@ -4,12 +4,12 @@ type Variant = 'primary' | 'accent' | 'ghost' | 'surface'
 
 const styles: Record<Variant, string> = {
   primary:
-    'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20',
+    'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-600/20',
   accent:
-    'bg-cyan-400 text-slate-950 hover:bg-cyan-300 shadow-lg shadow-cyan-400/20',
-  ghost: 'bg-transparent text-muted hover:bg-slate-800/70 hover:text-text',
+    'bg-cyan-600 text-white hover:bg-cyan-500 shadow-lg shadow-cyan-600/20',
+  ghost: 'bg-transparent text-muted hover:bg-slate-100 hover:text-text',
   surface:
-    'bg-slate-800/80 text-text hover:bg-slate-700/80 border border-slate-700/60',
+    'bg-slate-100 text-text hover:bg-slate-200 border border-slate-200',
 }
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {

@@ -48,7 +48,7 @@ export function FoodCategoriesManager() {
           {foodCategories.map((cat) => (
             <li
               key={cat.id}
-              className="flex min-h-14 items-center gap-1 rounded-2xl border border-slate-800/60 bg-slate-950/40 px-3 py-3"
+              className="flex min-h-14 items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"
             >
               <UtensilsCrossed
                 className="size-4 shrink-0 text-muted"

@@ -10,13 +10,13 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
+      includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
         name: 'Nutrition & Fitness Tracker',
         short_name: 'FitnessApp',
         description: 'Personal Nutrition and Fitness Tracker',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        theme_color: '#ffffff',
+        background_color: '#f8fafc',
         display: 'standalone',
         orientation: 'portrait',
         icons: [

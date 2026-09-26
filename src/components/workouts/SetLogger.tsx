@@ -32,7 +32,7 @@ export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
         })
         setReps('')
       }}
-      className="space-y-4 rounded-3xl border border-slate-800/60 bg-slate-900/70 p-5 shadow-lg shadow-black/20 backdrop-blur-md"
+      className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/80"
     >
       <p className="font-display text-base font-bold text-text">
         רישום סט — {exercise.name}

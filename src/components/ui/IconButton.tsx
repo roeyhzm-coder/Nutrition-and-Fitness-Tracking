@@ -7,11 +7,11 @@ type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 }
 
 const tones = {
-  default: 'text-muted hover:bg-slate-800/80 hover:text-text',
-  danger: 'text-muted hover:bg-rose-500/10 hover:text-danger',
-  accent: 'text-muted hover:bg-cyan-400/10 hover:text-cyan-300',
-  dangerSolid: 'bg-rose-500/15 text-danger hover:bg-rose-500/25',
-  accentSolid: 'bg-cyan-400/15 text-cyan-300 hover:bg-cyan-400/25',
+  default: 'text-muted hover:bg-slate-100 hover:text-text',
+  danger: 'text-muted hover:bg-rose-50 hover:text-danger',
+  accent: 'text-muted hover:bg-blue-50 hover:text-blue-600',
+  dangerSolid: 'bg-rose-50 text-danger hover:bg-rose-100',
+  accentSolid: 'bg-blue-50 text-blue-600 hover:bg-blue-100',
 }
 
 export function IconButton({

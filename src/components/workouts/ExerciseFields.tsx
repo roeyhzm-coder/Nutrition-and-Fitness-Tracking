@@ -65,20 +65,20 @@ export function ExerciseDetails({ exercise }: { exercise: Exercise }) {
   return (
     <>
       <div className="mt-1 flex flex-wrap gap-1.5 text-xs">
-        <span className="rounded-lg bg-slate-800/80 px-2 py-0.5 text-text">
+        <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-text">
           {exercise.sets} סטים
         </span>
-        <span className="rounded-lg bg-slate-800/80 px-2 py-0.5 text-text">
+        <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-text">
           {exercise.reps}
         </span>
         {exercise.rest ? (
-          <span className="inline-flex items-center gap-1 rounded-lg bg-cyan-400/10 px-2 py-0.5 font-medium text-cyan-300">
+          <span className="inline-flex items-center gap-1 rounded-lg bg-cyan-50 px-2 py-0.5 font-medium text-blue-600">
             <Timer className="size-3" strokeWidth={2} />
             מנוחה {exercise.rest}
           </span>
         ) : null}
         {exercise.weight ? (
-          <span className="inline-flex items-center gap-1 rounded-lg bg-slate-800/80 px-2 py-0.5 text-muted">
+          <span className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2 py-0.5 text-muted">
             <Dumbbell className="size-3" strokeWidth={2} />
             {exercise.weight}
           </span>
@@ -104,7 +104,7 @@ export function ExerciseMedia({ exercise }: { exercise: Exercise }) {
         rel="noopener noreferrer"
         aria-label="צפה בהדגמה"
         title="צפה בהדגמה"
-        className="inline-flex size-11 shrink-0 items-center justify-center rounded-2xl text-muted transition hover:bg-cyan-400/10 hover:text-cyan-300"
+        className="inline-flex size-11 shrink-0 items-center justify-center rounded-2xl text-muted transition hover:bg-blue-50 hover:text-blue-600"
       >
         <CirclePlay className="size-3.5" strokeWidth={1.75} />
       </a>
@@ -117,7 +117,7 @@ export function ExerciseMedia({ exercise }: { exercise: Exercise }) {
       target="_blank"
       rel="noopener noreferrer"
       title={mediaUrl ? 'צפה בהדגמה' : name}
-      className="relative block size-16 shrink-0 overflow-hidden rounded-2xl border border-slate-800/60 bg-slate-950/40"
+      className="relative block size-16 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
     >
       <img
         src={imageUrl}

@@ -81,7 +81,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
         {results.map((p) => (
           <li
             key={p.code}
-            className="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4"
+            className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
           >
             <div className="flex gap-3">
               {p.imageUrl ? (
@@ -91,7 +91,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
                   className="size-12 rounded-2xl object-cover"
                 />
               ) : (
-                <div className="size-12 rounded-2xl bg-slate-800/80" />
+                <div className="size-12 rounded-2xl bg-slate-100" />
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-text">

@@ -21,7 +21,7 @@ export function TodayWorkoutCard() {
     <Card
       title={`האימון של היום · ${WEEKDAYS[todayNumber - 1]}`}
       action={
-        <Link to="/workouts" className="text-xs font-semibold text-cyan-300 hover:underline">
+        <Link to="/workouts" className="text-xs font-semibold text-blue-600 hover:underline">
           ללוח השבועי
         </Link>
       }
@@ -31,7 +31,7 @@ export function TodayWorkoutCard() {
           לא נקבע אימון להיום ב{activeProgram?.name ?? 'תוכנית'}.
         </p>
       ) : day.isRest ? (
-        <p className="rounded-2xl bg-slate-950/40 px-4 py-5 text-center text-sm leading-relaxed text-muted">
+        <p className="rounded-2xl bg-slate-50 px-4 py-5 text-center text-sm leading-relaxed text-muted">
           יום מנוחה 💤 — התאוששות היא חלק מהתוכנית.
         </p>
       ) : (
@@ -46,7 +46,7 @@ export function TodayWorkoutCard() {
         </div>
       )}
       {doneToday.length ? (
-        <p className="mt-4 rounded-2xl bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300">
+        <p className="mt-4 rounded-2xl bg-blue-50 px-3 py-2 text-xs font-medium text-blue-600">
           ✓ בוצע היום: {doneToday.map((l) => l.workoutName).join(', ')}
         </p>
       ) : null}

@@ -380,9 +380,9 @@ export const PHASE_LABELS: Record<Phase, string> = {
 }
 
 export const PHASE_ACTIVE_CLASS: Record<Phase, string> = {
-  bulk: 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20',
-  cut: 'bg-cyan-400 text-slate-950 shadow-lg shadow-cyan-400/20',
-  maintain: 'bg-orange-400 text-slate-950 shadow-lg shadow-orange-400/20',
+  bulk: 'bg-blue-600 text-white shadow-lg shadow-blue-600/20',
+  cut: 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/20',
+  maintain: 'bg-orange-500 text-white shadow-lg shadow-orange-500/20',
 }
 
 export function isPhase(value: unknown): value is Phase {

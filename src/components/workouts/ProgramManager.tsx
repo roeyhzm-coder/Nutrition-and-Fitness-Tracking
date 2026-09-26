@@ -23,7 +23,7 @@ export function ProgramManager() {
 
   return (
     <>
-      <div className="flex items-center gap-2 rounded-3xl border border-slate-800/60 bg-slate-900/70 p-2.5 shadow-lg shadow-black/20 backdrop-blur-md">
+      <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm shadow-slate-200/80">
         <label className="sr-only" htmlFor="program-select">
           תוכנית אימונים
         </label>
@@ -57,7 +57,7 @@ export function ProgramManager() {
             {workoutPrograms.map((p) => (
               <li
                 key={p.id}
-                className="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4"
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
               >
                 <div className="flex items-center gap-1">
                   <div className="min-w-0 flex-1 text-right">
@@ -96,7 +96,7 @@ export function ProgramManager() {
           </ul>
 
           <form
-            className="flex gap-2 border-t border-slate-800/60 pt-4"
+            className="flex gap-2 border-t border-slate-200 pt-4"
             onSubmit={(e) => {
               e.preventDefault()
               createProgram(newName || 'תוכנית חדשה', true)

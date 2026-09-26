@@ -64,7 +64,7 @@ export function LifestyleCard() {
           {fields.map(([key, label, Icon, mode]) => (
             <label key={key} className="block text-xs text-muted">
               <span className="flex items-center gap-1">
-                <Icon className="size-3.5 text-emerald-400" strokeWidth={1.75} />
+                <Icon className="size-3.5 text-blue-600" strokeWidth={1.75} />
                 {label}
               </span>
               <input

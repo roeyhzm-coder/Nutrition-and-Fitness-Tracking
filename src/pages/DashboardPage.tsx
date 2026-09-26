@@ -104,20 +104,20 @@ export function DashboardPage() {
             color="warn"
           />
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <div className="rounded-2xl bg-violet-500/10 px-3 py-2.5 text-center">
-              <p className="text-[11px] text-violet-300">חלבון</p>
+            <div className="rounded-2xl bg-violet-50 px-3 py-2.5 text-center">
+              <p className="text-[11px] text-violet-700">חלבון</p>
               <p className="mt-0.5 font-display text-sm font-bold tabular-nums text-text">
                 {macroTargets.protein}ג׳
               </p>
             </div>
-            <div className="rounded-2xl bg-cyan-400/10 px-3 py-2.5 text-center">
-              <p className="text-[11px] text-cyan-300">פחמימות</p>
+            <div className="rounded-2xl bg-cyan-50 px-3 py-2.5 text-center">
+              <p className="text-[11px] text-blue-600">פחמימות</p>
               <p className="mt-0.5 font-display text-sm font-bold tabular-nums text-text">
                 {macroTargets.carbs}ג׳
               </p>
             </div>
-            <div className="rounded-2xl bg-orange-400/10 px-3 py-2.5 text-center">
-              <p className="text-[11px] text-orange-300">שומן</p>
+            <div className="rounded-2xl bg-orange-50 px-3 py-2.5 text-center">
+              <p className="text-[11px] text-orange-700">שומן</p>
               <p className="mt-0.5 font-display text-sm font-bold tabular-nums text-text">
                 {macroTargets.fats}ג׳
               </p>
@@ -140,7 +140,7 @@ export function DashboardPage() {
           action={
             <Link
               to="/nutrition#food-log"
-              className="text-xs font-semibold text-cyan-300 hover:underline"
+              className="text-xs font-semibold text-blue-600 hover:underline"
             >
               ליומן המלא
             </Link>
@@ -158,10 +158,10 @@ export function DashboardPage() {
         </Card>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-3xl border border-slate-800/60 bg-slate-900/70 p-5 shadow-lg shadow-black/20 backdrop-blur-md">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/80">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted">משקל עדכני</p>
-              <Scale className="size-4 text-emerald-400" strokeWidth={1.75} />
+              <Scale className="size-4 text-blue-600" strokeWidth={1.75} />
             </div>
             <p className="mt-3 font-display text-3xl font-extrabold tabular-nums text-text">
               {latest ? latest.weightKg : '—'}
@@ -170,10 +170,10 @@ export function DashboardPage() {
               {latest ? 'ק״ג' : 'אין מדידה'}
             </p>
           </div>
-          <div className="rounded-3xl border border-slate-800/60 bg-slate-900/70 p-5 shadow-lg shadow-black/20 backdrop-blur-md">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/80">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted">אחוזי שומן</p>
-              <Percent className="size-4 text-violet-400" strokeWidth={1.75} />
+              <Percent className="size-4 text-violet-600" strokeWidth={1.75} />
             </div>
             <p className="mt-3 font-display text-3xl font-extrabold tabular-nums text-text">
               {latest?.bodyFatPct != null ? latest.bodyFatPct : '—'}

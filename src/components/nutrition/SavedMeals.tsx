@@ -60,7 +60,7 @@ export function SavedMeals() {
             {savedMeals.map((meal) => (
               <li
                 key={meal.id}
-                className="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4"
+                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
               >
                 <div className="flex items-start gap-2">
                   <button

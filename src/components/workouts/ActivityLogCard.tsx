@@ -104,8 +104,8 @@ export function ActivityLogCard() {
               className={[
                 'min-h-11 rounded-2xl px-3 text-xs transition',
                 sport === s
-                  ? 'bg-emerald-500 text-slate-950'
-                  : 'bg-slate-800/80 text-muted hover:text-text',
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-slate-100 text-muted hover:text-text',
               ].join(' ')}
             >
               {s}
@@ -151,11 +151,11 @@ export function ActivityLogCard() {
       </form>
 
       {recent.length > 0 ? (
-        <ul className="mt-4 space-y-2 border-t border-slate-800/60 pt-4">
+        <ul className="mt-4 space-y-2 border-t border-slate-200 pt-4">
           {recent.map((a) => (
             <li
               key={a.id}
-              className="flex items-center gap-2 rounded-2xl bg-slate-950/40 px-3 py-2.5"
+              className="flex items-center gap-2 rounded-2xl bg-slate-50 px-3 py-2.5"
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-text">

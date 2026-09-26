@@ -82,7 +82,7 @@ export function WeightLog({ entries, onAdd }: WeightLogProps) {
             .map((e) => (
               <li
                 key={e.id}
-                className="flex items-center justify-between rounded-2xl bg-slate-950/40 px-3 py-3 text-sm"
+                className="flex items-center justify-between rounded-2xl bg-slate-50 px-3 py-3 text-sm"
               >
                 <span className="text-muted">
                   {new Date(e.loggedAt).toLocaleDateString('he-IL')}

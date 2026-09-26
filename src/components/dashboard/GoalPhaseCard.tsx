@@ -77,9 +77,9 @@ export function GoalPhaseCard({
     <>
       <Card
         title="מטרת על ותהליך"
-        className="border-emerald-500/25 bg-gradient-to-b from-emerald-500/10 to-transparent"
+        className="border-blue-100 bg-gradient-to-b from-blue-50 to-white"
       >
-        <div className="mb-4 grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-950/50 p-1.5">
+        <div className="mb-4 grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-50 p-1.5">
           {PHASES.map((p) => (
             <button
               key={p}
@@ -89,7 +89,7 @@ export function GoalPhaseCard({
                 'min-h-11 rounded-xl px-3 py-2 text-sm font-bold transition',
                 phase === p
                   ? PHASE_ACTIVE_CLASS[p]
-                  : 'text-muted hover:bg-slate-800/60 hover:text-text',
+                  : 'text-muted hover:bg-slate-100 hover:text-text',
               ].join(' ')}
             >
               {PHASE_LABELS[p]}
@@ -97,7 +97,7 @@ export function GoalPhaseCard({
           ))}
         </div>
 
-        <section className="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4">
+        <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-semibold text-text">
               שלב קצר · {PHASE_LABELS[phase]}
@@ -121,7 +121,7 @@ export function GoalPhaseCard({
             <ProgressBar value={shortDay} max={goal.totalDays} color="primary" />
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-            <div className="rounded-2xl bg-slate-900/60 px-3 py-2.5">
+            <div className="rounded-2xl bg-slate-50 px-3 py-2.5">
               <p className="text-xs text-muted">משקל יעד לשלב</p>
               <p className="mt-1 font-display text-lg font-bold tabular-nums text-text">
                 {goal.targetWeightKg != null ? `${goal.targetWeightKg} ק״ג` : '—'}
@@ -130,7 +130,7 @@ export function GoalPhaseCard({
                 נוכחי: {currentWeight != null ? `${currentWeight}` : '—'}
               </p>
             </div>
-            <div className="rounded-2xl bg-slate-900/60 px-3 py-2.5">
+            <div className="rounded-2xl bg-slate-50 px-3 py-2.5">
               <p className="text-xs text-muted">שומן יעד לשלב</p>
               <p className="mt-1 font-display text-lg font-bold tabular-nums text-text">
                 {goal.targetBodyFatPct != null
@@ -152,7 +152,7 @@ export function GoalPhaseCard({
           </Button>
         </section>
 
-        <section className="mt-3 rounded-2xl border border-cyan-400/25 bg-cyan-400/5 p-4">
+        <section className="mt-3 rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
           <div className="mb-2 flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-text">מטרת על ארוכת טווח</p>

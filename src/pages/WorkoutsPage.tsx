@@ -84,7 +84,7 @@ export function WorkoutsPage() {
 
   function renderExerciseRow(ex: Exercise) {
     return (
-      <li key={ex.id} className="rounded-2xl border border-slate-800/60 bg-slate-950/40">
+      <li key={ex.id} className="rounded-2xl border border-slate-200 bg-slate-50">
         <div className="flex items-start gap-2 px-3 py-3">
           <ExerciseMedia exercise={ex} />
           <button
@@ -120,7 +120,7 @@ export function WorkoutsPage() {
     return (
       <section
         key={session.id}
-        className="rounded-2xl border border-slate-800/60 bg-slate-950/35 p-4"
+        className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
       >
         <div className="mb-2 flex items-center gap-1">
           <div className="min-w-0 flex-1">
@@ -209,11 +209,11 @@ export function WorkoutsPage() {
                 className={[
                   'flex min-h-[5rem] min-w-[4.75rem] flex-1 flex-col items-center justify-start gap-1 rounded-2xl px-1.5 py-2.5 text-center transition',
                   selected
-                    ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/25'
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
                     : d.isRest
-                      ? 'border border-slate-800/60 bg-slate-950/30 text-muted'
-                      : 'border border-slate-800/60 bg-slate-900/70 text-text backdrop-blur-md',
-                  isToday && !selected ? 'ring-1 ring-cyan-400/70' : '',
+                      ? 'border border-slate-200 bg-slate-50 text-muted'
+                      : 'border border-slate-200 bg-white text-text backdrop-blur-md',
+                  isToday && !selected ? 'ring-1 ring-blue-400' : '',
                 ].join(' ')}
               >
                 <span className="text-sm font-bold">{WEEKDAYS[d.dayNumber - 1]}</span>
@@ -221,7 +221,7 @@ export function WorkoutsPage() {
                   <span
                     className={[
                       'text-[10px] font-semibold',
-                      selected ? 'text-slate-950/75' : 'text-cyan-300',
+                      selected ? 'text-white/80' : 'text-blue-600',
                     ].join(' ')}
                   >
                     היום
@@ -230,7 +230,7 @@ export function WorkoutsPage() {
                 <span
                   className={[
                     'line-clamp-2 text-[10px] leading-tight',
-                    selected ? 'text-slate-950/80' : 'text-muted',
+                    selected ? 'text-white/80' : 'text-muted',
                   ].join(' ')}
                 >
                   {dayPlanLabel(d)}
@@ -249,7 +249,7 @@ export function WorkoutsPage() {
           </div>
 
           {day.isRest ? (
-            <p className="rounded-2xl border border-dashed border-slate-700/70 bg-slate-950/30 p-5 text-center text-sm text-muted">
+            <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm text-muted">
               יום מנוחה — אין אימון מתוכנן.
             </p>
           ) : (
@@ -283,7 +283,7 @@ export function WorkoutsPage() {
                 {day.sessions.map(renderSession)}
 
                 {(day.exercises.length > 0 || day.sessions.length === 0) && (
-                  <section className="rounded-2xl border border-dashed border-slate-700/70 bg-slate-950/30 p-4">
+                  <section className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-sm font-semibold text-text">
                         תרגילים עצמאיים
@@ -338,7 +338,7 @@ export function WorkoutsPage() {
               <li key={t.id}>
                 <button
                   type="button"
-                  className="w-full min-h-14 rounded-2xl border border-slate-800/60 bg-slate-950/40 px-4 py-3.5 text-right transition hover:border-cyan-400/50"
+                  className="w-full min-h-14 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-right transition hover:border-blue-300"
                   onClick={() => {
                     attachTemplateToDay(day.id, t.id)
                     setPickTemplateOpen(false)

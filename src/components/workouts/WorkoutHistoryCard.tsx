@@ -34,7 +34,7 @@ function LogItem({ log }: { log: WorkoutLog }) {
   const volume = volumeKg(log)
 
   return (
-    <li className="rounded-2xl border border-slate-800/60 bg-slate-950/40">
+    <li className="rounded-2xl border border-slate-200 bg-slate-50">
       <div className="flex items-start gap-1 px-4 py-3">
         <button
           type="button"
@@ -67,7 +67,7 @@ function LogItem({ log }: { log: WorkoutLog }) {
         </IconButton>
       </div>
       {open ? (
-        <ul className="space-y-2 border-t border-slate-800/60 px-4 py-3">
+        <ul className="space-y-2 border-t border-slate-200 px-4 py-3">
           {log.exercises.map((ex, i) => (
             <li key={`${ex.exerciseId}-${i}`} className="text-xs">
               <p className="font-medium text-text">{ex.name}</p>

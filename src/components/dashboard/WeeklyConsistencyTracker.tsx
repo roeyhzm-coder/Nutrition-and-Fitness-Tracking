@@ -20,15 +20,15 @@ type WeeklyConsistencyTrackerProps = {
 }
 
 const toneClass = {
-  blue: 'border-cyan-400/40 bg-cyan-400/10',
-  green: 'border-emerald-400/40 bg-emerald-400/10',
-  amber: 'border-orange-400/35 bg-orange-400/10',
+  blue: 'border-cyan-200 bg-cyan-50',
+  green: 'border-blue-200 bg-blue-50',
+  amber: 'border-orange-200 bg-orange-50',
 }
 
 const badgeClass = {
-  blue: 'bg-cyan-400/20 text-cyan-200',
-  green: 'bg-emerald-400/20 text-emerald-300',
-  amber: 'bg-orange-400/20 text-orange-300',
+  blue: 'bg-cyan-50 text-cyan-700',
+  green: 'bg-blue-50 text-blue-700',
+  amber: 'bg-orange-50 text-orange-700',
 }
 
 function WeekRow({
@@ -88,8 +88,8 @@ function WeekRow({
             className={[
               'flex size-11 flex-col items-center justify-center rounded-full text-[10px] font-bold transition',
               slot.done
-                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/25'
-                : 'bg-slate-950/50 text-muted ring-1 ring-slate-800/70',
+                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                : 'bg-slate-50 text-muted ring-1 ring-slate-200',
             ].join(' ')}
             aria-pressed={slot.done}
             aria-label={`${slot.weekday} ${slot.date}`}
@@ -223,8 +223,8 @@ export function WeeklyConsistencyTracker({
                 className={[
                   'min-h-11 rounded-2xl px-3 text-xs font-bold',
                   Number(countInput) === n
-                    ? 'bg-emerald-500 text-slate-950'
-                    : 'bg-slate-800/80 text-muted',
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-100 text-muted',
                 ].join(' ')}
               >
                 {n}/{targetPerWeek}

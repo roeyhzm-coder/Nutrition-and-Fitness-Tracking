@@ -69,7 +69,7 @@ export function WeightFatTracker({ entries, onAdd }: WeightFatTrackerProps) {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[320px] text-right text-sm">
             <thead>
-              <tr className="border-b border-slate-800/60 text-xs text-muted">
+              <tr className="border-b border-slate-200 text-xs text-muted">
                 <th className="px-2 py-2 font-medium">תאריך</th>
                 <th className="px-2 py-2 font-medium">משקל</th>
                 <th className="px-2 py-2 font-medium">שומן %</th>
@@ -81,7 +81,7 @@ export function WeightFatTracker({ entries, onAdd }: WeightFatTrackerProps) {
                 .reverse()
                 .slice(0, 14)
                 .map((e) => (
-                  <tr key={e.id} className="border-b border-slate-800/40">
+                  <tr key={e.id} className="border-b border-slate-200">
                     <td className="px-2 py-3 text-muted">
                       {new Date(e.loggedAt).toLocaleDateString('he-IL')}
                     </td>
