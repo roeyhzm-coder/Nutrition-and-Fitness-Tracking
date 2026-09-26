@@ -5,8 +5,7 @@ import { WorkoutSessionProvider } from './context/WorkoutSessionContext'
 import { DashboardPage } from './pages/DashboardPage'
 import { WorkoutsPage } from './pages/WorkoutsPage'
 import { NutritionPage } from './pages/NutritionPage'
-import { HabitsPage } from './pages/HabitsPage'
-import { ExportPage } from './pages/ExportPage'
+import { ProfilePage } from './pages/ProfilePage'
 
 export default function App() {
   return (
@@ -18,8 +17,9 @@ export default function App() {
               <Route index element={<DashboardPage />} />
               <Route path="workouts" element={<WorkoutsPage />} />
               <Route path="nutrition" element={<NutritionPage />} />
-              <Route path="habits" element={<HabitsPage />} />
-              <Route path="export" element={<ExportPage />} />
+              <Route path="profile" element={<ProfilePage />} />
+              <Route path="habits" element={<Navigate to="/profile" replace />} />
+              <Route path="export" element={<Navigate to="/profile" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

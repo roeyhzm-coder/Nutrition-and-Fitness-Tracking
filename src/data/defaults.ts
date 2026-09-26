@@ -52,6 +52,7 @@ export const DEFAULT_GOAL: GoalSettings = {
   totalDays: 84,
   targetWeightKg: null,
   targetBodyFatPct: null,
+  weeklyWorkoutTarget: 5,
   masterStartDate: todayKey(),
   masterTotalDays: 1200,
   masterTargetWeightKg: 80,

@@ -3,22 +3,20 @@ import {
   LayoutDashboard,
   Dumbbell,
   UtensilsCrossed,
-  CheckSquare,
-  Sparkles,
+  UserRound,
 } from 'lucide-react'
 
 const tabs = [
   { to: '/', label: 'דשבורד', icon: LayoutDashboard },
   { to: '/workouts', label: 'אימונים', icon: Dumbbell },
   { to: '/nutrition', label: 'תזונה ומתכונים', icon: UtensilsCrossed },
-  { to: '/habits', label: 'הרגלים', icon: CheckSquare },
-  { to: '/export', label: 'ייצוא נתונים', icon: Sparkles },
+  { to: '/profile', label: 'פרופיל ומדדים', icon: UserRound },
 ]
 
 export function BottomNav() {
   return (
     <nav className="fixed inset-x-3 bottom-3 z-40 pb-[env(safe-area-inset-bottom)]">
-      <ul className="mx-auto grid max-w-3xl grid-cols-5 gap-1 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-lg shadow-slate-200/70 backdrop-blur-md">
+      <ul className="mx-auto grid max-w-3xl grid-cols-4 gap-1 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-lg shadow-slate-200/70 backdrop-blur-md">
         {tabs.map(({ to, label, icon: Icon }) => (
           <li key={to}>
             <NavLink

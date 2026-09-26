@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import type { SavedMeal } from '../../lib/types'
 import { Button } from '../ui/Button'
@@ -25,12 +25,6 @@ export function SavedMeals() {
     fats: '',
   })
 
-  function openCreate() {
-    setEditing(null)
-    setForm({ name: '', calories: '', protein: '', carbs: '', fats: '' })
-    setOpen(true)
-  }
-
   function openEdit(meal: SavedMeal) {
     setEditing(meal)
     setForm({
@@ -45,14 +39,7 @@ export function SavedMeals() {
 
   return (
     <>
-      <Card
-        title="ארוחות קבועות"
-        action={
-          <IconButton label="הוסף ארוחה" tone="accent" onClick={openCreate}>
-            <Plus className="size-4" strokeWidth={1.75} />
-          </IconButton>
-        }
-      >
+      <Card title="ארוחות קבועות">
         {savedMeals.length === 0 ? (
           <p className="text-sm text-muted">אין ארוחות קבועות עדיין.</p>
         ) : (

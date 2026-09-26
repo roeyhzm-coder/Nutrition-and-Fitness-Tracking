@@ -2,14 +2,13 @@ import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { PageHeader } from '../components/layout/PageHeader'
 import { MacroTargetsView } from '../components/nutrition/MacroTargets'
-import { WeightLog } from '../components/nutrition/WeightLog'
 import { FoodSearch } from '../components/nutrition/FoodSearch'
 import { RecipeCatalog } from '../components/nutrition/RecipeCatalog'
 import { SavedMeals } from '../components/nutrition/SavedMeals'
 import { ImportMealsModal } from '../components/nutrition/ImportMealsModal'
 import { FoodCategoriesManager } from '../components/nutrition/FoodCategoriesManager'
 import { FoodLogList } from '../components/nutrition/FoodLogList'
-import { EditTargetsModal } from '../components/dashboard/EditTargetsModal'
+import { AddFoodModal } from '../components/dashboard/AddFoodModal'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { useAppData } from '../context/AppDataContext'
@@ -21,17 +20,8 @@ import {
 } from '../lib/types'
 
 export function NutritionPage() {
-  const {
-    foodLogs,
-    weightLogs,
-    addFood,
-    addWeight,
-    macroTargets,
-    setMacroTargets,
-    phase,
-    setPhase,
-  } = useAppData()
-  const [targetsOpen, setTargetsOpen] = useState(false)
+  const { foodLogs, addFood, macroTargets, phase, setPhase } = useAppData()
+  const [foodOpen, setFoodOpen] = useState(false)
   const { hash } = useLocation()
   const today = todayKey()
 
@@ -41,6 +31,7 @@ export function NutritionPage() {
       .getElementById(hash.slice(1))
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [hash])
+
   const todayFood = [...foodLogs]
     .filter((f) => f.loggedAt.startsWith(today))
     .reverse()
@@ -50,6 +41,11 @@ export function NutritionPage() {
       <PageHeader
         title="תזונה ומתכונים"
         subtitle={`יעדי ${PHASE_LABELS[phase]} · ארוחות, מתכונים וייבוא`}
+        action={
+          <Button variant="accent" onClick={() => setFoodOpen(true)}>
+            הוסף מזון / ארוחה
+          </Button>
+        }
       />
       <div className="space-y-5 px-4 py-5">
         <Card title="שלב תזונה">
@@ -72,23 +68,11 @@ export function NutritionPage() {
           </div>
           <p className="text-xs text-muted">
             מעבר בין מסה, חיטוב ותחזוקה מחליף אוטומטית את יעדי המאקרו השמורים
-            לכל שלב.
+            לכל שלב. עריכת היעדים נמצאת בלשונית פרופיל ומדדים.
           </p>
-          <Button
-            className="mt-3 w-full"
-            variant="surface"
-            onClick={() => setTargetsOpen(true)}
-          >
-            יעדי {PHASE_LABELS[phase]}
-          </Button>
         </Card>
 
-        <MacroTargetsView
-          logs={foodLogs}
-          targets={macroTargets}
-          onEditTargets={() => setTargetsOpen(true)}
-        />
-        <WeightLog entries={weightLogs} onAdd={addWeight} />
+        <MacroTargetsView logs={foodLogs} targets={macroTargets} />
         <SavedMeals />
         <FoodSearch onAdd={addFood} />
 
@@ -103,13 +87,7 @@ export function NutritionPage() {
         <RecipeCatalog />
       </div>
 
-      <EditTargetsModal
-        open={targetsOpen}
-        targets={macroTargets}
-        onClose={() => setTargetsOpen(false)}
-        onSave={setMacroTargets}
-        title={`עריכת יעדי ${PHASE_LABELS[phase]}`}
-      />
+      <AddFoodModal open={foodOpen} onClose={() => setFoodOpen(false)} />
     </>
   )
 }

@@ -18,10 +18,14 @@ import type {
   WorkoutDay,
 } from './types'
 import {
+  ACTIVITY_LEVEL_LABELS,
+  calcBmi,
   calcProcessDay,
   dayAllExercises,
   INTENSITY_LABELS,
   PHASE_LABELS,
+  SEX_LABELS,
+  WORK_STYLE_LABELS,
 } from './types'
 import { relativeWeekNumber } from './weeklyConsistency'
 import { summarizePhase } from './phaseHistory'
@@ -185,10 +189,7 @@ export function buildAiExportPrompt(input: {
       ?.bodyFatPct ??
     profile.estimatedBodyFatPct ??
     null
-  const bmi =
-    currentWeight != null && profile.heightCm
-      ? currentWeight / (profile.heightCm / 100) ** 2
-      : null
+  const bmi = calcBmi(currentWeight, profile.heightCm)
   const weightDelta =
     startWeight != null && currentWeight != null
       ? currentWeight - startWeight
@@ -206,7 +207,7 @@ export function buildAiExportPrompt(input: {
     ...weekActivities.map((a) => a.loggedAt.slice(0, 10)),
   ])
   const workoutsThisWeek = workoutDaysSet.size
-  const targetPerWeek = 5
+  const targetPerWeek = input.goal.weeklyWorkoutTarget || 5
   const metTarget = workoutsThisWeek >= targetPerWeek
 
   const topExercises = Object.entries(
@@ -330,12 +331,17 @@ export function buildAiExportPrompt(input: {
 
 ## מדדי גוף ובסיס (Biometrics)
 - גיל: ${fmtNum(profile.age)}
+- מין: ${profile.sex ? SEX_LABELS[profile.sex] : NA}
 - גובה: ${fmtNum(profile.heightCm, ' ס״מ')}
 - משקל התחלתי: ${fmtNum(startWeight, ' ק״ג', 1)}
 - משקל עדכני: ${fmtNum(currentWeight, ' ק״ג', 1)}
+- משקל יעד: ${fmtNum(input.goal.targetWeightKg, ' ק״ג', 1)}
 - שינוי מתחילת התהליך: ${weightDelta != null ? `${weightDelta > 0 ? '+' : ''}${weightDelta.toFixed(1)} ק״ג` : NA}
 - אחוז שומן מוערך: ${fmtNum(latestFat, '%', 1)}
 - BMI: ${fmtNum(bmi, '', 1)}
+- רמת פעילות יומית: ${profile.activityLevel ? ACTIVITY_LEVEL_LABELS[profile.activityLevel] : NA}
+- שעות שינה ממוצעות (פרופיל): ${fmtNum(profile.avgSleepHours, ' ש׳', 1)}
+- סגנון עבודה: ${profile.workStyle ? WORK_STYLE_LABELS[profile.workStyle] : NA}
 
 ## מטרת על ארוכת טווח (Master Plan)
 - שם: גוף אל יווני
@@ -372,8 +378,11 @@ ${setLogLine}
 ${sportsSection}
 
 ## פעילות יומית ואורח חיים (Lifestyle & NEAT)
-- ממוצע צעדים יומי: ${avgSteps != null ? Math.round(avgSteps).toLocaleString('he-IL') : NA}
-- ממוצע שעות שינה: ${fmtNum(avgSleep, ' ש׳', 1)}
+- רמת פעילות מוגדרת: ${profile.activityLevel ? ACTIVITY_LEVEL_LABELS[profile.activityLevel] : NA}
+- סגנון עבודה: ${profile.workStyle ? WORK_STYLE_LABELS[profile.workStyle] : NA}
+- שעות שינה ממוצעות (פרופיל): ${fmtNum(profile.avgSleepHours, ' ש׳', 1)}
+- ממוצע צעדים יומי (יומן): ${avgSteps != null ? Math.round(avgSteps).toLocaleString('he-IL') : NA}
+- ממוצע שעות שינה (יומן שבועי): ${fmtNum(avgSleep, ' ש׳', 1)}
 - מדד התאוששות ממוצע (1–10): ${fmtNum(avgRecovery, '', 1)}
 - ימים מתועדים השבוע: ${weekLifestyle.length || NA}
 

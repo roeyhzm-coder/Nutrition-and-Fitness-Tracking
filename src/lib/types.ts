@@ -15,6 +15,8 @@ export type GoalSettings = {
   totalDays: number
   targetWeightKg: number | null
   targetBodyFatPct: number | null
+  /** Weekly workout-day target used by consistency tracking */
+  weeklyWorkoutTarget: number
   /** Long-term master plan */
   masterStartDate: string
   masterTotalDays: number
@@ -85,11 +87,45 @@ export type SavedMeal = {
   fats: number
 }
 
+export type Sex = 'male' | 'female'
+
+export const SEX_LABELS: Record<Sex, string> = {
+  male: 'זכר',
+  female: 'נקבה',
+}
+
+export type ActivityLevel =
+  | 'sedentary'
+  | 'light'
+  | 'moderate'
+  | 'active'
+  | 'very_active'
+
+export const ACTIVITY_LEVEL_LABELS: Record<ActivityLevel, string> = {
+  sedentary: 'יושבני',
+  light: 'קלה',
+  moderate: 'בינונית',
+  active: 'פעילה',
+  very_active: 'פעילה מאוד',
+}
+
+export type WorkStyle = 'sitting' | 'mixed' | 'moving'
+
+export const WORK_STYLE_LABELS: Record<WorkStyle, string> = {
+  sitting: 'ישיבה',
+  mixed: 'משולב',
+  moving: 'תנועה',
+}
+
 export type UserProfile = {
   age: number | null
   heightCm: number | null
+  sex: Sex | null
   startWeightKg: number | null
   estimatedBodyFatPct: number | null
+  activityLevel: ActivityLevel | null
+  avgSleepHours: number | null
+  workStyle: WorkStyle | null
   avoidFoods: string
   allergies: string
   supplements: string
@@ -99,8 +135,12 @@ export type UserProfile = {
 export const EMPTY_PROFILE: UserProfile = {
   age: null,
   heightCm: null,
+  sex: null,
   startWeightKg: null,
   estimatedBodyFatPct: null,
+  activityLevel: null,
+  avgSleepHours: null,
+  workStyle: null,
   avoidFoods: '',
   allergies: '',
   supplements: '',
@@ -297,16 +337,42 @@ export function calcProcessDay(startDate: string, totalDays: number) {
 
 export function normalizeGoal(goal: Partial<GoalSettings> | null | undefined): GoalSettings {
   const start = goal?.startDate || todayKey()
+  const weekly = Number(goal?.weeklyWorkoutTarget)
   return {
     startDate: start,
     totalDays: goal?.totalDays ?? 84,
     targetWeightKg: goal?.targetWeightKg ?? null,
     targetBodyFatPct: goal?.targetBodyFatPct ?? null,
+    weeklyWorkoutTarget:
+      Number.isFinite(weekly) && weekly > 0 ? Math.round(weekly) : 5,
     masterStartDate: goal?.masterStartDate || start,
     masterTotalDays: goal?.masterTotalDays ?? 1200,
     masterTargetWeightKg: goal?.masterTargetWeightKg ?? 80,
     masterTargetBodyFatPct: goal?.masterTargetBodyFatPct ?? 9,
   }
+}
+
+export function calcBmi(
+  weightKg: number | null | undefined,
+  heightCm: number | null | undefined,
+): number | null {
+  if (
+    weightKg == null ||
+    heightCm == null ||
+    !Number.isFinite(weightKg) ||
+    !Number.isFinite(heightCm) ||
+    weightKg <= 0 ||
+    heightCm <= 0
+  ) {
+    return null
+  }
+  return weightKg / (heightCm / 100) ** 2
+}
+
+export function toLoggedAt(date?: string | null) {
+  if (!date) return new Date().toISOString()
+  if (date.includes('T')) return date
+  return `${date}T12:00:00`
 }
 
 /** Flatten all exercises on a day (sessions + standalone). */

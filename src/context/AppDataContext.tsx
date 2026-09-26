@@ -71,6 +71,7 @@ import {
   normalizeWorkoutDay,
   normalizeWorkoutProgram,
   todayKey,
+  toLoggedAt,
   uid,
 } from '../lib/types'
 import {
@@ -167,7 +168,9 @@ type AppDataContextValue = {
     weightKg: number
     bodyFatPct?: number | null
     note?: string
+    loggedAt?: string
   }) => void
+  addBodyFat: (input: { bodyFatPct: number; loggedAt?: string }) => void
   addFood: (entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) => void
   updateFood: (
     id: string,
@@ -931,6 +934,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       weightKg: number
       bodyFatPct?: number | null
       note?: string
+      loggedAt?: string
     }) => {
       setWeightLogs((prev) => [
         ...prev,
@@ -939,9 +943,41 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           weightKg: input.weightKg,
           bodyFatPct: input.bodyFatPct ?? null,
           note: input.note,
-          loggedAt: new Date().toISOString(),
+          loggedAt: toLoggedAt(input.loggedAt),
         },
       ])
+    },
+    [setWeightLogs],
+  )
+
+  const addBodyFat = useCallback(
+    (input: { bodyFatPct: number; loggedAt?: string }) => {
+      const loggedAt = toLoggedAt(input.loggedAt)
+      const day = loggedAt.slice(0, 10)
+      setWeightLogs((prev) => {
+        const sameDay = [...prev]
+          .reverse()
+          .find((e) => e.loggedAt.startsWith(day))
+        if (sameDay) {
+          return prev.map((e) =>
+            e.id === sameDay.id
+              ? { ...e, bodyFatPct: input.bodyFatPct }
+              : e,
+          )
+        }
+        const lastWeight =
+          [...prev].reverse().find((e) => e.weightKg > 0)?.weightKg ?? 0
+        return [
+          ...prev,
+          {
+            id: uid(),
+            weightKg: lastWeight,
+            bodyFatPct: input.bodyFatPct,
+            loggedAt,
+            note: lastWeight > 0 ? undefined : 'מדידת שומן',
+          },
+        ]
+      })
     },
     [setWeightLogs],
   )
@@ -1221,6 +1257,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       stateSyncStatus,
       addSetLog,
       addWeight,
+      addBodyFat,
       addFood,
       updateFood,
       deleteFood,
@@ -1298,6 +1335,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       stateSyncStatus,
       addSetLog,
       addWeight,
+      addBodyFat,
       addFood,
       updateFood,
       deleteFood,

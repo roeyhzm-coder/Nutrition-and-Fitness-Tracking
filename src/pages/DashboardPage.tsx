@@ -1,16 +1,12 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Flame, Percent, Scale } from 'lucide-react'
+import { Flame, Scale } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
-import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { ProgressBar } from '../components/ui/ProgressBar'
-import { EditTargetsModal } from '../components/dashboard/EditTargetsModal'
-import { AddFoodModal } from '../components/dashboard/AddFoodModal'
+import { DailyWeightCard } from '../components/dashboard/DailyWeightCard'
 import { GoalPhaseCard } from '../components/dashboard/GoalPhaseCard'
 import { WeightFatTracker } from '../components/dashboard/WeightFatTracker'
 import { WeeklyConsistencyTracker } from '../components/dashboard/WeeklyConsistencyTracker'
-import { LifestyleCard } from '../components/dashboard/LifestyleCard'
 import { FinishPhaseModal } from '../components/dashboard/FinishPhaseModal'
 import { PhaseHistoryCard } from '../components/dashboard/PhaseHistoryCard'
 import { TodayWorkoutCard } from '../components/dashboard/TodayWorkoutCard'
@@ -18,6 +14,7 @@ import { WorkoutHistoryCard } from '../components/workouts/WorkoutHistoryCard'
 import { FoodLogList } from '../components/nutrition/FoodLogList'
 import { useAppData } from '../context/AppDataContext'
 import { PHASE_LABELS, todayKey } from '../lib/types'
+import { useState } from 'react'
 
 export function DashboardPage() {
   const {
@@ -25,52 +22,40 @@ export function DashboardPage() {
     weightLogs,
     setLogs,
     macroTargets,
-    setMacroTargets,
     goal,
     setGoal,
     phase,
     setPhase,
     stateSyncStatus,
-    addWeight,
     consistencyDayMarks,
     toggleConsistencyDay,
     setWeekConsistencyCount,
   } = useAppData()
 
-  const [targetsOpen, setTargetsOpen] = useState(false)
-  const [foodOpen, setFoodOpen] = useState(false)
   const [finishOpen, setFinishOpen] = useState(false)
 
   const today = todayKey()
   const todayFood = foodLogs.filter((f) => f.loggedAt.startsWith(today))
   const calories = todayFood.reduce((s, f) => s + f.calories, 0)
   const latest = weightLogs.at(-1)
+  const weeklyTarget = goal.weeklyWorkoutTarget || 5
 
   return (
     <>
       <PageHeader
         title="דשבורד"
         subtitle={`שלב ${PHASE_LABELS[phase]} · יעדים, עקביות והתקדמות`}
-        action={
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Button variant="surface" onClick={() => setTargetsOpen(true)}>
-              עריכת יעדים
-            </Button>
-            <Button variant="accent" onClick={() => setFoodOpen(true)}>
-              הוסף מזון / ארוחה
-            </Button>
-          </div>
-        }
       />
 
       <div className="space-y-5 px-4 py-5">
+        <DailyWeightCard />
+
         <GoalPhaseCard
           phase={phase}
           onPhaseChange={setPhase}
           goal={goal}
           onSaveGoal={setGoal}
           currentWeight={latest?.weightKg}
-          currentBodyFat={latest?.bodyFatPct}
           onFinishPhase={() => setFinishOpen(true)}
         />
         <TodayWorkoutCard />
@@ -82,7 +67,7 @@ export function DashboardPage() {
           dayMarks={consistencyDayMarks}
           onToggleDay={toggleConsistencyDay}
           onSetWeekCount={setWeekConsistencyCount}
-          targetPerWeek={5}
+          targetPerWeek={weeklyTarget}
         />
 
         <Card title={`יעדי קלוריות היום · ${PHASE_LABELS[phase]}`}>
@@ -157,46 +142,23 @@ export function DashboardPage() {
           ) : null}
         </Card>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/80">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted">משקל עדכני</p>
-              <Scale className="size-4 text-blue-600" strokeWidth={1.75} />
-            </div>
-            <p className="mt-3 font-display text-3xl font-extrabold tabular-nums text-text">
-              {latest ? latest.weightKg : '—'}
-            </p>
-            <p className="mt-1 text-xs text-muted">
-              {latest ? 'ק״ג' : 'אין מדידה'}
-            </p>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/80">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-muted">משקל עדכני</p>
+            <Scale className="size-4 text-blue-600" strokeWidth={1.75} />
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/80">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted">אחוזי שומן</p>
-              <Percent className="size-4 text-violet-600" strokeWidth={1.75} />
-            </div>
-            <p className="mt-3 font-display text-3xl font-extrabold tabular-nums text-text">
-              {latest?.bodyFatPct != null ? latest.bodyFatPct : '—'}
-            </p>
-            <p className="mt-1 text-xs text-muted">
-              {latest?.bodyFatPct != null ? '%' : 'אין מדידה'}
-            </p>
-          </div>
+          <p className="mt-3 font-display text-3xl font-extrabold tabular-nums text-text">
+            {latest ? latest.weightKg : '—'}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            {latest ? 'ק״ג' : 'אין מדידה'}
+          </p>
         </div>
 
         <WorkoutHistoryCard limit={3} />
-        <WeightFatTracker entries={weightLogs} onAdd={addWeight} />
-        <LifestyleCard />
+        <WeightFatTracker entries={weightLogs} />
       </div>
 
-      <EditTargetsModal
-        open={targetsOpen}
-        targets={macroTargets}
-        onClose={() => setTargetsOpen(false)}
-        onSave={setMacroTargets}
-        title={`עריכת יעדי ${PHASE_LABELS[phase]}`}
-      />
-      <AddFoodModal open={foodOpen} onClose={() => setFoodOpen(false)} />
       <FinishPhaseModal
         open={finishOpen}
         onClose={() => setFinishOpen(false)}

@@ -1,20 +1,15 @@
+import { Link } from 'react-router-dom'
 import type { FoodLogEntry, MacroTargets } from '../../lib/types'
 import { todayKey } from '../../lib/types'
 import { Card } from '../ui/Card'
 import { ProgressBar } from '../ui/ProgressBar'
-import { Button } from '../ui/Button'
 
 type MacroTargetsProps = {
   logs: FoodLogEntry[]
   targets: MacroTargets
-  onEditTargets: () => void
 }
 
-export function MacroTargetsView({
-  logs,
-  targets,
-  onEditTargets,
-}: MacroTargetsProps) {
+export function MacroTargetsView({ logs, targets }: MacroTargetsProps) {
   const today = todayKey()
   const todayLogs = logs.filter((l) => l.loggedAt.startsWith(today))
   const totals = todayLogs.reduce(
@@ -66,9 +61,12 @@ export function MacroTargetsView({
     <Card
       title="יעדי מאקרו יומיים"
       action={
-        <Button variant="ghost" onClick={onEditTargets}>
-          עריכת יעדים
-        </Button>
+        <Link
+          to="/profile#goals"
+          className="text-xs font-semibold text-blue-600 hover:underline"
+        >
+          עריכה בפרופיל
+        </Link>
       }
     >
       <div className="space-y-5">

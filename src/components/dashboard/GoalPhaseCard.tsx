@@ -21,7 +21,6 @@ type GoalPhaseCardProps = {
   goal: GoalSettings
   onSaveGoal: (goal: GoalSettings) => void
   currentWeight?: number | null
-  currentBodyFat?: number | null
   onFinishPhase: () => void
 }
 
@@ -31,7 +30,6 @@ export function GoalPhaseCard({
   goal,
   onSaveGoal,
   currentWeight,
-  currentBodyFat,
   onFinishPhase,
 }: GoalPhaseCardProps) {
   const [open, setOpen] = useState<'short' | 'master' | null>(null)
@@ -57,6 +55,7 @@ export function GoalPhaseCard({
         Number.isNaN(Number(form.targetBodyFatPct))
           ? null
           : Number(form.targetBodyFatPct),
+      weeklyWorkoutTarget: Math.max(1, Number(form.weeklyWorkoutTarget) || 5),
       masterStartDate: form.masterStartDate,
       masterTotalDays: Math.max(1, Number(form.masterTotalDays) || 1),
       masterTargetWeightKg:
@@ -120,27 +119,14 @@ export function GoalPhaseCard({
           <div className="mt-3">
             <ProgressBar value={shortDay} max={goal.totalDays} color="primary" />
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-            <div className="rounded-2xl bg-slate-50 px-3 py-2.5">
-              <p className="text-xs text-muted">משקל יעד לשלב</p>
-              <p className="mt-1 font-display text-lg font-bold tabular-nums text-text">
-                {goal.targetWeightKg != null ? `${goal.targetWeightKg} ק״ג` : '—'}
-              </p>
-              <p className="text-[11px] text-muted">
-                נוכחי: {currentWeight != null ? `${currentWeight}` : '—'}
-              </p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 px-3 py-2.5">
-              <p className="text-xs text-muted">שומן יעד לשלב</p>
-              <p className="mt-1 font-display text-lg font-bold tabular-nums text-text">
-                {goal.targetBodyFatPct != null
-                  ? `${goal.targetBodyFatPct}%`
-                  : '—'}
-              </p>
-              <p className="text-[11px] text-muted">
-                נוכחי: {currentBodyFat != null ? `${currentBodyFat}%` : '—'}
-              </p>
-            </div>
+          <div className="mt-4 rounded-2xl bg-slate-50 px-3 py-2.5 text-sm">
+            <p className="text-xs text-muted">משקל יעד לשלב</p>
+            <p className="mt-1 font-display text-lg font-bold tabular-nums text-text">
+              {goal.targetWeightKg != null ? `${goal.targetWeightKg} ק״ג` : '—'}
+            </p>
+            <p className="text-[11px] text-muted">
+              נוכחי: {currentWeight != null ? `${currentWeight}` : '—'}
+            </p>
           </div>
           <Button
             className="mt-3 w-full"

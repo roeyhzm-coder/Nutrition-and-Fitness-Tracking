@@ -1,48 +1,44 @@
 import { useState } from 'react'
-import { Footprints, HeartPulse, Moon } from 'lucide-react'
+import { Briefcase, Moon, PersonStanding } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
-import type { LifestyleEntry } from '../../lib/types'
-import { todayKey } from '../../lib/types'
+import {
+  ACTIVITY_LEVEL_LABELS,
+  WORK_STYLE_LABELS,
+  type ActivityLevel,
+  type WorkStyle,
+} from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 
-type Form = { steps: string; sleepHours: string; recovery: string }
+const ACTIVITY_LEVELS = Object.keys(ACTIVITY_LEVEL_LABELS) as ActivityLevel[]
+const WORK_STYLES = Object.keys(WORK_STYLE_LABELS) as WorkStyle[]
 
-function toForm(entry: LifestyleEntry | undefined): Form {
-  return {
-    steps: entry?.steps != null ? String(entry.steps) : '',
-    sleepHours: entry?.sleepHours != null ? String(entry.sleepHours) : '',
-    recovery: entry?.recovery != null ? String(entry.recovery) : '',
-  }
+type Form = {
+  activityLevel: ActivityLevel | ''
+  avgSleepHours: string
+  workStyle: WorkStyle | ''
 }
-
-function parse(raw: string, max?: number): number | null {
-  if (!raw.trim()) return null
-  const n = Number(raw.replace(',', '.'))
-  if (!Number.isFinite(n) || n < 0) return null
-  return max != null ? Math.min(n, max) : n
-}
-
-const inputClass = 'mt-1 field'
 
 export function LifestyleCard() {
-  const { lifestyleLogs, setLifestyleEntry } = useAppData()
-  const today = todayKey()
-  const entry = lifestyleLogs[today]
-  const [form, setForm] = useState<Form>(() => toForm(entry))
-  const [source, setSource] = useState(entry)
+  const { profile, setProfile } = useAppData()
+  const [form, setForm] = useState<Form>({
+    activityLevel: profile.activityLevel ?? '',
+    avgSleepHours:
+      profile.avgSleepHours != null ? String(profile.avgSleepHours) : '',
+    workStyle: profile.workStyle ?? '',
+  })
+  const [source, setSource] = useState(profile)
   const [saved, setSaved] = useState(false)
 
-  if (source !== entry) {
-    setSource(entry)
-    setForm(toForm(entry))
+  if (source !== profile) {
+    setSource(profile)
+    setForm({
+      activityLevel: profile.activityLevel ?? '',
+      avgSleepHours:
+        profile.avgSleepHours != null ? String(profile.avgSleepHours) : '',
+      workStyle: profile.workStyle ?? '',
+    })
   }
-
-  const fields = [
-    ['steps', 'צעדים', Footprints, 'numeric'],
-    ['sleepHours', 'שעות שינה', Moon, 'decimal'],
-    ['recovery', 'התאוששות 1–10', HeartPulse, 'numeric'],
-  ] as const
 
   return (
     <Card title="פעילות יומית ואורח חיים">
@@ -50,37 +46,84 @@ export function LifestyleCard() {
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault()
-          const steps = parse(form.steps)
-          setLifestyleEntry(today, {
-            steps: steps != null ? Math.round(steps) : null,
-            sleepHours: parse(form.sleepHours, 24),
-            recovery: parse(form.recovery, 10),
+          const sleepRaw = form.avgSleepHours.replace(',', '.')
+          const sleep = sleepRaw === '' ? null : Number(sleepRaw)
+          setProfile({
+            ...profile,
+            activityLevel: form.activityLevel || null,
+            avgSleepHours:
+              sleep != null && Number.isFinite(sleep) && sleep >= 0
+                ? Math.min(sleep, 24)
+                : null,
+            workStyle: form.workStyle || null,
           })
           setSaved(true)
           window.setTimeout(() => setSaved(false), 2000)
         }}
       >
-        <div className="grid grid-cols-3 gap-2">
-          {fields.map(([key, label, Icon, mode]) => (
-            <label key={key} className="block text-xs text-muted">
-              <span className="flex items-center gap-1">
-                <Icon className="size-3.5 text-blue-600" strokeWidth={1.75} />
-                {label}
-              </span>
-              <input
-                inputMode={mode}
-                value={form[key]}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, [key]: e.target.value }))
-                }
-                placeholder="—"
-                className={inputClass}
-              />
-            </label>
-          ))}
-        </div>
+        <label className="block text-xs text-muted">
+          <span className="flex items-center gap-1">
+            <PersonStanding className="size-3.5 text-blue-600" strokeWidth={1.75} />
+            רמת פעילות יומית
+          </span>
+          <select
+            value={form.activityLevel}
+            onChange={(e) =>
+              setForm((p) => ({
+                ...p,
+                activityLevel: e.target.value as ActivityLevel | '',
+              }))
+            }
+            className="mt-1 field"
+          >
+            <option value="">לא צוין</option>
+            {ACTIVITY_LEVELS.map((key) => (
+              <option key={key} value={key}>
+                {ACTIVITY_LEVEL_LABELS[key]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-xs text-muted">
+          <span className="flex items-center gap-1">
+            <Moon className="size-3.5 text-blue-600" strokeWidth={1.75} />
+            שעות שינה ממוצעות
+          </span>
+          <input
+            inputMode="decimal"
+            value={form.avgSleepHours}
+            onChange={(e) =>
+              setForm((p) => ({ ...p, avgSleepHours: e.target.value }))
+            }
+            placeholder="למשל 7.5"
+            className="mt-1 field"
+          />
+        </label>
+        <label className="block text-xs text-muted">
+          <span className="flex items-center gap-1">
+            <Briefcase className="size-3.5 text-blue-600" strokeWidth={1.75} />
+            עבודה בישיבה / תנועה
+          </span>
+          <select
+            value={form.workStyle}
+            onChange={(e) =>
+              setForm((p) => ({
+                ...p,
+                workStyle: e.target.value as WorkStyle | '',
+              }))
+            }
+            className="mt-1 field"
+          >
+            <option value="">לא צוין</option>
+            {WORK_STYLES.map((key) => (
+              <option key={key} value={key}>
+                {WORK_STYLE_LABELS[key]}
+              </option>
+            ))}
+          </select>
+        </label>
         <Button type="submit" className="w-full" variant="surface">
-          {saved ? 'נשמר ✓' : 'שמור להיום'}
+          {saved ? 'נשמר ✓' : 'שמור אורח חיים'}
         </Button>
       </form>
     </Card>
