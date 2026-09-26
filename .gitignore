@@ -32,3 +32,5 @@ dist-ssr
 # Temp API dumps
 recipes_body.json
 all_recipes_meta.json
+
+.vercel
