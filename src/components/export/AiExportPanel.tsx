@@ -75,7 +75,7 @@ export function AiExportPanel() {
       <Button className="w-full" variant="accent" onClick={copy}>
         {copied ? 'הועתק ✓' : 'העתק ייצוא נתונים'}
       </Button>
-      <pre className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap rounded-xl border border-line bg-surface p-3 text-xs leading-relaxed text-muted">
+      <pre className="mt-4 max-h-96 overflow-auto whitespace-pre-wrap rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4 text-xs leading-relaxed text-muted">
         {prompt}
       </pre>
     </Card>

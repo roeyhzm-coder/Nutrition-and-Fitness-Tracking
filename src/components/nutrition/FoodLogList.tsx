@@ -27,8 +27,7 @@ const MACRO_FIELDS = [
   ['fats', 'שומנים'],
 ] as const
 
-const inputClass =
-  'mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary'
+const inputClass = 'mt-1 field'
 
 const SOURCE_LABELS: Record<FoodLogEntry['source'], string> = {
   recipe: 'מתכון',
@@ -169,7 +168,7 @@ export function FoodLogList({ entries, compact }: FoodLogListProps) {
         {entries.map((f) => (
           <li
             key={f.id}
-            className="flex items-center gap-2 rounded-lg bg-surface px-3 py-2 text-sm"
+            className="flex min-h-14 items-center gap-2 rounded-2xl bg-slate-950/40 px-3 py-3 text-sm"
           >
             <div className="min-w-0 flex-1">
               <p className="truncate font-medium text-text">{f.name}</p>
@@ -180,7 +179,9 @@ export function FoodLogList({ entries, compact }: FoodLogListProps) {
               </p>
             </div>
             <div className="shrink-0 text-left text-xs text-muted">
-              <p className="font-semibold text-text">{f.calories} קק״ל</p>
+              <p className="font-display font-bold tabular-nums text-text">
+                {f.calories} קק״ל
+              </p>
               {compact ? null : (
                 <p>
                   ח {f.protein} · פ {f.carbs} · ש {f.fats}

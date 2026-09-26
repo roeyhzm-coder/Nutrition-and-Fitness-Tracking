@@ -20,15 +20,15 @@ type WeeklyConsistencyTrackerProps = {
 }
 
 const toneClass = {
-  blue: 'border-[#7eb6ff]/50 bg-[#5b8cff]/20',
-  green: 'border-accent/40 bg-accent/15',
-  amber: 'border-warn/35 bg-warn/10',
+  blue: 'border-cyan-400/40 bg-cyan-400/10',
+  green: 'border-emerald-400/40 bg-emerald-400/10',
+  amber: 'border-orange-400/35 bg-orange-400/10',
 }
 
 const badgeClass = {
-  blue: 'bg-[#5b8cff]/30 text-[#b7d3ff]',
-  green: 'bg-accent/25 text-accent',
-  amber: 'bg-warn/20 text-warn',
+  blue: 'bg-cyan-400/20 text-cyan-200',
+  green: 'bg-emerald-400/20 text-emerald-300',
+  amber: 'bg-orange-400/20 text-orange-300',
 }
 
 function WeekRow({
@@ -56,7 +56,7 @@ function WeekRow({
   }
 
   return (
-    <li className={`rounded-xl border px-3 py-3 ${toneClass[tone]}`}>
+    <li className={`rounded-2xl border px-4 py-4 ${toneClass[tone]}`}>
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
@@ -71,7 +71,7 @@ function WeekRow({
         <button
           type="button"
           onClick={openCount}
-          className={`rounded-lg px-2.5 py-1 text-xs font-bold transition hover:brightness-110 ${badgeClass[tone]}`}
+          className={`min-h-11 min-w-11 rounded-2xl px-3 text-sm font-extrabold tabular-nums transition hover:brightness-110 ${badgeClass[tone]}`}
           aria-label={`עריכת ספירה ${week.completed} מתוך ${week.target}`}
         >
           {week.completed}/{week.target}
@@ -86,10 +86,10 @@ function WeekRow({
             title={slot.date}
             onClick={() => onToggleDay(slot.date)}
             className={[
-              'flex size-9 flex-col items-center justify-center rounded-full text-[10px] font-bold transition',
+              'flex size-11 flex-col items-center justify-center rounded-full text-[10px] font-bold transition',
               slot.done
-                ? 'bg-primary text-white'
-                : 'bg-bg/50 text-muted ring-1 ring-line',
+                ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/25'
+                : 'bg-slate-950/50 text-muted ring-1 ring-slate-800/70',
             ].join(' ')}
             aria-pressed={slot.done}
             aria-label={`${slot.weekday} ${slot.date}`}
@@ -209,7 +209,7 @@ export function WeeklyConsistencyTracker({
               inputMode="numeric"
               value={countInput}
               onChange={(e) => setCountInput(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              className="mt-1 field"
               min={0}
               max={7}
             />
@@ -221,10 +221,10 @@ export function WeeklyConsistencyTracker({
                 type="button"
                 onClick={() => setCountInput(String(n))}
                 className={[
-                  'rounded-lg px-3 py-1.5 text-xs font-bold',
+                  'min-h-11 rounded-2xl px-3 text-xs font-bold',
                   Number(countInput) === n
-                    ? 'bg-primary text-white'
-                    : 'bg-surface text-muted',
+                    ? 'bg-emerald-500 text-slate-950'
+                    : 'bg-slate-800/80 text-muted',
                 ].join(' ')}
               >
                 {n}/{targetPerWeek}

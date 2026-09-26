@@ -53,7 +53,7 @@ export function ImportMealsModal() {
             onChange={(e) => setRaw(e.target.value)}
             rows={12}
             placeholder={EXAMPLE}
-            className="w-full rounded-xl border border-line bg-surface px-3 py-2 font-mono text-xs text-text outline-none focus:border-primary"
+            className="field font-mono text-xs"
             dir="ltr"
           />
           {error ? <p className="text-sm text-danger">{error}</p> : null}

@@ -16,8 +16,7 @@ const SUGGESTED_SPORTS = [
   'אופניים',
 ]
 
-const inputClass =
-  'w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary'
+const inputClass = 'field'
 
 function localDateInput(d = new Date()) {
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -103,10 +102,10 @@ export function ActivityLogCard() {
               type="button"
               onClick={() => setSport(s)}
               className={[
-                'rounded-lg px-2 py-1 text-xs transition',
+                'min-h-11 rounded-2xl px-3 text-xs transition',
                 sport === s
-                  ? 'bg-primary text-white'
-                  : 'bg-surface text-muted hover:text-text',
+                  ? 'bg-emerald-500 text-slate-950'
+                  : 'bg-slate-800/80 text-muted hover:text-text',
               ].join(' ')}
             >
               {s}
@@ -152,11 +151,11 @@ export function ActivityLogCard() {
       </form>
 
       {recent.length > 0 ? (
-        <ul className="mt-4 space-y-1.5 border-t border-line pt-3">
+        <ul className="mt-4 space-y-2 border-t border-slate-800/60 pt-4">
           {recent.map((a) => (
             <li
               key={a.id}
-              className="flex items-center gap-2 rounded-lg bg-surface px-2.5 py-1.5"
+              className="flex items-center gap-2 rounded-2xl bg-slate-950/40 px-3 py-2.5"
             >
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-text">

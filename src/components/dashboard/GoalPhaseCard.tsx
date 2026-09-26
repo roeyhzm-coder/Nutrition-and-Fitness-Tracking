@@ -77,19 +77,19 @@ export function GoalPhaseCard({
     <>
       <Card
         title="מטרת על ותהליך"
-        className="border-primary/30 bg-gradient-to-b from-primary/10 to-card"
+        className="border-emerald-500/25 bg-gradient-to-b from-emerald-500/10 to-transparent"
       >
-        <div className="mb-4 grid grid-cols-3 gap-2 rounded-xl bg-surface p-1">
+        <div className="mb-4 grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-950/50 p-1.5">
           {PHASES.map((p) => (
             <button
               key={p}
               type="button"
               onClick={() => onPhaseChange(p)}
               className={[
-                'rounded-lg px-3 py-2 text-sm font-bold transition',
+                'min-h-11 rounded-xl px-3 py-2 text-sm font-bold transition',
                 phase === p
                   ? PHASE_ACTIVE_CLASS[p]
-                  : 'text-muted hover:text-text',
+                  : 'text-muted hover:bg-slate-800/60 hover:text-text',
               ].join(' ')}
             >
               {PHASE_LABELS[p]}
@@ -97,7 +97,7 @@ export function GoalPhaseCard({
           ))}
         </div>
 
-        <section className="rounded-xl border border-line bg-surface/70 p-3">
+        <section className="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-semibold text-text">
               שלב קצר · {PHASE_LABELS[phase]}
@@ -110,7 +110,7 @@ export function GoalPhaseCard({
               <Pencil className="size-4" strokeWidth={1.75} />
             </IconButton>
           </div>
-          <p className="font-display text-2xl font-bold text-text">
+          <p className="font-display text-3xl font-extrabold tabular-nums text-text">
             יום {shortDay} מתוך {goal.totalDays}
           </p>
           <p className="mt-1 text-xs text-muted">
@@ -120,19 +120,19 @@ export function GoalPhaseCard({
           <div className="mt-3">
             <ProgressBar value={shortDay} max={goal.totalDays} color="primary" />
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-            <div>
+          <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+            <div className="rounded-2xl bg-slate-900/60 px-3 py-2.5">
               <p className="text-xs text-muted">משקל יעד לשלב</p>
-              <p className="font-semibold text-text">
+              <p className="mt-1 font-display text-lg font-bold tabular-nums text-text">
                 {goal.targetWeightKg != null ? `${goal.targetWeightKg} ק״ג` : '—'}
               </p>
               <p className="text-[11px] text-muted">
                 נוכחי: {currentWeight != null ? `${currentWeight}` : '—'}
               </p>
             </div>
-            <div>
+            <div className="rounded-2xl bg-slate-900/60 px-3 py-2.5">
               <p className="text-xs text-muted">שומן יעד לשלב</p>
-              <p className="font-semibold text-text">
+              <p className="mt-1 font-display text-lg font-bold tabular-nums text-text">
                 {goal.targetBodyFatPct != null
                   ? `${goal.targetBodyFatPct}%`
                   : '—'}
@@ -152,7 +152,7 @@ export function GoalPhaseCard({
           </Button>
         </section>
 
-        <section className="mt-3 rounded-xl border border-accent/30 bg-accent/5 p-3">
+        <section className="mt-3 rounded-2xl border border-cyan-400/25 bg-cyan-400/5 p-4">
           <div className="mb-2 flex items-center justify-between">
             <div>
               <p className="text-sm font-semibold text-text">מטרת על ארוכת טווח</p>
@@ -166,7 +166,7 @@ export function GoalPhaseCard({
               <Pencil className="size-4" strokeWidth={1.75} />
             </IconButton>
           </div>
-          <p className="font-display text-xl font-bold text-text">
+          <p className="font-display text-2xl font-extrabold tabular-nums text-text">
             יום {masterDay} מתוך {goal.masterTotalDays}
           </p>
           <p className="mt-1 text-xs text-muted">
@@ -203,7 +203,7 @@ export function GoalPhaseCard({
               onChange={(e) =>
                 setForm((prev) => ({ ...prev, startDate: e.target.value }))
               }
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              className="mt-1 field"
               required
             />
           </label>
@@ -218,7 +218,7 @@ export function GoalPhaseCard({
                   totalDays: Number(e.target.value) || 0,
                 }))
               }
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              className="mt-1 field"
               required
             />
           </label>
@@ -235,7 +235,7 @@ export function GoalPhaseCard({
                       e.target.value === '' ? null : Number(e.target.value),
                   }))
                 }
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+                className="mt-1 field"
               />
             </label>
             <label className="block text-xs text-muted">
@@ -250,7 +250,7 @@ export function GoalPhaseCard({
                       e.target.value === '' ? null : Number(e.target.value),
                   }))
                 }
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+                className="mt-1 field"
               />
             </label>
           </div>
@@ -283,7 +283,7 @@ export function GoalPhaseCard({
                   masterStartDate: e.target.value,
                 }))
               }
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              className="mt-1 field"
               required
             />
           </label>
@@ -298,7 +298,7 @@ export function GoalPhaseCard({
                   masterTotalDays: Number(e.target.value) || 0,
                 }))
               }
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              className="mt-1 field"
               required
             />
           </label>
@@ -315,7 +315,7 @@ export function GoalPhaseCard({
                       e.target.value === '' ? null : Number(e.target.value),
                   }))
                 }
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+                className="mt-1 field"
               />
             </label>
             <label className="block text-xs text-muted">
@@ -330,7 +330,7 @@ export function GoalPhaseCard({
                       e.target.value === '' ? null : Number(e.target.value),
                   }))
                 }
-                className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+                className="mt-1 field"
               />
             </label>
           </div>

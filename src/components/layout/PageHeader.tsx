@@ -8,14 +8,14 @@ type PageHeaderProps = {
 
 export function PageHeader({ title, subtitle, action }: PageHeaderProps) {
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-bg/90 px-4 py-4 backdrop-blur-md">
+    <header className="sticky top-0 z-30 border-b border-slate-800/60 bg-slate-950/80 px-4 py-5 backdrop-blur-md">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold tracking-tight text-text">
+        <div className="min-w-0">
+          <h1 className="font-display text-[1.65rem] font-extrabold tracking-tight text-text">
             {title}
           </h1>
           {subtitle ? (
-            <p className="mt-1 text-sm text-muted">{subtitle}</p>
+            <p className="mt-1.5 text-sm leading-relaxed text-muted">{subtitle}</p>
           ) : null}
         </div>
         {action}

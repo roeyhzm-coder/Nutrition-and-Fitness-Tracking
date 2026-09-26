@@ -23,8 +23,7 @@ function parse(raw: string, max?: number): number | null {
   return max != null ? Math.min(n, max) : n
 }
 
-const inputClass =
-  'mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary'
+const inputClass = 'mt-1 field'
 
 export function LifestyleCard() {
   const { lifestyleLogs, setLifestyleEntry } = useAppData()
@@ -65,7 +64,7 @@ export function LifestyleCard() {
           {fields.map(([key, label, Icon, mode]) => (
             <label key={key} className="block text-xs text-muted">
               <span className="flex items-center gap-1">
-                <Icon className="size-3.5 text-primary" strokeWidth={1.75} />
+                <Icon className="size-3.5 text-emerald-400" strokeWidth={1.75} />
                 {label}
               </span>
               <input

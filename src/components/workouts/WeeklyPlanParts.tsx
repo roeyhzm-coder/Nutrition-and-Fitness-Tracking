@@ -42,7 +42,7 @@ export function DayPlanSelect({ day }: { day: WorkoutDay }) {
                 : { type: 'template', templateId: next },
           )
         }}
-        className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+        className="mt-1 field"
       >
         <option value="empty">ריק (לא נבחר אימון)</option>
         <option value="rest">יום מנוחה</option>

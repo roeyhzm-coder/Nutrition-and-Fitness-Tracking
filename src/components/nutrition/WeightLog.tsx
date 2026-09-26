@@ -44,7 +44,7 @@ export function WeightLog({ entries, onAdd }: WeightLogProps) {
               inputMode="decimal"
               value={weight}
               onChange={(e) => setWeight(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              className="mt-1 field"
               placeholder={latest ? String(latest.weightKg) : '75.0'}
               required
             />
@@ -55,7 +55,7 @@ export function WeightLog({ entries, onAdd }: WeightLogProps) {
               inputMode="decimal"
               value={bodyFat}
               onChange={(e) => setBodyFat(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              className="mt-1 field"
               placeholder="%"
             />
           </label>
@@ -64,7 +64,7 @@ export function WeightLog({ entries, onAdd }: WeightLogProps) {
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              className="mt-1 field"
               placeholder="בוקר"
             />
           </label>
@@ -82,13 +82,13 @@ export function WeightLog({ entries, onAdd }: WeightLogProps) {
             .map((e) => (
               <li
                 key={e.id}
-                className="flex items-center justify-between rounded-lg bg-surface px-3 py-2 text-sm"
+                className="flex items-center justify-between rounded-2xl bg-slate-950/40 px-3 py-3 text-sm"
               >
                 <span className="text-muted">
                   {new Date(e.loggedAt).toLocaleDateString('he-IL')}
                   {e.note ? ` · ${e.note}` : ''}
                 </span>
-                <span className="font-semibold text-text">
+                <span className="font-display font-bold tabular-nums text-text">
                   {e.weightKg} ק״ג
                   {e.bodyFatPct != null ? ` · ${e.bodyFatPct}%` : ''}
                 </span>

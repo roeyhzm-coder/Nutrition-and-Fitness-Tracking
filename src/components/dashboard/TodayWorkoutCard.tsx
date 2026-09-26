@@ -21,22 +21,24 @@ export function TodayWorkoutCard() {
     <Card
       title={`האימון של היום · ${WEEKDAYS[todayNumber - 1]}`}
       action={
-        <Link to="/workouts" className="text-xs font-semibold text-primary hover:underline">
+        <Link to="/workouts" className="text-xs font-semibold text-cyan-300 hover:underline">
           ללוח השבועי
         </Link>
       }
     >
       {!day || (!day.isRest && exercises.length === 0) ? (
-        <p className="text-sm text-muted">
+        <p className="text-sm leading-relaxed text-muted">
           לא נקבע אימון להיום ב{activeProgram?.name ?? 'תוכנית'}.
         </p>
       ) : day.isRest ? (
-        <p className="text-sm text-muted">יום מנוחה 💤 — התאוששות היא חלק מהתוכנית.</p>
+        <p className="rounded-2xl bg-slate-950/40 px-4 py-5 text-center text-sm leading-relaxed text-muted">
+          יום מנוחה 💤 — התאוששות היא חלק מהתוכנית.
+        </p>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div>
-            <p className="font-semibold text-text">{dayPlanLabel(day)}</p>
-            <p className="text-xs text-muted">
+            <p className="font-display text-lg font-bold text-text">{dayPlanLabel(day)}</p>
+            <p className="mt-1 text-xs text-muted">
               {activeProgram?.name} · {exercises.length} תרגילים
             </p>
           </div>
@@ -44,7 +46,7 @@ export function TodayWorkoutCard() {
         </div>
       )}
       {doneToday.length ? (
-        <p className="mt-3 text-xs font-medium text-accent">
+        <p className="mt-4 rounded-2xl bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300">
           ✓ בוצע היום: {doneToday.map((l) => l.workoutName).join(', ')}
         </p>
       ) : null}

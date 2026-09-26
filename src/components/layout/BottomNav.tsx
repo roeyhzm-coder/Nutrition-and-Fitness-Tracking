@@ -17,8 +17,8 @@ const tabs = [
 
 export function BottomNav() {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card/95 backdrop-blur-md pb-[env(safe-area-inset-bottom)]">
-      <ul className="mx-auto grid max-w-3xl grid-cols-5 gap-1 px-1 py-2">
+    <nav className="fixed inset-x-3 bottom-3 z-40 pb-[env(safe-area-inset-bottom)]">
+      <ul className="mx-auto grid max-w-3xl grid-cols-5 gap-1 rounded-3xl border border-slate-800/60 bg-slate-900/80 p-1.5 shadow-2xl shadow-black/40 backdrop-blur-md">
         {tabs.map(({ to, label, icon: Icon }) => (
           <li key={to}>
             <NavLink
@@ -26,8 +26,10 @@ export function BottomNav() {
               end={to === '/'}
               className={({ isActive }) =>
                 [
-                  'flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-center transition-colors',
-                  isActive ? 'bg-surface text-primary' : 'text-muted hover:text-text',
+                  'flex min-h-11 flex-col items-center justify-center gap-1 rounded-2xl px-1 py-2 text-center transition-all',
+                  isActive
+                    ? 'bg-emerald-500/15 text-emerald-300 shadow-inner shadow-emerald-500/10'
+                    : 'text-muted hover:bg-slate-800/60 hover:text-text',
                 ].join(' ')
               }
             >

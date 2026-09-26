@@ -84,12 +84,12 @@ export function WorkoutsPage() {
 
   function renderExerciseRow(ex: Exercise) {
     return (
-      <li key={ex.id} className="rounded-xl border border-line bg-bg/40">
-        <div className="flex items-start gap-2 px-3 py-2.5">
+      <li key={ex.id} className="rounded-2xl border border-slate-800/60 bg-slate-950/40">
+        <div className="flex items-start gap-2 px-3 py-3">
           <ExerciseMedia exercise={ex} />
           <button
             type="button"
-            className="min-w-0 flex-1 text-right"
+            className="min-h-11 min-w-0 flex-1 text-right"
             onClick={() =>
               setActiveExerciseId(activeExerciseId === ex.id ? null : ex.id)
             }
@@ -120,7 +120,7 @@ export function WorkoutsPage() {
     return (
       <section
         key={session.id}
-        className="rounded-xl border border-line bg-surface p-3"
+        className="rounded-2xl border border-slate-800/60 bg-slate-950/35 p-4"
       >
         <div className="mb-2 flex items-center gap-1">
           <div className="min-w-0 flex-1">
@@ -159,7 +159,7 @@ export function WorkoutsPage() {
     return (
       <>
         <PageHeader title="אימונים" subtitle="אין ימי אימון" />
-        <div className="space-y-4 px-4 py-4">
+        <div className="space-y-5 px-4 py-5">
           <ProgramManager />
           <ActivityLogCard />
         </div>
@@ -186,14 +186,14 @@ export function WorkoutsPage() {
         }
       />
 
-      <div className="space-y-4 px-4 py-4">
+      <div className="space-y-5 px-4 py-5">
         <ProgramManager />
         <WorkoutLibrary
           currentDayId={day.id}
           currentDayExercises={allExercises}
         />
 
-        <section aria-label="לוח שבועי" className="flex gap-1.5 overflow-x-auto pb-1">
+        <section aria-label="לוח שבועי" className="flex gap-2 overflow-x-auto pb-1">
           {workoutDays.map((d) => {
             const selected = d.id === day.id
             const isToday = d.dayNumber === todayNumber
@@ -207,13 +207,13 @@ export function WorkoutsPage() {
                 }}
                 aria-pressed={selected}
                 className={[
-                  'flex min-h-[4.5rem] min-w-[4.75rem] flex-1 flex-col items-center justify-start gap-1 rounded-xl px-1.5 py-2 text-center transition',
+                  'flex min-h-[5rem] min-w-[4.75rem] flex-1 flex-col items-center justify-start gap-1 rounded-2xl px-1.5 py-2.5 text-center transition',
                   selected
-                    ? 'bg-primary text-white'
+                    ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/25'
                     : d.isRest
-                      ? 'border border-line bg-surface/50 text-muted'
-                      : 'border border-line bg-card text-text',
-                  isToday && !selected ? 'ring-1 ring-primary' : '',
+                      ? 'border border-slate-800/60 bg-slate-950/30 text-muted'
+                      : 'border border-slate-800/60 bg-slate-900/70 text-text backdrop-blur-md',
+                  isToday && !selected ? 'ring-1 ring-cyan-400/70' : '',
                 ].join(' ')}
               >
                 <span className="text-sm font-bold">{WEEKDAYS[d.dayNumber - 1]}</span>
@@ -221,7 +221,7 @@ export function WorkoutsPage() {
                   <span
                     className={[
                       'text-[10px] font-semibold',
-                      selected ? 'text-white/80' : 'text-primary',
+                      selected ? 'text-slate-950/75' : 'text-cyan-300',
                     ].join(' ')}
                   >
                     היום
@@ -230,7 +230,7 @@ export function WorkoutsPage() {
                 <span
                   className={[
                     'line-clamp-2 text-[10px] leading-tight',
-                    selected ? 'text-white/85' : 'text-muted',
+                    selected ? 'text-slate-950/80' : 'text-muted',
                   ].join(' ')}
                 >
                   {dayPlanLabel(d)}
@@ -249,14 +249,14 @@ export function WorkoutsPage() {
           </div>
 
           {day.isRest ? (
-            <p className="rounded-xl border border-dashed border-line bg-surface/50 p-4 text-center text-sm text-muted">
+            <p className="rounded-2xl border border-dashed border-slate-700/70 bg-slate-950/30 p-5 text-center text-sm text-muted">
               יום מנוחה — אין אימון מתוכנן.
             </p>
           ) : (
             <>
               <button
                 type="button"
-                className="mb-3 text-sm text-muted hover:text-text"
+                className="mb-3 min-h-11 text-sm text-muted hover:text-text"
                 onClick={() => {
                   setDayFocus(day.focus)
                   setEditDayOpen(true)
@@ -283,7 +283,7 @@ export function WorkoutsPage() {
                 {day.sessions.map(renderSession)}
 
                 {(day.exercises.length > 0 || day.sessions.length === 0) && (
-                  <section className="rounded-xl border border-dashed border-line bg-surface/50 p-3">
+                  <section className="rounded-2xl border border-dashed border-slate-700/70 bg-slate-950/30 p-4">
                     <div className="mb-2 flex items-center justify-between">
                       <p className="text-sm font-semibold text-text">
                         תרגילים עצמאיים
@@ -338,7 +338,7 @@ export function WorkoutsPage() {
               <li key={t.id}>
                 <button
                   type="button"
-                  className="w-full rounded-xl border border-line bg-surface px-3 py-3 text-right transition hover:border-primary"
+                  className="w-full min-h-14 rounded-2xl border border-slate-800/60 bg-slate-950/40 px-4 py-3.5 text-right transition hover:border-cyan-400/50"
                   onClick={() => {
                     attachTemplateToDay(day.id, t.id)
                     setPickTemplateOpen(false)
@@ -371,7 +371,7 @@ export function WorkoutsPage() {
             <input
               value={dayFocus}
               onChange={(e) => setDayFocus(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              className="mt-1 field"
             />
           </label>
           <Button type="submit" className="w-full" variant="accent">

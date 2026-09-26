@@ -48,7 +48,7 @@ export function FoodCategoriesManager() {
           {foodCategories.map((cat) => (
             <li
               key={cat.id}
-              className="flex items-center gap-1 rounded-xl border border-line bg-surface px-3 py-2"
+              className="flex min-h-14 items-center gap-1 rounded-2xl border border-slate-800/60 bg-slate-950/40 px-3 py-3"
             >
               <UtensilsCrossed
                 className="size-4 shrink-0 text-muted"
@@ -100,7 +100,7 @@ export function FoodCategoriesManager() {
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               placeholder="למשל ארוחת בוקר"
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              className="mt-1 field"
               required
             />
           </label>

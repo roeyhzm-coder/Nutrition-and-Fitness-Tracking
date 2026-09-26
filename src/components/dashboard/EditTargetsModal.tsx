@@ -37,7 +37,7 @@ export function EditTargetsModal({
               [key]: Number(e.target.value) || 0,
             }))
           }
-          className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+          className="mt-1 field"
         />
       </label>
     )

@@ -33,21 +33,24 @@ export function MacroTargetsView({
       value: totals.calories,
       max: targets.calories,
       unit: 'קק״ל',
-      color: 'primary' as const,
+      color: 'warn' as const,
+      chip: 'bg-orange-400/10 text-orange-300',
     },
     {
       label: 'חלבון',
       value: totals.protein,
       max: targets.protein,
       unit: 'ג׳',
-      color: 'accent' as const,
+      color: 'violet' as const,
+      chip: 'bg-violet-500/10 text-violet-300',
     },
     {
       label: 'פחמימות',
       value: totals.carbs,
       max: targets.carbs,
       unit: 'ג׳',
-      color: 'primary' as const,
+      color: 'accent' as const,
+      chip: 'bg-cyan-400/10 text-cyan-300',
     },
     {
       label: 'שומנים',
@@ -55,6 +58,7 @@ export function MacroTargetsView({
       max: targets.fats,
       unit: 'ג׳',
       color: 'warn' as const,
+      chip: 'bg-orange-400/10 text-orange-300',
     },
   ]
 
@@ -67,13 +71,18 @@ export function MacroTargetsView({
         </Button>
       }
     >
-      <div className="space-y-4">
+      <div className="space-y-5">
         {rows.map((row) => (
           <div key={row.label}>
-            <div className="mb-1.5 flex items-center justify-between text-sm">
-              <span className="text-muted">{row.label}</span>
-              <span className="font-semibold text-text">
-                {Math.round(row.value)} / {row.max} {row.unit}
+            <div className="mb-2 flex items-end justify-between gap-3">
+              <span className={`rounded-xl px-2.5 py-1 text-xs font-semibold ${row.chip}`}>
+                {row.label}
+              </span>
+              <span className="font-display text-lg font-extrabold tabular-nums text-text">
+                {Math.round(row.value)}
+                <span className="ms-1 text-sm font-semibold text-muted">
+                  / {row.max} {row.unit}
+                </span>
               </span>
             </div>
             <ProgressBar value={row.value} max={row.max} color={row.color} />

@@ -23,7 +23,7 @@ export function ProgramManager() {
 
   return (
     <>
-      <div className="flex items-center gap-2 rounded-xl border border-line bg-card p-2">
+      <div className="flex items-center gap-2 rounded-3xl border border-slate-800/60 bg-slate-900/70 p-2.5 shadow-lg shadow-black/20 backdrop-blur-md">
         <label className="sr-only" htmlFor="program-select">
           תוכנית אימונים
         </label>
@@ -31,7 +31,7 @@ export function ProgramManager() {
           id="program-select"
           value={activeProgramId}
           onChange={(e) => setActiveProgramId(e.target.value)}
-          className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-3 py-2 text-sm font-semibold text-text outline-none focus:border-primary"
+          className="field min-w-0 flex-1 font-semibold"
         >
           {workoutPrograms.map((p) => (
             <option key={p.id} value={p.id}>
@@ -57,7 +57,7 @@ export function ProgramManager() {
             {workoutPrograms.map((p) => (
               <li
                 key={p.id}
-                className="rounded-xl border border-line bg-surface p-3"
+                className="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4"
               >
                 <div className="flex items-center gap-1">
                   <div className="min-w-0 flex-1 text-right">
@@ -96,7 +96,7 @@ export function ProgramManager() {
           </ul>
 
           <form
-            className="flex gap-2 border-t border-line pt-3"
+            className="flex gap-2 border-t border-slate-800/60 pt-4"
             onSubmit={(e) => {
               e.preventDefault()
               createProgram(newName || 'תוכנית חדשה', true)
@@ -107,7 +107,7 @@ export function ProgramManager() {
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               placeholder="שם תוכנית חדשה"
-              className="min-w-0 flex-1 rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              className="field min-w-0 flex-1"
             />
             <Button type="submit" variant="accent">
               צור
@@ -132,7 +132,7 @@ export function ProgramManager() {
           <input
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
-            className="w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+            className="field"
             required
           />
           <Button type="submit" className="w-full" variant="accent">

@@ -32,9 +32,9 @@ export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
         })
         setReps('')
       }}
-      className="space-y-3 rounded-xl border border-line bg-card p-3"
+      className="space-y-4 rounded-3xl border border-slate-800/60 bg-slate-900/70 p-5 shadow-lg shadow-black/20 backdrop-blur-md"
     >
-      <p className="text-sm font-semibold text-text">
+      <p className="font-display text-base font-bold text-text">
         רישום סט — {exercise.name}
       </p>
       <div className="grid grid-cols-3 gap-2">
@@ -44,7 +44,7 @@ export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
             inputMode="decimal"
             value={weightKg}
             onChange={(e) => setWeightKg(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+            className="mt-1 field"
             required
           />
         </label>
@@ -54,7 +54,7 @@ export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
             inputMode="numeric"
             value={reps}
             onChange={(e) => setReps(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+            className="mt-1 field"
             required
           />
         </label>
@@ -67,7 +67,7 @@ export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
             step={0.5}
             value={rpe}
             onChange={(e) => setRpe(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+            className="mt-1 field"
             required
           />
         </label>

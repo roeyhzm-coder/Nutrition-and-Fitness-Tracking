@@ -34,11 +34,11 @@ function LogItem({ log }: { log: WorkoutLog }) {
   const volume = volumeKg(log)
 
   return (
-    <li className="rounded-xl border border-line bg-surface">
-      <div className="flex items-start gap-1 px-3 py-2.5">
+    <li className="rounded-2xl border border-slate-800/60 bg-slate-950/40">
+      <div className="flex items-start gap-1 px-4 py-3">
         <button
           type="button"
-          className="min-w-0 flex-1 text-right"
+          className="min-h-11 min-w-0 flex-1 text-right"
           onClick={() => setOpen((v) => !v)}
           aria-expanded={open}
         >
@@ -67,7 +67,7 @@ function LogItem({ log }: { log: WorkoutLog }) {
         </IconButton>
       </div>
       {open ? (
-        <ul className="space-y-1.5 border-t border-line px-3 py-2.5">
+        <ul className="space-y-2 border-t border-slate-800/60 px-4 py-3">
           {log.exercises.map((ex, i) => (
             <li key={`${ex.exerciseId}-${i}`} className="text-xs">
               <p className="font-medium text-text">{ex.name}</p>

@@ -120,7 +120,7 @@ export function TemplateEditor({
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+              className="mt-1 field"
               placeholder="למשל דחיפה עליון"
               required
             />
@@ -147,7 +147,7 @@ export function TemplateEditor({
               {exercises.map((ex, index) => (
                 <li
                   key={ex.id}
-                  className="flex items-start gap-2 rounded-xl border border-line bg-surface px-3 py-2"
+                  className="flex items-start gap-2 rounded-2xl border border-slate-800/60 bg-slate-950/40 px-3 py-3"
                 >
                   <ExerciseMedia exercise={ex} />
                   <button
@@ -191,7 +191,7 @@ export function TemplateEditor({
             </ul>
           )}
 
-          <div className="flex flex-col gap-2 border-t border-line pt-3">
+          <div className="flex flex-col gap-2 border-t border-slate-800/60 pt-4">
             <Button
               variant="accent"
               className="w-full"
@@ -262,7 +262,7 @@ export function TemplateEditor({
             <li key={d.id}>
               <button
                 type="button"
-                className="w-full rounded-xl border border-line bg-surface px-3 py-3 text-right transition hover:border-primary"
+                className="w-full min-h-14 rounded-2xl border border-slate-800/60 bg-slate-950/40 px-4 py-3.5 text-right transition hover:border-cyan-400/50"
                 onClick={() => {
                   if (!template?.id) return
                   onSave({

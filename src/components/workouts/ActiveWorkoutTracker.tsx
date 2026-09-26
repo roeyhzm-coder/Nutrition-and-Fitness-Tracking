@@ -7,7 +7,7 @@ import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 
 const inputClass =
-  'w-full rounded-lg border border-line bg-surface px-2 py-1.5 text-center text-sm text-text outline-none focus:border-primary'
+  'field px-2 text-center tabular-nums'
 
 function formatElapsed(ms: number) {
   const total = Math.max(0, Math.floor(ms / 1000))
@@ -51,8 +51,10 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
   return (
     <li
       className={[
-        'rounded-xl border p-3 transition',
-        allDone ? 'border-accent/60 bg-accent/5' : 'border-line bg-card',
+        'rounded-2xl border p-4 transition',
+        allDone
+          ? 'border-emerald-400/50 bg-emerald-500/10'
+          : 'border-slate-800/60 bg-slate-900/70 backdrop-blur-md',
       ].join(' ')}
     >
       <div className="flex items-start gap-3">
@@ -60,23 +62,23 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
           <img
             src={exercise.imageUrl}
             alt={exercise.name}
-            className="size-14 shrink-0 rounded-lg border border-line object-cover"
+            className="size-14 shrink-0 rounded-2xl border border-slate-800/60 object-cover"
           />
         ) : null}
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-text">{exercise.name}</p>
           <div className="mt-1 flex flex-wrap gap-1.5 text-xs">
-            <span className="rounded-md bg-line/50 px-1.5 py-0.5 text-text">
+            <span className="rounded-lg bg-slate-800/80 px-2 py-0.5 text-text">
               {exercise.targetSets} × {exercise.targetReps}
             </span>
             {exercise.rest ? (
-              <span className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+              <span className="inline-flex items-center gap-1 rounded-lg bg-cyan-400/10 px-2 py-0.5 font-medium text-cyan-300">
                 <Timer className="size-3" strokeWidth={2} />
                 מנוחה {exercise.rest}
               </span>
             ) : null}
             {exercise.targetWeight ? (
-              <span className="inline-flex items-center gap-1 rounded-md bg-line/50 px-1.5 py-0.5 text-muted">
+              <span className="inline-flex items-center gap-1 rounded-lg bg-slate-800/80 px-2 py-0.5 text-muted">
                 <Dumbbell className="size-3" strokeWidth={2} />
                 {exercise.targetWeight}
               </span>
@@ -92,8 +94,10 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
           type="button"
           onClick={() => setExerciseDone(index, !allDone)}
           className={[
-            'shrink-0 rounded-lg px-2 py-1 text-xs font-semibold transition',
-            allDone ? 'bg-accent text-bg' : 'bg-surface text-muted hover:text-text',
+            'icon-hit shrink-0 min-h-11 rounded-2xl px-3 text-xs font-semibold transition',
+            allDone
+              ? 'bg-emerald-500 text-slate-950'
+              : 'bg-slate-800/80 text-muted hover:text-text',
           ].join(' ')}
         >
           {allDone ? 'בוצע ✓' : 'סמן הכל'}
@@ -136,10 +140,10 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
               aria-label={set.done ? 'בטל סימון סט' : 'סמן סט כבוצע'}
               onClick={() => updateSet(index, setIndex, { done: !set.done })}
               className={[
-                'flex size-9 items-center justify-center rounded-lg border transition',
+                'flex size-11 items-center justify-center rounded-2xl border transition',
                 set.done
-                  ? 'border-accent bg-accent text-bg'
-                  : 'border-line bg-surface text-muted hover:border-accent',
+                  ? 'border-emerald-400 bg-emerald-500 text-slate-950'
+                  : 'border-slate-800/70 bg-slate-950/50 text-muted hover:border-emerald-400',
               ].join(' ')}
             >
               <Check className="size-4" strokeWidth={2.5} />
@@ -150,7 +154,7 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
       <button
         type="button"
         onClick={() => addSet(index)}
-        className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+        className="mt-3 inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-cyan-300 hover:underline"
       >
         <Plus className="size-3" strokeWidth={2} />
         הוסף סט
@@ -188,7 +192,7 @@ function MinimizedBar({ onOpen }: { onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="fixed inset-x-3 bottom-24 z-40 mx-auto flex max-w-3xl items-center justify-between rounded-2xl bg-primary px-4 py-3 text-white shadow-xl"
+      className="fixed inset-x-3 bottom-28 z-40 mx-auto flex max-w-3xl min-h-14 items-center justify-between rounded-3xl bg-emerald-500 px-5 py-3.5 text-slate-950 shadow-2xl shadow-emerald-500/25"
     >
       <span className="font-semibold">אימון פעיל · {activeWorkout!.workoutName}</span>
       <span className="text-sm tabular-nums">{elapsed} · המשך</span>
@@ -210,9 +214,9 @@ function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
   const doneSets = allSets.filter((s) => s.done).length
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-bg" dir="rtl">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950" dir="rtl">
       <div className="mx-auto max-w-3xl pb-28">
-        <header className="sticky top-0 z-10 border-b border-line bg-bg/95 px-4 py-3 backdrop-blur">
+        <header className="sticky top-0 z-10 border-b border-slate-800/60 bg-slate-950/90 px-4 py-4 backdrop-blur-md">
           <div className="flex items-center gap-2">
             <div className="min-w-0 flex-1">
               <p className="text-xs text-muted">
@@ -222,7 +226,7 @@ function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
                 {workout.workoutName}
               </h1>
             </div>
-            <span className="rounded-lg bg-surface px-2 py-1 font-mono text-sm tabular-nums text-text">
+            <span className="rounded-2xl bg-slate-800/80 px-3 py-2 font-mono text-sm tabular-nums text-text">
               {elapsed}
             </span>
             <IconButton label="מזער" onClick={onMinimize}>
@@ -238,9 +242,9 @@ function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
               <X className="size-4" strokeWidth={1.75} />
             </IconButton>
           </div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface">
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-900 ring-1 ring-slate-800/60">
             <div
-              className="h-full rounded-full bg-accent transition-all"
+              className="h-full rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.35)] transition-all"
               style={{ width: `${allSets.length ? (doneSets / allSets.length) * 100 : 0}%` }}
             />
           </div>
@@ -249,14 +253,14 @@ function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
           </p>
         </header>
 
-        <ul className="space-y-3 px-4 py-4">
+        <ul className="space-y-4 px-4 py-5">
           {workout.exercises.map((ex, i) => (
             <ExerciseBlock key={`${ex.exerciseId}-${i}`} exercise={ex} index={i} />
           ))}
         </ul>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 border-t border-line bg-bg/95 px-4 py-3 backdrop-blur">
+      <div className="fixed inset-x-0 bottom-0 border-t border-slate-800/60 bg-slate-950/90 px-4 py-4 backdrop-blur-md">
         <div className="mx-auto max-w-3xl">
           <Button
             variant="accent"

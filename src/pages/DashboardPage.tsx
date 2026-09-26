@@ -52,7 +52,7 @@ export function DashboardPage() {
         title="דשבורד"
         subtitle={`שלב ${PHASE_LABELS[phase]} · יעדים, עקביות והתקדמות`}
         action={
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <Button variant="surface" onClick={() => setTargetsOpen(true)}>
               עריכת יעדים
             </Button>
@@ -63,7 +63,7 @@ export function DashboardPage() {
         }
       />
 
-      <div className="space-y-4 px-4 py-4">
+      <div className="space-y-5 px-4 py-5">
         <GoalPhaseCard
           phase={phase}
           onPhaseChange={setPhase}
@@ -86,25 +86,44 @@ export function DashboardPage() {
         />
 
         <Card title={`יעדי קלוריות היום · ${PHASE_LABELS[phase]}`}>
-          <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="flex items-center gap-2 text-muted">
-              <Flame className="size-4 text-primary" />
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <span className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
+              <Flame className="size-4 text-orange-400" />
               קלוריות
             </span>
-            <span className="font-semibold text-text">
-              {Math.round(calories)} / {macroTargets.calories}
-            </span>
+            <p className="font-display text-3xl font-extrabold tabular-nums leading-none text-text">
+              {Math.round(calories)}
+              <span className="ms-1 text-base font-semibold text-muted">
+                / {macroTargets.calories}
+              </span>
+            </p>
           </div>
           <ProgressBar
             value={calories}
             max={macroTargets.calories}
-            color="primary"
+            color="warn"
           />
-          <p className="mt-2 text-xs text-muted">
-            חלבון {macroTargets.protein}ג׳ · פחמימות {macroTargets.carbs}ג׳ ·
-            שומן {macroTargets.fats}ג׳
-          </p>
-          <p className="mt-1 text-[10px] text-muted">
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="rounded-2xl bg-violet-500/10 px-3 py-2.5 text-center">
+              <p className="text-[11px] text-violet-300">חלבון</p>
+              <p className="mt-0.5 font-display text-sm font-bold tabular-nums text-text">
+                {macroTargets.protein}ג׳
+              </p>
+            </div>
+            <div className="rounded-2xl bg-cyan-400/10 px-3 py-2.5 text-center">
+              <p className="text-[11px] text-cyan-300">פחמימות</p>
+              <p className="mt-0.5 font-display text-sm font-bold tabular-nums text-text">
+                {macroTargets.carbs}ג׳
+              </p>
+            </div>
+            <div className="rounded-2xl bg-orange-400/10 px-3 py-2.5 text-center">
+              <p className="text-[11px] text-orange-300">שומן</p>
+              <p className="mt-0.5 font-display text-sm font-bold tabular-nums text-text">
+                {macroTargets.fats}ג׳
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-[10px] text-muted">
             סנכרון:{' '}
             {stateSyncStatus === 'synced'
               ? 'שמור'
@@ -121,7 +140,7 @@ export function DashboardPage() {
           action={
             <Link
               to="/nutrition#food-log"
-              className="text-xs font-semibold text-primary hover:underline"
+              className="text-xs font-semibold text-cyan-300 hover:underline"
             >
               ליומן המלא
             </Link>
@@ -139,24 +158,24 @@ export function DashboardPage() {
         </Card>
 
         <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-2xl border border-line bg-card p-4">
+          <div className="rounded-3xl border border-slate-800/60 bg-slate-900/70 p-5 shadow-lg shadow-black/20 backdrop-blur-md">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-muted">משקל עדכני</p>
-              <Scale className="size-4 text-primary" strokeWidth={1.75} />
+              <p className="text-xs font-medium text-muted">משקל עדכני</p>
+              <Scale className="size-4 text-emerald-400" strokeWidth={1.75} />
             </div>
-            <p className="mt-2 font-display text-2xl font-bold text-text">
+            <p className="mt-3 font-display text-3xl font-extrabold tabular-nums text-text">
               {latest ? latest.weightKg : '—'}
             </p>
             <p className="mt-1 text-xs text-muted">
               {latest ? 'ק״ג' : 'אין מדידה'}
             </p>
           </div>
-          <div className="rounded-2xl border border-line bg-card p-4">
+          <div className="rounded-3xl border border-slate-800/60 bg-slate-900/70 p-5 shadow-lg shadow-black/20 backdrop-blur-md">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-muted">אחוזי שומן</p>
-              <Percent className="size-4 text-accent" strokeWidth={1.75} />
+              <p className="text-xs font-medium text-muted">אחוזי שומן</p>
+              <Percent className="size-4 text-violet-400" strokeWidth={1.75} />
             </div>
-            <p className="mt-2 font-display text-2xl font-bold text-text">
+            <p className="mt-3 font-display text-3xl font-extrabold tabular-nums text-text">
               {latest?.bodyFatPct != null ? latest.bodyFatPct : '—'}
             </p>
             <p className="mt-1 text-xs text-muted">

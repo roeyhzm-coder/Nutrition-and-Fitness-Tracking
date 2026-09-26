@@ -70,7 +70,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="חפש מוצר… למשל חלבון מי גבינה"
-        className="w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm text-text outline-none focus:border-primary"
+        className="field"
       />
       {loading ? (
         <p className="mt-3 text-sm text-muted">מחפש…</p>
@@ -81,17 +81,17 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
         {results.map((p) => (
           <li
             key={p.code}
-            className="rounded-xl border border-line bg-surface p-3"
+            className="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4"
           >
             <div className="flex gap-3">
               {p.imageUrl ? (
                 <img
                   src={p.imageUrl}
                   alt=""
-                  className="size-12 rounded-lg object-cover"
+                  className="size-12 rounded-2xl object-cover"
                 />
               ) : (
-                <div className="size-12 rounded-lg bg-card" />
+                <div className="size-12 rounded-2xl bg-slate-800/80" />
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold text-text">
@@ -110,7 +110,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
                     onChange={(e) =>
                       setGrams((prev) => ({ ...prev, [p.code]: e.target.value }))
                     }
-                    className="w-20 rounded-lg border border-line bg-card px-2 py-1.5 text-xs text-text outline-none"
+                    className="field w-20 px-2 text-xs"
                     aria-label="גרמים"
                   />
                   <span className="text-xs text-muted">גרם</span>

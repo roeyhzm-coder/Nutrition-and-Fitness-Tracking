@@ -8,7 +8,7 @@ export function HabitsPage() {
         title="הרגלים"
         subtitle="נהל הרגלים יומיים מותאמים אישית"
       />
-      <div className="px-4 py-4">
+      <div className="px-4 py-5">
         <HabitManager />
       </div>
     </>

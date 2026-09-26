@@ -23,8 +23,7 @@ const TEXT_FIELDS: ReadonlyArray<[TextKey, string, string]> = [
 
 type ProfileForm = Record<NumericKey | TextKey, string>
 
-const inputClass =
-  'mt-1 w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary'
+const inputClass = 'mt-1 field'
 
 function toForm(p: UserProfile): ProfileForm {
   return {

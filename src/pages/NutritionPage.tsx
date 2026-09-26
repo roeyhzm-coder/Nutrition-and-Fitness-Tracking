@@ -51,19 +51,19 @@ export function NutritionPage() {
         title="תזונה ומתכונים"
         subtitle={`יעדי ${PHASE_LABELS[phase]} · ארוחות, מתכונים וייבוא`}
       />
-      <div className="space-y-4 px-4 py-4">
+      <div className="space-y-5 px-4 py-5">
         <Card title="שלב תזונה">
-          <div className="mb-3 grid grid-cols-3 gap-2 rounded-xl bg-surface p-1">
+          <div className="mb-3 grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-950/50 p-1.5">
             {PHASES.map((p) => (
               <button
                 key={p}
                 type="button"
                 onClick={() => setPhase(p)}
                 className={[
-                  'rounded-lg px-3 py-2 text-sm font-bold transition',
+                  'min-h-11 rounded-xl px-3 py-2 text-sm font-bold transition',
                   phase === p
                     ? PHASE_ACTIVE_CLASS[p]
-                    : 'text-muted hover:text-text',
+                    : 'text-muted hover:bg-slate-800/60 hover:text-text',
                 ].join(' ')}
               >
                 {PHASE_LABELS[p]}

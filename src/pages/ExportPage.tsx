@@ -9,7 +9,7 @@ export function ExportPage() {
         title="ייצוא נתונים"
         subtitle="העתקת פרומפט שבועי לניתוח AI"
       />
-      <div className="space-y-4 px-4 py-4">
+      <div className="space-y-5 px-4 py-5">
         <ProfileCard />
         <AiExportPanel />
       </div>

@@ -34,8 +34,7 @@ const MACRO_FIELDS = [
   ['fats', 'שומנים', 'decimal'],
 ] as const
 
-const inputClass =
-  'w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary'
+const inputClass = 'field'
 
 function toForm(meal: SavedMeal): MacroForm {
   return {
@@ -169,7 +168,7 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
                 <IconButton
                   label={manage ? 'סיום ניהול' : 'ניהול תבניות'}
                   tone="accent"
-                  className={manage ? 'bg-primary/10 text-primary' : ''}
+                  className={manage ? 'bg-cyan-400/10 text-cyan-300' : ''}
                   onClick={() => setManage((v) => !v)}
                 >
                   <Settings2 className="size-4" strokeWidth={1.75} />
@@ -180,7 +179,7 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
 
           {editorTarget ? (
             <form
-              className="mb-3 space-y-2 rounded-xl border border-primary/40 bg-surface/60 p-3"
+              className="mb-3 space-y-2 rounded-2xl border border-cyan-400/40 bg-slate-950/50 p-4"
               onSubmit={(e) => {
                 e.preventDefault()
                 saveEditor()
@@ -216,7 +215,7 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
               {savedMeals.map((m) => (
                 <li
                   key={m.id}
-                  className="flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-2"
+                  className="flex items-center gap-2 rounded-2xl border border-slate-800/60 bg-slate-950/40 px-3 py-3"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-text">
@@ -254,11 +253,11 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
               {savedMeals.map((m) => (
                 <div
                   key={m.id}
-                  className="flex items-stretch overflow-hidden rounded-xl border border-line bg-surface"
+                  className="flex min-h-11 items-stretch overflow-hidden rounded-2xl border border-slate-800/60 bg-slate-950/40"
                 >
                   <button
                     type="button"
-                    className="px-3 py-1.5 text-right transition hover:bg-line"
+                    className="min-h-11 px-3 py-2 text-right transition hover:bg-slate-800/60"
                     title="מילוי השדות לעריכה לפני הוספה"
                     onClick={() => {
                       setForm(toForm(m))
@@ -276,7 +275,7 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
                     type="button"
                     aria-label={`הוסף ${m.name} ישירות ליומן`}
                     title="הוסף ישירות ליומן"
-                    className="flex items-center border-s border-line px-2 text-accent transition hover:bg-accent hover:text-bg"
+                    className="flex min-w-11 items-center justify-center border-s border-slate-800/60 px-3 text-cyan-300 transition hover:bg-cyan-400 hover:text-slate-950"
                     onClick={() => {
                       logSavedMeal(m.id)
                       close()
@@ -299,7 +298,7 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
         </section>
 
         <form
-          className="space-y-3 border-t border-line pt-3"
+          className="space-y-3 border-t border-slate-800/60 pt-4"
           onSubmit={(e) => {
             e.preventDefault()
             const payload = toMacros(form)

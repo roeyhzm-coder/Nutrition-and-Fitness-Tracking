@@ -88,7 +88,7 @@ export function WorkoutLibrary({
               <li key={t.id}>
                 <button
                   type="button"
-                  className="w-full rounded-lg bg-surface px-3 py-2 text-right text-sm transition hover:bg-line/40"
+                  className="w-full min-h-11 rounded-2xl bg-slate-950/40 px-4 py-3 text-right text-sm transition hover:bg-slate-800/60"
                   onClick={() => openEdit(t)}
                 >
                   <p className="truncate font-medium text-text">{t.name}</p>
@@ -125,7 +125,7 @@ export function WorkoutLibrary({
               <li key={t.id}>
                 <button
                   type="button"
-                  className="w-full rounded-xl border border-line bg-surface px-3 py-3 text-right transition hover:border-primary"
+                  className="w-full min-h-14 rounded-2xl border border-slate-800/60 bg-slate-950/40 px-4 py-3.5 text-right transition hover:border-cyan-400/50"
                   onClick={() => openEdit(t)}
                 >
                   <p className="font-semibold text-text">{t.name}</p>

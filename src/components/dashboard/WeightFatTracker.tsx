@@ -42,7 +42,7 @@ export function WeightFatTracker({ entries, onAdd }: WeightFatTrackerProps) {
           value={weight}
           onChange={(e) => setWeight(e.target.value)}
           placeholder={latest ? String(latest.weightKg) : 'משקל ק״ג'}
-          className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+          className="field"
           required
         />
         <input
@@ -50,13 +50,13 @@ export function WeightFatTracker({ entries, onAdd }: WeightFatTrackerProps) {
           value={bodyFat}
           onChange={(e) => setBodyFat(e.target.value)}
           placeholder="אחוזי שומן %"
-          className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+          className="field"
         />
         <input
           value={note}
           onChange={(e) => setNote(e.target.value)}
           placeholder="הערה"
-          className="rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+          className="field"
         />
         <Button type="submit" variant="accent">
           הוסף
@@ -69,7 +69,7 @@ export function WeightFatTracker({ entries, onAdd }: WeightFatTrackerProps) {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[320px] text-right text-sm">
             <thead>
-              <tr className="border-b border-line text-xs text-muted">
+              <tr className="border-b border-slate-800/60 text-xs text-muted">
                 <th className="px-2 py-2 font-medium">תאריך</th>
                 <th className="px-2 py-2 font-medium">משקל</th>
                 <th className="px-2 py-2 font-medium">שומן %</th>
@@ -81,11 +81,11 @@ export function WeightFatTracker({ entries, onAdd }: WeightFatTrackerProps) {
                 .reverse()
                 .slice(0, 14)
                 .map((e) => (
-                  <tr key={e.id} className="border-b border-line/60">
-                    <td className="px-2 py-2 text-muted">
+                  <tr key={e.id} className="border-b border-slate-800/40">
+                    <td className="px-2 py-3 text-muted">
                       {new Date(e.loggedAt).toLocaleDateString('he-IL')}
                     </td>
-                    <td className="px-2 py-2 font-semibold text-text">
+                    <td className="px-2 py-3 font-display font-bold tabular-nums text-text">
                       {e.weightKg} ק״ג
                     </td>
                     <td className="px-2 py-2 text-text">

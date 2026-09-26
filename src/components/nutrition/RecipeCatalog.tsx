@@ -21,7 +21,7 @@ function RecipeThumb({ src, alt }: { src?: string; alt: string }) {
   if (!src || failed) {
     return (
       <div
-        className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-card text-muted"
+        className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-slate-800/80 text-muted"
         aria-hidden
       >
         <UtensilsCrossed className="size-6" strokeWidth={1.5} />
@@ -32,7 +32,7 @@ function RecipeThumb({ src, alt }: { src?: string; alt: string }) {
     <img
       src={src}
       alt={alt}
-      className="size-14 shrink-0 rounded-lg object-cover bg-card"
+      className="size-14 shrink-0 rounded-2xl bg-slate-800/80 object-cover"
       onError={() => setFailed(true)}
     />
   )
@@ -75,7 +75,7 @@ export function RecipeCatalog() {
       action={
         <button
           type="button"
-          className="text-sm font-medium text-primary disabled:opacity-50"
+          className="min-h-11 text-sm font-medium text-cyan-300 disabled:opacity-50"
           disabled={recipesSyncStatus === 'loading'}
           onClick={() => void syncRecipes()}
         >
@@ -98,10 +98,10 @@ export function RecipeCatalog() {
           type="button"
           onClick={() => setFilter('all')}
           className={[
-            'rounded-lg px-3 py-1.5 text-xs font-medium transition',
+            'min-h-11 rounded-2xl px-3 text-xs font-medium transition',
             filter === 'all'
-              ? 'bg-primary text-white'
-              : 'bg-surface text-muted hover:text-text',
+              ? 'bg-orange-400 text-slate-950'
+              : 'bg-slate-800/80 text-muted hover:text-text',
           ].join(' ')}
         >
           הכל
@@ -112,10 +112,10 @@ export function RecipeCatalog() {
             type="button"
             onClick={() => setFilter(c.id)}
             className={[
-              'rounded-lg px-3 py-1.5 text-xs font-medium transition',
+              'min-h-11 rounded-2xl px-3 text-xs font-medium transition',
               filter === c.id
-                ? 'bg-primary text-white'
-                : 'bg-surface text-muted hover:text-text',
+                ? 'bg-orange-400 text-slate-950'
+                : 'bg-slate-800/80 text-muted hover:text-text',
             ].join(' ')}
           >
             {c.label}
@@ -129,7 +129,7 @@ export function RecipeCatalog() {
           return (
             <li
               key={recipe.id}
-              className="rounded-xl border border-line bg-surface p-3"
+              className="rounded-2xl border border-slate-800/60 bg-slate-950/40 p-4"
             >
               <button
                 type="button"
@@ -150,7 +150,7 @@ export function RecipeCatalog() {
                             : ''}
                         </p>
                       </div>
-                      <span className="text-xs text-primary">
+                      <span className="text-xs text-cyan-300">
                         {open ? 'סגור' : 'פרטים'}
                       </span>
                     </div>
@@ -159,7 +159,7 @@ export function RecipeCatalog() {
               </button>
 
               {open ? (
-                <div className="mt-3 space-y-3 border-t border-line pt-3 text-sm">
+                <div className="mt-3 space-y-3 border-t border-slate-800/60 pt-4 text-sm">
                   {recipe.ingredients.length > 0 ? (
                     <div>
                       <p className="mb-1 font-medium text-text">מצרכים</p>

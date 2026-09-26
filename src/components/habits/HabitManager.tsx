@@ -40,7 +40,7 @@ export function HabitManager() {
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
             placeholder="הוסף הרגל חדש…"
-            className="min-w-0 flex-1 rounded-xl border border-line bg-surface px-3 py-2 text-sm text-text outline-none focus:border-primary"
+            className="field min-w-0 flex-1"
           />
           <Button type="submit" variant="accent">
             הוסף
@@ -57,17 +57,17 @@ export function HabitManager() {
               const checked = done.has(habit.id)
               return (
                 <li key={habit.id}>
-                  <div className="flex items-start gap-2 rounded-xl border border-line bg-surface px-3 py-3">
+                  <div className="flex items-start gap-2 rounded-2xl border border-slate-800/60 bg-slate-950/40 px-4 py-3.5">
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={() => toggleHabit(habit.id)}
-                      className="mt-0.5 size-4 accent-accent"
+                      className="mt-1 size-5 accent-emerald-400"
                     />
                     <button
                       type="button"
                       className={[
-                        'min-w-0 flex-1 text-right text-sm',
+                        'min-h-11 min-w-0 flex-1 text-right text-sm',
                         checked ? 'text-muted line-through' : 'text-text',
                       ].join(' ')}
                       onClick={() => {
@@ -120,7 +120,7 @@ export function HabitManager() {
           <input
             value={editLabel}
             onChange={(e) => setEditLabel(e.target.value)}
-            className="w-full rounded-lg border border-line bg-surface px-2.5 py-2 text-sm text-text outline-none focus:border-primary"
+            className="field"
             required
           />
           <Button type="submit" className="w-full" variant="accent">

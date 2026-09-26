@@ -24,7 +24,7 @@ export function PhaseHistoryCard() {
           return (
             <li
               key={h.id}
-              className="flex items-start gap-2 rounded-xl border border-line bg-surface px-3 py-2"
+              className="flex items-start gap-2 rounded-2xl border border-slate-800/60 bg-slate-950/40 px-4 py-3"
             >
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-text">
