@@ -47,6 +47,7 @@ export function NutritionPage() {
         }
       />
       <div className="space-y-5 px-4 py-5">
+        <ImportMealsModal />
         <RecipeCatalog />
 
         <section id="food-log">
@@ -82,8 +83,6 @@ export function NutritionPage() {
             לכל שלב. עריכת היעדים נמצאת בלשונית פרופיל ומדדים.
           </p>
         </Card>
-
-        <ImportMealsModal />
       </div>
 
       <AddFoodModal open={foodOpen} onClose={() => setFoodOpen(false)} />

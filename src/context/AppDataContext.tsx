@@ -107,9 +107,6 @@ type AppDataContextValue = {
   habitChecks: HabitChecks
   habits: CustomHabit[]
   foodCategories: FoodCategory[]
-  addFoodCategory: (label: string) => void
-  updateFoodCategory: (id: string, label: string) => void
-  deleteFoodCategory: (id: string) => void
   workoutPrograms: WorkoutProgram[]
   activeProgramId: string
   activeProgram: WorkoutProgram | null
@@ -780,39 +777,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [setConsistencyDayMarks],
   )
 
-  const addFoodCategory = useCallback(
-    (label: string) => {
-      const trimmed = label.trim()
-      if (!trimmed) return
-      setFoodCategories((prev) => {
-        if (prev.some((c) => c.label === trimmed)) return prev
-        return [...prev, { id: uid(), label: trimmed }]
-      })
-    },
-    [setFoodCategories],
-  )
-
-  const updateFoodCategory = useCallback(
-    (id: string, label: string) => {
-      const trimmed = label.trim()
-      if (!trimmed) return
-      setFoodCategories((prev) =>
-        prev.map((c) => (c.id === id ? { ...c, label: trimmed } : c)),
-      )
-    },
-    [setFoodCategories],
-  )
-
-  const deleteFoodCategory = useCallback(
-    (id: string) => {
-      setFoodCategories((prev) => {
-        if (prev.length <= 1) return prev
-        return prev.filter((c) => c.id !== id)
-      })
-    },
-    [setFoodCategories],
-  )
-
   const syncRecipes = useCallback(async () => {
     if (!isSupabaseConfigured) {
       setRecipesSyncStatus('error')
@@ -1286,9 +1250,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       habitChecks,
       habits,
       foodCategories,
-      addFoodCategory,
-      updateFoodCategory,
-      deleteFoodCategory,
       workoutPrograms,
       activeProgramId: activeProgram?.id ?? activeProgramId,
       activeProgram,
@@ -1365,9 +1326,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       habitChecks,
       habits,
       foodCategories,
-      addFoodCategory,
-      updateFoodCategory,
-      deleteFoodCategory,
       workoutPrograms,
       activeProgramId,
       activeProgram,
