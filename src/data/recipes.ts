@@ -28,6 +28,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
     tags: ['בוקר'],
     ingredients: ['6 חלבונים', 'גבינה לבנה 5%', 'עגבניות', 'תבלינים'],
     steps: ['לטגן עגבניות', 'להוסיף חלבונים וגבינה', 'לבשל עד מוכן'],
+    servingGrams: 300,
   },
   {
     id: 'recipe-yogurt',
@@ -41,6 +42,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
     tags: ['מהיר'],
     ingredients: ['יוגורט יווני 0%', 'כף אבקת חלבון', 'פירות יער'],
     steps: ['לערבב יוגורט ואבקה', 'להוסיף פירות'],
+    servingGrams: 250,
   },
   {
     id: 'recipe-chicken-rice',
@@ -54,6 +56,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
     tags: ['צהריים'],
     ingredients: ['חזה עוף', 'אורז', 'ירקות מאודים', 'שמן זית'],
     steps: ['לבשל אורז', 'לצלות עוף', 'להגיש עם ירקות'],
+    servingGrams: 400,
   },
   {
     id: 'recipe-turkey',
@@ -67,6 +70,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
     tags: ['צהריים'],
     ingredients: ['הודו טחון', 'בטטה', 'תבלינים', 'ביצה'],
     steps: ['לערבב קציצות', 'לאפות', 'להגיש עם בטטה'],
+    servingGrams: 350,
   },
   {
     id: 'recipe-steak',
@@ -80,6 +84,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
     tags: ['ערב'],
     ingredients: ['סטייק רזה', 'סלט ירקות', 'שמן זית'],
     steps: ['לצלות סטייק', 'להכין סלט', 'להגיש'],
+    servingGrams: 300,
   },
   {
     id: 'recipe-thighs',
@@ -93,6 +98,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
     tags: ['ערב'],
     ingredients: ['ירכי עוף ללא עור', 'ירקות שורש', 'תבלינים'],
     steps: ['לתבל', 'לאפות עד מוכן'],
+    servingGrams: 350,
   },
   {
     id: 'recipe-shake',
@@ -106,6 +112,7 @@ export const DEFAULT_RECIPES: Recipe[] = [
     tags: ['נשנוש'],
     ingredients: ['אבקת חלבון', 'חלב דל שומן', 'קרח'],
     steps: ['לבלנדר עד אחיד'],
+    servingGrams: 300,
   },
   {
     id: 'recipe-cottage',
@@ -119,5 +126,6 @@ export const DEFAULT_RECIPES: Recipe[] = [
     tags: ['נשנוש'],
     ingredients: ['גבינה לבנה 5%', 'מלפפון', 'מלח'],
     steps: ['לערבב ולהגיש'],
+    servingGrams: 200,
   },
 ]

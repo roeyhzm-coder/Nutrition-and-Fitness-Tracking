@@ -1,6 +1,8 @@
 import type { MealType, Recipe } from './types'
 import { supabase } from './supabase'
 
+export const DEFAULT_SERVING_GRAMS = 150
+
 export type SupabaseIngredient = {
   item?: string
   name?: string
@@ -50,9 +52,69 @@ function formatIngredient(ing: SupabaseIngredient | string): string {
   return [amount, unit, name].filter(Boolean).join(' ').trim()
 }
 
+function isGramUnit(unit: string) {
+  const u = unit.trim().toLowerCase()
+  return u === 'g' || u === 'gram' || u === 'grams' || u === 'גרם'
+}
+
+function gramsFromIngredientText(text: string): number {
+  const match = text.match(/(\d+(?:\.\d+)?)\s*(?:גרם|g\b)/i)
+  return match ? num(match[1]) : 0
+}
+
+function sumIngredientGrams(
+  ingredients: Array<SupabaseIngredient | string> | null | undefined,
+): number {
+  let total = 0
+  for (const ing of ingredients ?? []) {
+    if (typeof ing === 'string') {
+      total += gramsFromIngredientText(ing)
+      continue
+    }
+    if (isGramUnit(ing.unit ?? '')) {
+      total += num(ing.amount)
+      continue
+    }
+    total += gramsFromIngredientText(formatIngredient(ing))
+  }
+  return total
+}
+
+function servingGramsFromMacros(
+  macros: Record<string, number | string>,
+): number {
+  const candidates = [
+    macros.grams,
+    macros.serving_grams,
+    macros.servingGrams,
+    macros.serving_weight,
+    macros.weight_g,
+    macros['גרם'],
+  ]
+  for (const value of candidates) {
+    const n = num(value)
+    if (n > 0) return Math.round(n)
+  }
+  return 0
+}
+
+export function resolveServingGrams(
+  recipe: Pick<Recipe, 'servingGrams' | 'ingredients'>,
+): number {
+  const stored = num(recipe.servingGrams)
+  if (stored > 0) return Math.round(stored)
+  const fromIngredients = sumIngredientGrams(recipe.ingredients)
+  return fromIngredients > 0 ? Math.round(fromIngredients) : DEFAULT_SERVING_GRAMS
+}
+
 export function mapSupabaseRecipe(row: SupabaseRecipeRow): Recipe {
   const macros = row.macros ?? {}
   const image = row.image_url || row.image || undefined
+  const ingredients = (row.ingredients ?? []).map(formatIngredient)
+  const servingGrams =
+    servingGramsFromMacros(macros) ||
+    Math.round(sumIngredientGrams(row.ingredients)) ||
+    undefined
   return {
     id: row.id,
     name: row.title,
@@ -63,11 +125,12 @@ export function mapSupabaseRecipe(row: SupabaseRecipeRow): Recipe {
     fatsG: num(macros.fat ?? macros['שומן']),
     timeMin: 10,
     tags: row.categories ?? [],
-    ingredients: (row.ingredients ?? []).map(formatIngredient),
+    ingredients,
     steps: row.steps ?? [],
     image: image ?? undefined,
     categories: row.categories ?? [],
     equipment: row.equipment ?? [],
+    servingGrams,
   }
 }
 

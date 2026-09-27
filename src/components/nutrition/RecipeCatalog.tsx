@@ -1,10 +1,22 @@
-import { useMemo, useState } from 'react'
-import { UtensilsCrossed } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Check, UtensilsCrossed } from 'lucide-react'
 import { MEAL_TYPE_LABELS } from '../../data/recipes'
 import { useAppData } from '../../context/AppDataContext'
+import { parsePositiveDecimal } from '../../lib/numericInput'
+import { resolveServingGrams } from '../../lib/recipesApi'
 import type { Recipe } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
+import { NumericInput } from '../ui/NumericInput'
+
+const PORTION_MULTIPLIERS = [0.5, 1, 1.5, 2] as const
+
+const MACRO_BADGES = [
+  { key: 'calories', label: 'קלוריות', unit: '', chip: 'bg-orange-50 text-orange-700' },
+  { key: 'protein', label: 'חלבון', unit: 'ג׳', chip: 'bg-violet-50 text-violet-700' },
+  { key: 'carbs', label: 'פחמימות', unit: 'ג׳', chip: 'bg-cyan-50 text-cyan-700' },
+  { key: 'fats', label: 'שומן', unit: 'ג׳', chip: 'bg-amber-50 text-amber-700' },
+] as const
 
 function recipeMatchesCategory(recipe: Recipe, categoryLabel: string) {
   const labels = [
@@ -16,15 +28,25 @@ function recipeMatchesCategory(recipe: Recipe, categoryLabel: string) {
   return labels.some((l) => l.includes(q) || q.includes(l))
 }
 
+function round1(n: number) {
+  if (!Number.isFinite(n)) return 0
+  return Math.round(n * 10) / 10
+}
+
+function scaleCalories(base: number, factor: number) {
+  if (!Number.isFinite(base) || !Number.isFinite(factor) || factor <= 0) return 0
+  return Math.round(base * factor)
+}
+
 function RecipeThumb({ src, alt }: { src?: string; alt: string }) {
   const [failed, setFailed] = useState(false)
   if (!src || failed) {
     return (
       <div
-        className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-muted"
+        className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-muted"
         aria-hidden
       >
-        <UtensilsCrossed className="size-6" strokeWidth={1.5} />
+        <UtensilsCrossed className="size-7" strokeWidth={1.5} />
       </div>
     )
   }
@@ -32,9 +54,137 @@ function RecipeThumb({ src, alt }: { src?: string; alt: string }) {
     <img
       src={src}
       alt={alt}
-      className="size-14 shrink-0 rounded-2xl bg-slate-100 object-cover"
+      className="size-16 shrink-0 rounded-2xl bg-slate-100 object-cover"
       onError={() => setFailed(true)}
     />
+  )
+}
+
+function RecipeFoodCard({
+  recipe,
+  onLogged,
+}: {
+  recipe: Recipe
+  onLogged: (message: string) => void
+}) {
+  const { addFood } = useAppData()
+  const baseGrams = resolveServingGrams(recipe)
+  const [gramsDraft, setGramsDraft] = useState(String(baseGrams))
+  const [justLogged, setJustLogged] = useState(false)
+  const loggedTimer = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (loggedTimer.current != null) window.clearTimeout(loggedTimer.current)
+    }
+  }, [])
+
+  const grams = parsePositiveDecimal(gramsDraft)
+  const factor = grams != null && baseGrams > 0 ? grams / baseGrams : 0
+  const macros = {
+    calories: scaleCalories(recipe.calories, factor),
+    protein: round1(recipe.proteinG * factor),
+    carbs: round1(recipe.carbsG * factor),
+    fats: round1(recipe.fatsG * factor),
+  }
+
+  function applyMultiplier(multiplier: number) {
+    setGramsDraft(String(Math.round(baseGrams * multiplier)))
+  }
+
+  function logScaled() {
+    if (grams == null) return
+    addFood({
+      name: recipe.name,
+      grams,
+      calories: macros.calories,
+      protein: macros.protein,
+      carbs: macros.carbs,
+      fats: macros.fats,
+      source: 'recipe',
+    })
+    setJustLogged(true)
+    if (loggedTimer.current != null) window.clearTimeout(loggedTimer.current)
+    loggedTimer.current = window.setTimeout(() => setJustLogged(false), 2200)
+    onLogged(`נוספו ${grams} גרם ${recipe.name} ליומן`)
+  }
+
+  return (
+    <li className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <div className="flex items-start gap-3">
+        <RecipeThumb src={recipe.image} alt={recipe.name} />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-text">{recipe.name}</p>
+          <p className="mt-1 text-xs text-muted">מנת בסיס: {baseGrams} גרם</p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-4 gap-1.5">
+        {MACRO_BADGES.map((badge) => (
+          <div
+            key={badge.key}
+            className={`rounded-2xl px-2 py-2 text-center ${badge.chip}`}
+          >
+            <p className="text-[10px] font-semibold">{badge.label}</p>
+            <p className="mt-0.5 font-display text-sm font-bold tabular-nums">
+              {macros[badge.key]}
+              {badge.unit}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-xs text-muted">
+          <span className="font-medium">גרם</span>
+          <NumericInput
+            decimals={0}
+            value={gramsDraft}
+            onChange={setGramsDraft}
+            className="field w-24 px-2 text-sm"
+            aria-label={`גרם עבור ${recipe.name}`}
+          />
+        </label>
+        <div className="flex flex-wrap gap-1.5">
+          {PORTION_MULTIPLIERS.map((multiplier) => {
+            const active =
+              grams != null &&
+              Math.abs(grams - baseGrams * multiplier) < 0.51
+            return (
+              <button
+                key={multiplier}
+                type="button"
+                onClick={() => applyMultiplier(multiplier)}
+                className={[
+                  'min-h-9 rounded-xl px-2.5 text-xs font-semibold tabular-nums transition',
+                  active
+                    ? 'bg-orange-500 text-white'
+                    : 'bg-white text-muted ring-1 ring-slate-200 hover:text-text',
+                ].join(' ')}
+              >
+                {multiplier}x
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <Button
+        className="mt-3 w-full"
+        variant={justLogged ? 'surface' : 'accent'}
+        disabled={grams == null}
+        onClick={logScaled}
+      >
+        {justLogged ? (
+          <>
+            <Check className="size-4" strokeWidth={2.25} />
+            נוסף ליומן
+          </>
+        ) : (
+          'הוסף ליומן התזונה'
+        )}
+      </Button>
+    </li>
   )
 }
 
@@ -42,13 +192,19 @@ export function RecipeCatalog() {
   const {
     recipes,
     foodCategories,
-    addFood,
     recipesSyncStatus,
     recipesSyncError,
     syncRecipes,
   } = useAppData()
   const [filter, setFilter] = useState<string>('all')
-  const [openId, setOpenId] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
+    }
+  }, [])
 
   const list = useMemo(() => {
     if (filter === 'all') return recipes
@@ -57,16 +213,10 @@ export function RecipeCatalog() {
     return recipes.filter((r) => recipeMatchesCategory(r, cat.label))
   }, [recipes, foodCategories, filter])
 
-  function logRecipe(recipe: Recipe) {
-    addFood({
-      name: recipe.name,
-      grams: 1,
-      calories: recipe.calories,
-      protein: recipe.proteinG,
-      carbs: recipe.carbsG,
-      fats: recipe.fatsG,
-      source: 'recipe',
-    })
+  function showToast(message: string) {
+    setToast(message)
+    if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), 2800)
   }
 
   return (
@@ -92,6 +242,15 @@ export function RecipeCatalog() {
               ? `שגיאת סנכרון: ${recipesSyncError ?? 'לא ידוע'}`
               : 'ממתין לסנכרון'}
       </p>
+
+      {toast ? (
+        <p
+          role="status"
+          className="mb-3 rounded-2xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800"
+        >
+          {toast}
+        </p>
+      ) : null}
 
       <div className="mb-3 flex flex-wrap gap-2">
         <button
@@ -124,74 +283,13 @@ export function RecipeCatalog() {
       </div>
 
       <ul className="space-y-3">
-        {list.map((recipe) => {
-          const open = openId === recipe.id
-          return (
-            <li
-              key={recipe.id}
-              className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
-            >
-              <button
-                type="button"
-                className="w-full text-right"
-                onClick={() => setOpenId(open ? null : recipe.id)}
-              >
-                <div className="flex items-start gap-3">
-                  <RecipeThumb src={recipe.image} alt={recipe.name} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-semibold text-text">{recipe.name}</p>
-                        <p className="mt-1 text-xs text-muted">
-                          {MEAL_TYPE_LABELS[recipe.mealType]} ·{' '}
-                          {recipe.proteinG}ג׳ חלבון · {recipe.calories} קק״ל
-                          {recipe.equipment?.length
-                            ? ` · ${recipe.equipment[0]}`
-                            : ''}
-                        </p>
-                      </div>
-                      <span className="text-xs text-blue-600">
-                        {open ? 'סגור' : 'פרטים'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </button>
-
-              {open ? (
-                <div className="mt-3 space-y-3 border-t border-slate-200 pt-4 text-sm">
-                  {recipe.ingredients.length > 0 ? (
-                    <div>
-                      <p className="mb-1 font-medium text-text">מצרכים</p>
-                      <ul className="list-inside list-disc text-muted">
-                        {recipe.ingredients.map((ing) => (
-                          <li key={ing}>{ing}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
-                  {recipe.steps.length > 0 ? (
-                    <div>
-                      <p className="mb-1 font-medium text-text">שלבים</p>
-                      <ol className="list-inside list-decimal text-muted">
-                        {recipe.steps.map((step) => (
-                          <li key={step}>{step}</li>
-                        ))}
-                      </ol>
-                    </div>
-                  ) : null}
-                  <Button
-                    className="w-full"
-                    variant="accent"
-                    onClick={() => logRecipe(recipe)}
-                  >
-                    הוסף ליומן התזונה
-                  </Button>
-                </div>
-              ) : null}
-            </li>
-          )
-        })}
+        {list.map((recipe) => (
+          <RecipeFoodCard
+            key={recipe.id}
+            recipe={recipe}
+            onLogged={showToast}
+          />
+        ))}
       </ul>
     </Card>
   )

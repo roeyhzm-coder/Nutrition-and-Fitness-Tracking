@@ -333,6 +333,8 @@ export type Recipe = {
   image?: string
   categories?: string[]
   equipment?: string[]
+  /** Base serving weight the stored macros belong to. */
+  servingGrams?: number
 }
 
 export function todayKey(d = new Date()) {

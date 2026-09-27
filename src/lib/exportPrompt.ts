@@ -391,6 +391,10 @@ export function parseImportJson(raw: string): {
       tags: r.tags ?? [],
       ingredients: r.ingredients ?? [],
       steps: r.steps ?? [],
+      servingGrams:
+        r.servingGrams != null && Number.isFinite(Number(r.servingGrams))
+          ? Number(r.servingGrams)
+          : undefined,
     }))
 
   if (Array.isArray(data)) {
