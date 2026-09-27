@@ -6,7 +6,6 @@ import { FoodSearch } from '../components/nutrition/FoodSearch'
 import { RecipeCatalog } from '../components/nutrition/RecipeCatalog'
 import { SavedMeals } from '../components/nutrition/SavedMeals'
 import { ImportMealsModal } from '../components/nutrition/ImportMealsModal'
-import { FoodCategoriesManager } from '../components/nutrition/FoodCategoriesManager'
 import { FoodLogList } from '../components/nutrition/FoodLogList'
 import { AddFoodModal } from '../components/dashboard/AddFoodModal'
 import { Card } from '../components/ui/Card'
@@ -40,7 +39,7 @@ export function NutritionPage() {
     <>
       <PageHeader
         title="תזונה ומתכונים"
-        subtitle={`יעדי ${PHASE_LABELS[phase]} · ארוחות, מתכונים וייבוא`}
+        subtitle={`יעדי ${PHASE_LABELS[phase]} · קטלוג מזון ויומן יומי`}
         action={
           <Button variant="accent" onClick={() => setFoodOpen(true)}>
             הוסף מזון / ארוחה
@@ -48,6 +47,18 @@ export function NutritionPage() {
         }
       />
       <div className="space-y-5 px-4 py-5">
+        <RecipeCatalog />
+
+        <section id="food-log">
+          <Card title="יומן מזון להיום">
+            <FoodLogList entries={todayFood} />
+          </Card>
+        </section>
+
+        <MacroTargetsView logs={foodLogs} targets={macroTargets} />
+        <SavedMeals />
+        <FoodSearch onAdd={addFood} />
+
         <Card title="שלב תזונה">
           <div className="mb-3 grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-50 p-1.5">
             {PHASES.map((p) => (
@@ -72,19 +83,7 @@ export function NutritionPage() {
           </p>
         </Card>
 
-        <MacroTargetsView logs={foodLogs} targets={macroTargets} />
-        <SavedMeals />
-        <FoodSearch onAdd={addFood} />
-
-        <section id="food-log">
-          <Card title="יומן מזון להיום">
-            <FoodLogList entries={todayFood} />
-          </Card>
-        </section>
-
         <ImportMealsModal />
-        <FoodCategoriesManager />
-        <RecipeCatalog />
       </div>
 
       <AddFoodModal open={foodOpen} onClose={() => setFoodOpen(false)} />
