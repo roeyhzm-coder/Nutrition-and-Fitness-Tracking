@@ -47,8 +47,7 @@ export function NutritionPage() {
         }
       />
       <div className="space-y-5 px-4 py-5">
-        <ImportMealsModal />
-        <RecipeCatalog />
+        <MacroTargetsView logs={foodLogs} targets={macroTargets} />
 
         <section id="food-log">
           <Card title="יומן מזון להיום">
@@ -56,9 +55,11 @@ export function NutritionPage() {
           </Card>
         </section>
 
-        <MacroTargetsView logs={foodLogs} targets={macroTargets} />
+        <RecipeCatalog />
+
         <SavedMeals />
         <FoodSearch onAdd={addFood} />
+        <ImportMealsModal />
 
         <Card title="שלב תזונה">
           <div className="mb-3 grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-50 p-1.5">

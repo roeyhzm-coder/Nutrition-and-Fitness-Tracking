@@ -2,8 +2,13 @@ import type { WorkoutDay, WorkoutProgram, WorkoutTemplate } from './types'
 import { parseLocalDateKey, weekdayNumber } from './types'
 
 export const INDEPENDENT_WORKOUT = {
-  id: 'independent-cardio',
-  name: 'אימון עצמאי/אירובי',
+  id: 'independent',
+  name: 'אימון עצמאי',
+} as const
+
+export const CARDIO_WORKOUT = {
+  id: 'cardio',
+  name: 'אימון אירובי',
 } as const
 
 export type ConsistencyWorkoutOption = {
@@ -45,16 +50,14 @@ export function consistencyWorkoutOptions(
   templates: WorkoutTemplate[],
 ): ConsistencyWorkoutOption[] {
   const options = templates.map((t) => ({ id: t.id, name: t.name }))
-  if (
-    !options.some(
-      (o) =>
-        o.id === INDEPENDENT_WORKOUT.id || o.name === INDEPENDENT_WORKOUT.name,
-    )
-  ) {
-    options.push({
-      id: INDEPENDENT_WORKOUT.id,
-      name: INDEPENDENT_WORKOUT.name,
-    })
+  const extras: ConsistencyWorkoutOption[] = [
+    { id: INDEPENDENT_WORKOUT.id, name: INDEPENDENT_WORKOUT.name },
+    { id: CARDIO_WORKOUT.id, name: CARDIO_WORKOUT.name },
+  ]
+  for (const extra of extras) {
+    if (!options.some((o) => o.id === extra.id || o.name === extra.name)) {
+      options.push(extra)
+    }
   }
   return options
 }

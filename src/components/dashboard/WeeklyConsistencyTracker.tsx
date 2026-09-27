@@ -270,8 +270,40 @@ export function WeeklyConsistencyTracker() {
             <p className="rounded-2xl bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700">
               אימון משויך: {pickerAssigned.name}
             </p>
+            <label className="block text-xs text-muted">
+              בחר תבנית אימון
+              <select
+                className="mt-1 field"
+                value={
+                  options.find(
+                    (o) =>
+                      o.id === pickerAssigned.id ||
+                      o.name === pickerAssigned.name,
+                  )?.id ?? pickerAssigned.id
+                }
+                onChange={(e) => {
+                  const next = options.find((o) => o.id === e.target.value)
+                  if (next) assignWorkout(pickerDate, next)
+                }}
+              >
+                {!options.some(
+                  (o) =>
+                    o.id === pickerAssigned.id ||
+                    o.name === pickerAssigned.name,
+                ) ? (
+                  <option value={pickerAssigned.id}>
+                    {pickerAssigned.name}
+                  </option>
+                ) : null}
+                {options.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div>
-              <p className="mb-2 text-xs text-muted">החלף תבנית אימון</p>
+              <p className="mb-2 text-xs text-muted">בחירה מהירה</p>
               <div className="grid grid-cols-2 gap-2">
                 {options.map((option) => {
                   const active =
