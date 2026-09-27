@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Briefcase, Moon, PersonStanding } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
+import { displayDecimal, parseDecimal } from '../../lib/numericInput'
 import {
   ACTIVITY_LEVEL_LABELS,
   WORK_STYLE_LABELS,
@@ -9,6 +10,7 @@ import {
 } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
+import { NumericInput } from '../ui/NumericInput'
 
 const ACTIVITY_LEVELS = Object.keys(ACTIVITY_LEVEL_LABELS) as ActivityLevel[]
 const WORK_STYLES = Object.keys(WORK_STYLE_LABELS) as WorkStyle[]
@@ -23,8 +25,7 @@ export function LifestyleCard() {
   const { profile, setProfile } = useAppData()
   const [form, setForm] = useState<Form>({
     activityLevel: profile.activityLevel ?? '',
-    avgSleepHours:
-      profile.avgSleepHours != null ? String(profile.avgSleepHours) : '',
+    avgSleepHours: displayDecimal(profile.avgSleepHours),
     workStyle: profile.workStyle ?? '',
   })
   const [source, setSource] = useState(profile)
@@ -34,8 +35,7 @@ export function LifestyleCard() {
     setSource(profile)
     setForm({
       activityLevel: profile.activityLevel ?? '',
-      avgSleepHours:
-        profile.avgSleepHours != null ? String(profile.avgSleepHours) : '',
+      avgSleepHours: displayDecimal(profile.avgSleepHours),
       workStyle: profile.workStyle ?? '',
     })
   }
@@ -46,8 +46,7 @@ export function LifestyleCard() {
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault()
-          const sleepRaw = form.avgSleepHours.replace(',', '.')
-          const sleep = sleepRaw === '' ? null : Number(sleepRaw)
+          const sleep = parseDecimal(form.avgSleepHours)
           setProfile({
             ...profile,
             activityLevel: form.activityLevel || null,
@@ -89,14 +88,12 @@ export function LifestyleCard() {
             <Moon className="size-3.5 text-blue-600" strokeWidth={1.75} />
             שעות שינה ממוצעות
           </span>
-          <input
-            inputMode="decimal"
+          <NumericInput
             value={form.avgSleepHours}
-            onChange={(e) =>
-              setForm((p) => ({ ...p, avgSleepHours: e.target.value }))
+            onChange={(avgSleepHours) =>
+              setForm((p) => ({ ...p, avgSleepHours }))
             }
-            placeholder="למשל 7.5"
-            className="mt-1 field"
+            placeholder="8.0"
           />
         </label>
         <label className="block text-xs text-muted">

@@ -24,6 +24,7 @@ import {
   dayAllExercises,
   INTENSITY_LABELS,
   PHASE_LABELS,
+  PHASE_RESULT_LABELS,
   SEX_LABELS,
   WORK_STYLE_LABELS,
 } from './types'
@@ -259,17 +260,47 @@ export function buildAiExportPrompt(input: {
   const phaseDay = calcProcessDay(input.goal.startDate, input.goal.totalDays)
   const relativeWeek = relativeWeekNumber(phaseStart)
   const phaseLabel = PHASE_LABELS[input.phase]
+  const currentSummary = summarizePhase({
+    phase: input.phase,
+    goal: input.goal,
+    macroTargets: input.macroTargets,
+    weightLogs: input.weightLogs,
+    foodLogs: input.foodLogs,
+  })
 
+  const masterName = input.goal.masterName || 'גוף אל יווני'
   const masterWeight = input.goal.masterTargetWeightKg ?? 80
   const masterFat = input.goal.masterTargetBodyFatPct ?? 9
+  const masterPercent = (
+    (masterDay / Math.max(1, input.goal.masterTotalDays)) *
+    100
+  ).toFixed(1)
+  const phaseName = input.goal.phaseName || PHASE_LABELS[input.phase]
+  const phaseNumber = input.goal.phaseNumber || 1
+  const totalPhases = input.goal.totalPhases || 6
+  const phaseWeeks = Math.max(1, Math.round(input.goal.totalDays / 7))
+  const phaseStartWeight =
+    input.goal.startWeightKg ?? currentSummary.startWeightKg ?? startWeight
+  const phaseTargetWeight = input.goal.targetWeightKg
+  const phaseTargetFat = input.goal.targetBodyFatPct
+  const weightDirection =
+    phaseStartWeight != null &&
+    phaseTargetWeight != null &&
+    phaseTargetWeight > phaseStartWeight
+      ? 'עלייה מ-'
+      : phaseStartWeight != null &&
+          phaseTargetWeight != null &&
+          phaseTargetWeight < phaseStartWeight
+        ? 'ירידה מ-'
+        : 'מ-'
   const phaseWeight =
-    input.goal.targetWeightKg != null
-      ? `${input.goal.targetWeightKg} ק״ג`
-      : NA
+    phaseTargetWeight != null ? `${phaseTargetWeight.toFixed(2)} ק״ג` : NA
   const phaseFat =
-    input.goal.targetBodyFatPct != null
-      ? `${input.goal.targetBodyFatPct}%`
-      : NA
+    phaseTargetFat != null ? `${phaseTargetFat.toFixed(2)}%` : NA
+  const phaseGoalsLine =
+    phaseTargetWeight != null
+      ? `יעדי השלב: ${phaseTargetWeight.toFixed(2)} ק״ג (${weightDirection}${fmtNum(phaseStartWeight, ' ק״ג', 2)}) · עד ${phaseTargetFat != null ? phaseTargetFat.toFixed(2) : NA}% שומן`
+      : `יעדי השלב: ${NA}`
 
   const keyExercises =
     topExercises ||
@@ -296,27 +327,16 @@ export function buildAiExportPrompt(input: {
     })
     .join(' | ')
 
-  const currentSummary = summarizePhase({
-    phase: input.phase,
-    goal: input.goal,
-    macroTargets: input.macroTargets,
-    weightLogs: input.weightLogs,
-    foodLogs: input.foodLogs,
-  })
   const historySection = input.phaseHistory.length
     ? input.phaseHistory
         .map((h, i) => {
-          const delta =
-            h.startWeightKg != null && h.endWeightKg != null
-              ? ` (${h.endWeightKg - h.startWeightKg > 0 ? '+' : ''}${(h.endWeightKg - h.startWeightKg).toFixed(1)} ק״ג)`
-              : ''
-          return `${i + 1}. ${PHASE_LABELS[h.phase]} · ${h.startDate} – ${h.endDate} · ${h.actualDays} ימים בפועל (מתוכנן ${h.plannedDays})
-   - משקל התחלה → סיום: ${fmtNum(h.startWeightKg, ' ק״ג', 1)} → ${fmtNum(h.endWeightKg, ' ק״ג', 1)}${delta}
-   - ממוצע קלוריות: ${fmtNum(h.avgCalories, ' קק״ל')} · יעד קלוריות: ${fmtNum(h.macroTargets?.calories, ' קק״ל')}
-   - משקל יעד לשלב: ${fmtNum(h.targetWeightKg, ' ק״ג', 1)}`
+          const type = PHASE_LABELS[h.phase]
+          const name = h.name?.trim() || type
+          const result = PHASE_RESULT_LABELS[h.result ?? 'completed']
+          return `- שלב ${i + 1}: ${name} (${type}) | ${h.startDate} עד ${h.endDate} | התחלה: ${fmtNum(h.startWeightKg, ' ק״ג', 2)} (${fmtNum(h.startBodyFatPct, '%', 2)}) -> סיום: ${fmtNum(h.endWeightKg, ' ק״ג', 2)} (${fmtNum(h.endBodyFatPct, '%', 2)}) | תוצאה: ${result}`
         })
         .join('\n')
-    : `- ${NA} (אין שלבים שהסתיימו עדיין)`
+    : 'לא צוין (שלב ראשון בתהליך)'
 
   const sportsSection = sportSummaries.length
     ? sportSummaries.map(formatSport).join('\n\n')
@@ -333,36 +353,33 @@ export function buildAiExportPrompt(input: {
 - גיל: ${fmtNum(profile.age)}
 - מין: ${profile.sex ? SEX_LABELS[profile.sex] : NA}
 - גובה: ${fmtNum(profile.heightCm, ' ס״מ')}
-- משקל התחלתי: ${fmtNum(startWeight, ' ק״ג', 1)}
-- משקל עדכני: ${fmtNum(currentWeight, ' ק״ג', 1)}
-- משקל יעד: ${fmtNum(input.goal.targetWeightKg, ' ק״ג', 1)}
-- שינוי מתחילת התהליך: ${weightDelta != null ? `${weightDelta > 0 ? '+' : ''}${weightDelta.toFixed(1)} ק״ג` : NA}
-- אחוז שומן מוערך: ${fmtNum(latestFat, '%', 1)}
+- משקל התחלתי: ${fmtNum(startWeight, ' ק״ג', 2)}
+- משקל עדכני: ${fmtNum(currentWeight, ' ק״ג', 2)}
+- משקל יעד: ${fmtNum(input.goal.masterTargetWeightKg, ' ק״ג', 2)}
+- שינוי מתחילת התהליך: ${weightDelta != null ? `${weightDelta > 0 ? '+' : ''}${weightDelta.toFixed(2)} ק״ג` : NA}
+- אחוז שומן מוערך: ${fmtNum(latestFat, '%', 2)}
 - BMI: ${fmtNum(bmi, '', 1)}
 - רמת פעילות יומית: ${profile.activityLevel ? ACTIVITY_LEVEL_LABELS[profile.activityLevel] : NA}
 - שעות שינה ממוצעות (פרופיל): ${fmtNum(profile.avgSleepHours, ' ש׳', 1)}
 - סגנון עבודה: ${profile.workStyle ? WORK_STYLE_LABELS[profile.workStyle] : NA}
 
 ## מטרת על ארוכת טווח (Master Plan)
-- שם: גוף אל יווני
-- יעד: ${masterWeight} ק״ג ו-${masterFat}% שומן
-- יום ${masterDay} מתוך ${input.goal.masterTotalDays}
+- מטרת על: ${masterName} (${masterWeight.toFixed(2)} ק״ג ו-${masterFat.toFixed(2)}% שומן)
+- התקדמות כללית: יום ${masterDay} מתוך ${input.goal.masterTotalDays} (${masterPercent}% מהיעד הכולל)
 - תאריך התחלה: ${input.goal.masterStartDate}
 
 ## שלב נוכחי (Current Phase)
-- שלב פעיל: ${phaseLabel}
-- יום ${phaseDay} מתוך ${input.goal.totalDays}
-- שבוע יחסי: ${relativeWeek}
+- שלב פעיל: שלב ${phaseNumber} מתוך ${totalPhases} (${phaseName}) · סוג: ${phaseLabel}
+- התקדמות בשלב: יום ${phaseDay} מתוך ${input.goal.totalDays} (שבוע ${relativeWeek} מתוך ${phaseWeeks})
+- ${phaseGoalsLine}
 - תאריך תחילת שלב: ${input.goal.startDate}
-- יעד משקל לשלב: ${phaseWeight}
-- יעד שומן לשלב: ${phaseFat}
-- משקל בתחילת השלב: ${fmtNum(currentSummary.startWeightKg, ' ק״ג', 1)}
+- משקל בתחילת השלב: ${fmtNum(phaseStartWeight, ' ק״ג', 2)}
 - ממוצע קלוריות בשלב עד כה: ${fmtNum(currentSummary.avgCalories, ' קק״ל')}
+- יעדי מאקרו: ${input.macroTargets.calories} קק״ל · חלבון ${input.macroTargets.protein}ג׳ · פחמימות ${input.macroTargets.carbs}ג׳ · שומן ${input.macroTargets.fats}ג׳
 
 ## היסטוריית שלבים (Phase History)
 היסטוריית שלבים קודמים:
 ${historySection}
-- שלב פעיל כעת: ${phaseLabel} · ${input.goal.startDate} – היום · יום ${phaseDay} מתוך ${input.goal.totalDays}
 
 ## אימונים ועקביות שבועית
 - טווח השבוע: ${localDateKey(weekStart)} – ${localDateKey(weekEnd)}

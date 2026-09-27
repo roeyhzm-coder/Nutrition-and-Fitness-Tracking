@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import { useAppData } from '../../context/AppDataContext'
 import {
+  displayDecimal,
+  formatKg,
+  parseInteger,
+  parsePositiveDecimal,
+} from '../../lib/numericInput'
+import {
   calcBmi,
   SEX_LABELS,
   type Sex,
@@ -8,15 +14,22 @@ import {
 } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
+import { NumericInput } from '../ui/NumericInput'
 
-type NumericKey = 'age' | 'heightCm' | 'startWeightKg' | 'targetWeightKg'
+type NumericKey =
+  | 'age'
+  | 'heightCm'
+  | 'startWeightKg'
+  | 'targetWeightKg'
+  | 'estimatedBodyFatPct'
 type TextKey = 'avoidFoods' | 'allergies' | 'supplements' | 'injuries'
 
-const NUMERIC_FIELDS: ReadonlyArray<[NumericKey, string]> = [
-  ['age', 'גיל'],
-  ['heightCm', 'גובה (ס״מ)'],
-  ['startWeightKg', 'משקל התחלתי (ק״ג)'],
-  ['targetWeightKg', 'משקל יעד (ק״ג)'],
+const NUMERIC_FIELDS: ReadonlyArray<[NumericKey, string, number]> = [
+  ['age', 'גיל', 0],
+  ['heightCm', 'גובה (ס״מ)', 0],
+  ['startWeightKg', 'משקל התחלתי (ק״ג)', 2],
+  ['targetWeightKg', 'משקל יעד (ק״ג)', 2],
+  ['estimatedBodyFatPct', 'אחוז שומן מוערך', 2],
 ]
 
 const TEXT_FIELDS: ReadonlyArray<[TextKey, string, string]> = [
@@ -35,10 +48,11 @@ function toForm(
   targetWeightKg: number | null,
 ): ProfileForm {
   return {
-    age: p.age != null ? String(p.age) : '',
-    heightCm: p.heightCm != null ? String(p.heightCm) : '',
-    startWeightKg: p.startWeightKg != null ? String(p.startWeightKg) : '',
-    targetWeightKg: targetWeightKg != null ? String(targetWeightKg) : '',
+    age: displayDecimal(p.age),
+    heightCm: displayDecimal(p.heightCm),
+    startWeightKg: displayDecimal(p.startWeightKg),
+    targetWeightKg: displayDecimal(targetWeightKg),
+    estimatedBodyFatPct: displayDecimal(p.estimatedBodyFatPct),
     sex: p.sex ?? '',
     avoidFoods: p.avoidFoods,
     allergies: p.allergies,
@@ -47,29 +61,32 @@ function toForm(
   }
 }
 
-function parseNum(raw: string): number | null {
-  if (!raw.trim()) return null
-  const n = Number(raw.replace(',', '.'))
-  return Number.isFinite(n) && n > 0 ? n : null
-}
-
 export function ProfileCard() {
   const { profile, setProfile, goal, setGoal, weightLogs } = useAppData()
   const latestWeight = [...weightLogs]
     .reverse()
     .find((e) => e.weightKg > 0)?.weightKg
   const [form, setForm] = useState<ProfileForm>(() =>
-    toForm(profile, goal.targetWeightKg),
+    toForm(profile, goal.masterTargetWeightKg),
   )
-  const [source, setSource] = useState({ profile, target: goal.targetWeightKg })
+  const [source, setSource] = useState({
+    profile,
+    target: goal.masterTargetWeightKg,
+  })
   const [saved, setSaved] = useState(false)
 
-  if (source.profile !== profile || source.target !== goal.targetWeightKg) {
-    setSource({ profile, target: goal.targetWeightKg })
-    setForm(toForm(profile, goal.targetWeightKg))
+  if (
+    source.profile !== profile ||
+    source.target !== goal.masterTargetWeightKg
+  ) {
+    setSource({ profile, target: goal.masterTargetWeightKg })
+    setForm(toForm(profile, goal.masterTargetWeightKg))
   }
 
-  const bmi = calcBmi(latestWeight ?? profile.startWeightKg, parseNum(form.heightCm))
+  const bmi = calcBmi(
+    latestWeight ?? parsePositiveDecimal(form.startWeightKg),
+    parsePositiveDecimal(form.heightCm),
+  )
 
   return (
     <Card title="נתונים אישיים ומדדים">
@@ -79,10 +96,11 @@ export function ProfileCard() {
           e.preventDefault()
           setProfile({
             ...profile,
-            age: parseNum(form.age),
-            heightCm: parseNum(form.heightCm),
+            age: parseInteger(form.age),
+            heightCm: parsePositiveDecimal(form.heightCm),
             sex: form.sex || null,
-            startWeightKg: parseNum(form.startWeightKg),
+            startWeightKg: parsePositiveDecimal(form.startWeightKg),
+            estimatedBodyFatPct: parsePositiveDecimal(form.estimatedBodyFatPct),
             avoidFoods: form.avoidFoods.trim(),
             allergies: form.allergies.trim(),
             supplements: form.supplements.trim(),
@@ -90,24 +108,21 @@ export function ProfileCard() {
           })
           setGoal({
             ...goal,
-            targetWeightKg: parseNum(form.targetWeightKg),
+            masterTargetWeightKg: parsePositiveDecimal(form.targetWeightKg),
           })
           setSaved(true)
           window.setTimeout(() => setSaved(false), 2000)
         }}
       >
         <div className="grid grid-cols-2 gap-2">
-          {NUMERIC_FIELDS.map(([key, label]) => (
+          {NUMERIC_FIELDS.map(([key, label, decimals]) => (
             <label key={key} className="block text-xs text-muted">
               {label}
-              <input
-                inputMode="decimal"
+              <NumericInput
+                decimals={decimals}
                 value={form[key]}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, [key]: e.target.value }))
-                }
+                onChange={(next) => setForm((p) => ({ ...p, [key]: next }))}
                 placeholder="לא צוין"
-                className={inputClass}
               />
             </label>
           ))}
@@ -132,13 +147,20 @@ export function ProfileCard() {
         </label>
 
         <div className="rounded-2xl bg-slate-50 px-4 py-3">
+          <p className="text-xs text-muted">משקל עדכני (מיומן השקילות)</p>
+          <p className="mt-1 font-display text-2xl font-extrabold tabular-nums text-text">
+            {latestWeight != null ? `${formatKg(latestWeight)} ק״ג` : '—'}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-slate-50 px-4 py-3">
           <p className="text-xs text-muted">BMI מחושב אוטומטית</p>
           <p className="mt-1 font-display text-2xl font-extrabold tabular-nums text-text">
             {bmi != null ? bmi.toFixed(1) : '—'}
           </p>
           <p className="mt-1 text-[11px] text-muted">
             לפי משקל עדכני
-            {latestWeight != null ? ` (${latestWeight} ק״ג)` : ''} וגובה.
+            {latestWeight != null ? ` (${formatKg(latestWeight)} ק״ג)` : ''} וגובה.
           </p>
         </div>
 

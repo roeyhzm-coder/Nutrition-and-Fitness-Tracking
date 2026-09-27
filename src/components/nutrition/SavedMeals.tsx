@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Pencil, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
+import { parseDecimal, parseInteger } from '../../lib/numericInput'
 import type { SavedMeal } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
+import { NumericInput } from '../ui/NumericInput'
 
 export function SavedMeals() {
   const {
@@ -100,10 +102,10 @@ export function SavedMeals() {
             e.preventDefault()
             const payload = {
               name: form.name.trim(),
-              calories: Number(form.calories) || 0,
-              protein: Number(form.protein) || 0,
-              carbs: Number(form.carbs) || 0,
-              fats: Number(form.fats) || 0,
+              calories: parseInteger(form.calories) ?? 0,
+              protein: parseDecimal(form.protein) ?? 0,
+              carbs: parseDecimal(form.carbs) ?? 0,
+              fats: parseDecimal(form.fats) ?? 0,
             }
             if (!payload.name) return
             if (editing) updateSavedMeal(editing.id, payload)
@@ -129,13 +131,10 @@ export function SavedMeals() {
             ).map(([key, label]) => (
               <label key={key} className="block text-xs text-muted">
                 {label}
-                <input
-                  inputMode="decimal"
+                <NumericInput
+                  decimals={key === 'calories' ? 0 : 2}
                   value={form[key]}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, [key]: e.target.value }))
-                  }
-                  className="mt-1 field"
+                  onChange={(next) => setForm((p) => ({ ...p, [key]: next }))}
                 />
               </label>
             ))}

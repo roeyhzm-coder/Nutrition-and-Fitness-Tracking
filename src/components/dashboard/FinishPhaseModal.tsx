@@ -1,10 +1,16 @@
 import { useMemo, useState } from 'react'
 import { useAppData } from '../../context/AppDataContext'
+import {
+  parseDecimal,
+  parseInteger,
+  parsePositiveDecimal,
+} from '../../lib/numericInput'
 import { summarizePhase } from '../../lib/phaseHistory'
 import type { MacroTargets, Phase } from '../../lib/types'
 import { calcProcessDay, PHASE_LABELS, PHASES } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
+import { NumericInput } from '../ui/NumericInput'
 
 type FinishPhaseModalProps = {
   open: boolean
@@ -13,6 +19,7 @@ type FinishPhaseModalProps = {
 
 type Form = {
   phase: Phase
+  phaseName: string
   totalDays: string
   targetWeightKg: string
   targetBodyFatPct: string
@@ -34,9 +41,7 @@ function fmt(value: number | null, unit: string) {
 }
 
 function parseOptional(raw: string) {
-  if (!raw.trim()) return null
-  const n = Number(raw.replace(',', '.'))
-  return Number.isFinite(n) && n > 0 ? n : null
+  return parsePositiveDecimal(raw)
 }
 
 export function FinishPhaseModal({ open, onClose }: FinishPhaseModalProps) {
@@ -59,7 +64,8 @@ export function FinishPhaseModal({ open, onClose }: FinishPhaseModalProps) {
     const m = macroPresets[next]
     return {
       phase: next,
-      totalDays: String(goal.totalDays || 84),
+      phaseName: '',
+      totalDays: String(goal.totalDays || 196),
       targetWeightKg: '',
       targetBodyFatPct: '',
       calories: String(m.calories),
@@ -108,14 +114,15 @@ export function FinishPhaseModal({ open, onClose }: FinishPhaseModalProps) {
           e.preventDefault()
           finishPhase({
             phase: form.phase,
-            totalDays: Number(form.totalDays) || 84,
+            phaseName: form.phaseName.trim() || undefined,
+            totalDays: parseInteger(form.totalDays) || 196,
             targetWeightKg: parseOptional(form.targetWeightKg),
             targetBodyFatPct: parseOptional(form.targetBodyFatPct),
             macros: {
-              calories: Number(form.calories) || 0,
-              protein: Number(form.protein) || 0,
-              carbs: Number(form.carbs) || 0,
-              fats: Number(form.fats) || 0,
+              calories: parseInteger(form.calories) ?? 0,
+              protein: parseDecimal(form.protein) ?? 0,
+              carbs: parseDecimal(form.carbs) ?? 0,
+              fats: parseDecimal(form.fats) ?? 0,
             },
           })
           onClose()
@@ -172,13 +179,22 @@ export function FinishPhaseModal({ open, onClose }: FinishPhaseModalProps) {
           </div>
 
           <label className="block text-xs text-muted">
-            משך השלב (ימים)
+            שם השלב החדש
             <input
-              inputMode="numeric"
-              value={form.totalDays}
+              value={form.phaseName}
               onChange={(e) =>
-                setForm((p) => ({ ...p, totalDays: e.target.value }))
+                setForm((p) => ({ ...p, phaseName: e.target.value }))
               }
+              placeholder={PHASE_LABELS[form.phase]}
+              className={inputClass}
+            />
+          </label>
+          <label className="block text-xs text-muted">
+            משך השלב (ימים)
+            <NumericInput
+              decimals={0}
+              value={form.totalDays}
+              onChange={(totalDays) => setForm((p) => ({ ...p, totalDays }))}
               className={inputClass}
               required
             />
@@ -204,11 +220,10 @@ export function FinishPhaseModal({ open, onClose }: FinishPhaseModalProps) {
           <div className="grid grid-cols-2 gap-2">
             <label className="block text-xs text-muted">
               משקל יעד (ק״ג)
-              <input
-                inputMode="decimal"
+              <NumericInput
                 value={form.targetWeightKg}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, targetWeightKg: e.target.value }))
+                onChange={(targetWeightKg) =>
+                  setForm((p) => ({ ...p, targetWeightKg }))
                 }
                 placeholder="לא צוין"
                 className={inputClass}
@@ -216,11 +231,10 @@ export function FinishPhaseModal({ open, onClose }: FinishPhaseModalProps) {
             </label>
             <label className="block text-xs text-muted">
               אחוז שומן יעד
-              <input
-                inputMode="decimal"
+              <NumericInput
                 value={form.targetBodyFatPct}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, targetBodyFatPct: e.target.value }))
+                onChange={(targetBodyFatPct) =>
+                  setForm((p) => ({ ...p, targetBodyFatPct }))
                 }
                 placeholder="לא צוין"
                 className={inputClass}
@@ -232,12 +246,10 @@ export function FinishPhaseModal({ open, onClose }: FinishPhaseModalProps) {
             {MACRO_FIELDS.map(([key, label]) => (
               <label key={key} className="block text-xs text-muted">
                 {label}
-                <input
-                  inputMode="numeric"
+                <NumericInput
+                  decimals={key === 'calories' ? 0 : 2}
                   value={form[key]}
-                  onChange={(e) =>
-                    setForm((p) => ({ ...p, [key]: e.target.value }))
-                  }
+                  onChange={(next) => setForm((p) => ({ ...p, [key]: next }))}
                   className={inputClass}
                 />
               </label>
@@ -246,7 +258,7 @@ export function FinishPhaseModal({ open, onClose }: FinishPhaseModalProps) {
         </section>
 
         <p className="text-[11px] text-muted">
-          אישור יאפס את מונה השלב ל-יום 1 מתוך {Number(form.totalDays) || 84},
+          אישור יאפס את מונה השלב ל-יום 1 מתוך {parseInteger(form.totalDays) || 196},
           ישמור על רצף מטרת העל (יום{' '}
           {calcProcessDay(goal.masterStartDate, goal.masterTotalDays)} מתוך{' '}
           {goal.masterTotalDays}) ויעדכן את יעדי המאקרו.

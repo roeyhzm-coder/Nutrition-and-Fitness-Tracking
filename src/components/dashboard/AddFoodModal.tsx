@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Check, Pencil, Plus, Settings2, Trash2, X } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
+import { parseDecimal, parseInteger } from '../../lib/numericInput'
 import type { SavedMeal } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
+import { NumericInput } from '../ui/NumericInput'
 
 type AddFoodModalProps = {
   open: boolean
@@ -49,10 +51,10 @@ function toForm(meal: SavedMeal): MacroForm {
 function toMacros(form: MacroForm): Omit<SavedMeal, 'id'> {
   return {
     name: form.name.trim(),
-    calories: Number(form.calories) || 0,
-    protein: Number(form.protein) || 0,
-    carbs: Number(form.carbs) || 0,
-    fats: Number(form.fats) || 0,
+    calories: parseInteger(form.calories) ?? 0,
+    protein: parseDecimal(form.protein) ?? 0,
+    carbs: parseDecimal(form.carbs) ?? 0,
+    fats: parseDecimal(form.fats) ?? 0,
   }
 }
 
@@ -78,10 +80,10 @@ function MacroFields({
         {MACRO_FIELDS.map(([key, label, mode]) => (
           <label key={key} className="block text-xs text-muted">
             {label}
-            <input
-              inputMode={mode}
+            <NumericInput
+              decimals={mode === 'numeric' ? 0 : 2}
               value={form[key]}
-              onChange={(e) => onChange({ [key]: e.target.value })}
+              onChange={(next) => onChange({ [key]: next })}
               placeholder="0"
               className={`mt-1 ${inputClass}`}
             />

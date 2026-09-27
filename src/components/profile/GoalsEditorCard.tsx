@@ -1,17 +1,28 @@
 import { useState } from 'react'
 import { useAppData } from '../../context/AppDataContext'
+import { displayDecimal, parseDecimal, parseInteger } from '../../lib/numericInput'
 import { PHASE_LABELS, type MacroTargets } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
+import { NumericInput } from '../ui/NumericInput'
 
-type Form = MacroTargets & { weeklyWorkoutTarget: string }
+type Form = Record<keyof MacroTargets, string> & { weeklyWorkoutTarget: string }
+
+function toForm(macros: MacroTargets, weekly: number): Form {
+  return {
+    calories: displayDecimal(macros.calories),
+    protein: displayDecimal(macros.protein),
+    carbs: displayDecimal(macros.carbs),
+    fats: displayDecimal(macros.fats),
+    weeklyWorkoutTarget: displayDecimal(weekly || 5),
+  }
+}
 
 export function GoalsEditorCard() {
   const { macroTargets, setMacroTargets, goal, setGoal, phase } = useAppData()
-  const [form, setForm] = useState<Form>({
-    ...macroTargets,
-    weeklyWorkoutTarget: String(goal.weeklyWorkoutTarget || 5),
-  })
+  const [form, setForm] = useState<Form>(() =>
+    toForm(macroTargets, goal.weeklyWorkoutTarget),
+  )
   const [source, setSource] = useState({
     macros: macroTargets,
     weekly: goal.weeklyWorkoutTarget,
@@ -29,26 +40,17 @@ export function GoalsEditorCard() {
       weekly: goal.weeklyWorkoutTarget,
       phase,
     })
-    setForm({
-      ...macroTargets,
-      weeklyWorkoutTarget: String(goal.weeklyWorkoutTarget || 5),
-    })
+    setForm(toForm(macroTargets, goal.weeklyWorkoutTarget))
   }
 
-  function field(key: keyof MacroTargets, label: string) {
+  function field(key: keyof MacroTargets, label: string, decimals = 0) {
     return (
       <label className="block text-xs text-muted">
         {label}
-        <input
-          inputMode="numeric"
+        <NumericInput
+          decimals={decimals}
           value={form[key]}
-          onChange={(e) =>
-            setForm((prev) => ({
-              ...prev,
-              [key]: Number(e.target.value) || 0,
-            }))
-          }
-          className="mt-1 field"
+          onChange={(next) => setForm((prev) => ({ ...prev, [key]: next }))}
         />
       </label>
     )
@@ -61,35 +63,31 @@ export function GoalsEditorCard() {
         onSubmit={(e) => {
           e.preventDefault()
           setMacroTargets({
-            calories: form.calories,
-            protein: form.protein,
-            carbs: form.carbs,
-            fats: form.fats,
+            calories: parseInteger(form.calories) ?? 0,
+            protein: parseDecimal(form.protein) ?? 0,
+            carbs: parseDecimal(form.carbs) ?? 0,
+            fats: parseDecimal(form.fats) ?? 0,
           })
-          const weekly = Math.max(1, Number(form.weeklyWorkoutTarget) || 5)
+          const weekly = Math.max(1, parseInteger(form.weeklyWorkoutTarget) ?? 5)
           setGoal({ ...goal, weeklyWorkoutTarget: weekly })
           setSaved(true)
           window.setTimeout(() => setSaved(false), 2000)
         }}
       >
         <div className="grid grid-cols-2 gap-2">
-          {field('calories', 'קלוריות יומיות')}
-          {field('protein', 'חלבון (ג׳)')}
-          {field('carbs', 'פחמימות (ג׳)')}
-          {field('fats', 'שומן (ג׳)')}
+          {field('calories', 'קלוריות יומיות', 0)}
+          {field('protein', 'חלבון (ג׳)', 2)}
+          {field('carbs', 'פחמימות (ג׳)', 2)}
+          {field('fats', 'שומן (ג׳)', 2)}
         </div>
         <label className="block text-xs text-muted">
           יעד אימונים שבועי
-          <input
-            inputMode="numeric"
+          <NumericInput
+            decimals={0}
             value={form.weeklyWorkoutTarget}
-            onChange={(e) =>
-              setForm((prev) => ({
-                ...prev,
-                weeklyWorkoutTarget: e.target.value,
-              }))
+            onChange={(weeklyWorkoutTarget) =>
+              setForm((prev) => ({ ...prev, weeklyWorkoutTarget }))
             }
-            className="mt-1 field"
           />
         </label>
         <p className="text-[10px] text-muted">

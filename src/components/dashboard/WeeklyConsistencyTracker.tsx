@@ -9,6 +9,7 @@ import type { SetLog } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Modal } from '../ui/Modal'
+import { NumericInput } from '../ui/NumericInput'
 
 type WeeklyConsistencyTrackerProps = {
   setLogs: SetLog[]
@@ -205,11 +206,10 @@ export function WeeklyConsistencyTracker({
           </p>
           <label className="block text-xs text-muted">
             מספר אימונים
-            <input
-              inputMode="numeric"
+            <NumericInput
+              decimals={0}
               value={countInput}
-              onChange={(e) => setCountInput(e.target.value)}
-              className="mt-1 field"
+              onChange={setCountInput}
               min={0}
               max={7}
             />

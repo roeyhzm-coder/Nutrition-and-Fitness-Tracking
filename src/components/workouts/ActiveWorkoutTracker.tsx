@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Check, ChevronDown, Dumbbell, Plus, Timer, X } from 'lucide-react'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
+import {
+  displayDecimal,
+  parseDecimal,
+  parseInteger,
+} from '../../lib/numericInput'
 import type { LoggedExercise, LoggedSet } from '../../lib/types'
 import { WEEKDAYS } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
+import { NumericInput } from '../ui/NumericInput'
 
 const inputClass =
   'field px-2 text-center tabular-nums'
@@ -26,10 +32,39 @@ function useElapsed(startedAt: string) {
   return formatElapsed(now - new Date(startedAt).getTime())
 }
 
-function toNumber(value: string): number | null {
-  if (value.trim() === '') return null
-  const n = Number(value)
-  return Number.isFinite(n) ? n : null
+function DraftNumberInput({
+  value,
+  onCommit,
+  decimals = 2,
+  placeholder,
+}: {
+  value: number | null
+  onCommit: (next: number | null) => void
+  decimals?: number
+  placeholder?: string
+}) {
+  const [draft, setDraft] = useState(() => displayDecimal(value))
+  useEffect(() => {
+    setDraft(displayDecimal(value))
+  }, [value])
+
+  return (
+    <NumericInput
+      decimals={decimals}
+      value={draft}
+      onChange={(raw) => {
+        setDraft(raw)
+        if (raw === '') {
+          onCommit(null)
+          return
+        }
+        const parsed = decimals <= 0 ? parseInteger(raw) : parseDecimal(raw)
+        if (parsed != null) onCommit(parsed)
+      }}
+      placeholder={placeholder}
+      className={inputClass}
+    />
+  )
 }
 
 function formatSets(sets: LoggedSet[]) {
@@ -117,23 +152,20 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
             className="grid grid-cols-[1.5rem_1fr_1fr_2.25rem] items-center gap-2"
           >
             <span className="text-sm font-semibold text-muted">{setIndex + 1}</span>
-            <input
-              inputMode="decimal"
-              value={set.weightKg ?? ''}
-              onChange={(e) =>
-                updateSet(index, setIndex, { weightKg: toNumber(e.target.value) })
+            <DraftNumberInput
+              value={set.weightKg}
+              onCommit={(weightKg) =>
+                updateSet(index, setIndex, { weightKg })
               }
               placeholder="0"
-              className={inputClass}
             />
-            <input
-              inputMode="numeric"
-              value={set.reps ?? ''}
-              onChange={(e) =>
-                updateSet(index, setIndex, { reps: toNumber(e.target.value) })
+            <DraftNumberInput
+              decimals={0}
+              value={set.reps}
+              onCommit={(reps) => updateSet(index, setIndex, { reps })}
+              placeholder={
+                exercise.targetReps.length <= 8 ? exercise.targetReps : 'חזרות'
               }
-              placeholder={exercise.targetReps.length <= 8 ? exercise.targetReps : 'חזרות'}
-              className={inputClass}
             />
             <button
               type="button"

@@ -1,7 +1,9 @@
 import { useState } from 'react'
+import { formatKg, formatPct, parseDecimal, parsePositiveDecimal } from '../../lib/numericInput'
 import type { WeightEntry } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
+import { NumericInput } from '../ui/NumericInput'
 
 type WeightLogProps = {
   entries: WeightEntry[]
@@ -23,12 +25,11 @@ export function WeightLog({ entries, onAdd }: WeightLogProps) {
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          const w = Number(weight)
-          if (!Number.isFinite(w) || w <= 0) return
-          const fat = bodyFat === '' ? null : Number(bodyFat)
+          const w = parsePositiveDecimal(weight)
+          if (w == null) return
           onAdd({
             weightKg: w,
-            bodyFatPct: fat != null && Number.isFinite(fat) ? fat : null,
+            bodyFatPct: parseDecimal(bodyFat),
             note: note.trim() || undefined,
           })
           setWeight('')
@@ -40,23 +41,19 @@ export function WeightLog({ entries, onAdd }: WeightLogProps) {
         <div className="grid grid-cols-3 gap-2">
           <label className="block text-xs text-muted">
             משקל (ק״ג)
-            <input
-              inputMode="decimal"
+            <NumericInput
               value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-              className="mt-1 field"
-              placeholder={latest ? String(latest.weightKg) : '75.0'}
+              onChange={setWeight}
+              placeholder={latest ? formatKg(latest.weightKg) : '70.00'}
               required
             />
           </label>
           <label className="block text-xs text-muted">
             אחוזי שומן
-            <input
-              inputMode="decimal"
+            <NumericInput
               value={bodyFat}
-              onChange={(e) => setBodyFat(e.target.value)}
-              className="mt-1 field"
-              placeholder="%"
+              onChange={setBodyFat}
+              placeholder="14.00"
             />
           </label>
           <label className="block text-xs text-muted">
@@ -89,8 +86,8 @@ export function WeightLog({ entries, onAdd }: WeightLogProps) {
                   {e.note ? ` · ${e.note}` : ''}
                 </span>
                 <span className="font-display font-bold tabular-nums text-text">
-                  {e.weightKg} ק״ג
-                  {e.bodyFatPct != null ? ` · ${e.bodyFatPct}%` : ''}
+                  {formatKg(e.weightKg)} ק״ג
+                  {e.bodyFatPct != null ? ` · ${formatPct(e.bodyFatPct)}%` : ''}
                 </span>
               </li>
             ))}

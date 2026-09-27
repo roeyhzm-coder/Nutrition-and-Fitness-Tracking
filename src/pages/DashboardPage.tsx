@@ -13,6 +13,7 @@ import { TodayWorkoutCard } from '../components/dashboard/TodayWorkoutCard'
 import { WorkoutHistoryCard } from '../components/workouts/WorkoutHistoryCard'
 import { FoodLogList } from '../components/nutrition/FoodLogList'
 import { useAppData } from '../context/AppDataContext'
+import { formatKg } from '../lib/numericInput'
 import { PHASE_LABELS, todayKey } from '../lib/types'
 import { useState } from 'react'
 
@@ -44,7 +45,7 @@ export function DashboardPage() {
     <>
       <PageHeader
         title="דשבורד"
-        subtitle={`שלב ${PHASE_LABELS[phase]} · יעדים, עקביות והתקדמות`}
+        subtitle={`שלב ${goal.phaseNumber} מתוך ${goal.totalPhases} · ${goal.phaseName} · ${PHASE_LABELS[phase]}`}
       />
 
       <div className="space-y-5 px-4 py-5">
@@ -148,7 +149,7 @@ export function DashboardPage() {
             <Scale className="size-4 text-blue-600" strokeWidth={1.75} />
           </div>
           <p className="mt-3 font-display text-3xl font-extrabold tabular-nums text-text">
-            {latest ? latest.weightKg : '—'}
+            {latest ? formatKg(latest.weightKg) : '—'}
           </p>
           <p className="mt-1 text-xs text-muted">
             {latest ? 'ק״ג' : 'אין מדידה'}

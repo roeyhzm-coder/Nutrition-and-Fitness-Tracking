@@ -9,6 +9,13 @@ export type Phase = 'bulk' | 'cut' | 'maintain'
 
 export const PHASES: Phase[] = ['bulk', 'cut', 'maintain']
 
+export type PhaseResult = 'completed' | 'aborted'
+
+export const PHASE_RESULT_LABELS: Record<PhaseResult, string> = {
+  completed: 'הושלם',
+  aborted: 'הופסק',
+}
+
 export type GoalSettings = {
   /** Short-term phase tracker */
   startDate: string
@@ -22,6 +29,12 @@ export type GoalSettings = {
   masterTotalDays: number
   masterTargetWeightKg: number | null
   masterTargetBodyFatPct: number | null
+  masterName: string
+  phaseName: string
+  phaseNumber: number
+  totalPhases: number
+  /** Weight at the start of the current phase */
+  startWeightKg: number | null
 }
 
 export type PhaseMacroPresets = Record<Phase, MacroTargets>
@@ -29,15 +42,19 @@ export type PhaseMacroPresets = Record<Phase, MacroTargets>
 export type PhaseHistoryEntry = {
   id: string
   phase: Phase
+  name?: string
   startDate: string
   endDate: string
   plannedDays: number
   actualDays: number
   startWeightKg: number | null
   endWeightKg: number | null
+  startBodyFatPct?: number | null
+  endBodyFatPct?: number | null
   avgCalories: number | null
   targetWeightKg: number | null
   macroTargets: MacroTargets
+  result?: PhaseResult
 }
 
 export type SetLog = {
@@ -335,20 +352,30 @@ export function calcProcessDay(startDate: string, totalDays: number) {
   return Math.min(Math.max(raw, 1), Math.max(totalDays, 1))
 }
 
+function finitePositive(value: unknown, fallback: number): number {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : fallback
+}
+
 export function normalizeGoal(goal: Partial<GoalSettings> | null | undefined): GoalSettings {
-  const start = goal?.startDate || todayKey()
+  const start = goal?.startDate || '2026-09-26'
   const weekly = Number(goal?.weeklyWorkoutTarget)
   return {
     startDate: start,
-    totalDays: goal?.totalDays ?? 84,
-    targetWeightKg: goal?.targetWeightKg ?? null,
-    targetBodyFatPct: goal?.targetBodyFatPct ?? null,
+    totalDays: finitePositive(goal?.totalDays, 196),
+    targetWeightKg: goal?.targetWeightKg ?? 75.5,
+    targetBodyFatPct: goal?.targetBodyFatPct ?? 15,
     weeklyWorkoutTarget:
       Number.isFinite(weekly) && weekly > 0 ? Math.round(weekly) : 5,
     masterStartDate: goal?.masterStartDate || start,
-    masterTotalDays: goal?.masterTotalDays ?? 1200,
+    masterTotalDays: finitePositive(goal?.masterTotalDays, 1100),
     masterTargetWeightKg: goal?.masterTargetWeightKg ?? 80,
     masterTargetBodyFatPct: goal?.masterTargetBodyFatPct ?? 9,
+    masterName: goal?.masterName?.trim() || 'גוף אל יווני',
+    phaseName: goal?.phaseName?.trim() || 'מסה מבוססת הרגלים',
+    phaseNumber: Math.max(1, Math.round(finitePositive(goal?.phaseNumber, 1))),
+    totalPhases: Math.max(1, Math.round(finitePositive(goal?.totalPhases, 6))),
+    startWeightKg: goal?.startWeightKg ?? 70,
   }
 }
 

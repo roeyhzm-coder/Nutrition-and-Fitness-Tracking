@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { searchOpenFoodFacts, type FoodProduct } from '../../lib/openFoodFacts'
+import { parsePositiveDecimal } from '../../lib/numericInput'
 import type { FoodLogEntry } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
+import { NumericInput } from '../ui/NumericInput'
 
 type FoodSearchProps = {
   onAdd: (entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) => void
@@ -48,8 +50,8 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
   }, [query])
 
   function addProduct(product: FoodProduct) {
-    const g = Number(grams[product.code] ?? '100')
-    if (!Number.isFinite(g) || g <= 0) return
+    const g = parsePositiveDecimal(grams[product.code] ?? '100')
+    if (g == null) return
     const factor = g / 100
     onAdd({
       name: product.brand
@@ -104,11 +106,10 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
                     : 'ללא נתונים'}
                 </p>
                 <div className="mt-2 flex items-center gap-2">
-                  <input
-                    inputMode="decimal"
+                  <NumericInput
                     value={grams[p.code] ?? '100'}
-                    onChange={(e) =>
-                      setGrams((prev) => ({ ...prev, [p.code]: e.target.value }))
+                    onChange={(next) =>
+                      setGrams((prev) => ({ ...prev, [p.code]: next }))
                     }
                     className="field w-20 px-2 text-xs"
                     aria-label="גרמים"

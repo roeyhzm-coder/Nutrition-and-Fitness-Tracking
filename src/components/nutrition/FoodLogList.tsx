@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { Pencil, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
+import { acceptNumericInput, parseDecimal } from '../../lib/numericInput'
 import type { FoodLogEntry } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
+import { NumericInput } from '../ui/NumericInput'
 
 type FoodLogListProps = {
   entries: FoodLogEntry[]
@@ -46,8 +48,7 @@ function round1(n: number) {
 }
 
 function toNum(raw: string) {
-  const n = Number(raw.replace(',', '.'))
-  return Number.isFinite(n) && n >= 0 ? n : 0
+  return parseDecimal(raw) ?? 0
 }
 
 function initialForm(entry: FoodLogEntry): EditForm {
@@ -121,10 +122,9 @@ function EditFoodModal({
         </label>
         <label className="block text-xs text-muted">
           {gramBased ? 'כמות (גרם)' : 'מספר מנות'}
-          <input
-            inputMode="decimal"
+          <NumericInput
             value={form.quantity}
-            onChange={(e) => changeQuantity(e.target.value)}
+            onChange={(next) => changeQuantity(next)}
             className={inputClass}
           />
           <span className="mt-1 block text-[10px]">
@@ -135,12 +135,14 @@ function EditFoodModal({
           {MACRO_FIELDS.map(([key, label]) => (
             <label key={key} className="block text-xs text-muted">
               {label}
-              <input
-                inputMode="decimal"
+              <NumericInput
+                decimals={key === 'calories' ? 0 : 2}
                 value={form[key]}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, [key]: e.target.value }))
-                }
+                onChange={(next) => {
+                  if (acceptNumericInput(next, key === 'calories' ? 0 : 2) != null) {
+                    setForm((p) => ({ ...p, [key]: next }))
+                  }
+                }}
                 className={inputClass}
               />
             </label>

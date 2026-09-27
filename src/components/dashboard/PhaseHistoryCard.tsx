@@ -28,7 +28,7 @@ export function PhaseHistoryCard() {
             >
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-text">
-                  {PHASE_LABELS[h.phase]} · {h.actualDays} ימים
+                  {h.name?.trim() || PHASE_LABELS[h.phase]} · {h.actualDays} ימים
                   <span className="font-normal text-muted">
                     {' '}
                     (מתוכנן {h.plannedDays})

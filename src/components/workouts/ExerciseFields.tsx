@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { CirclePlay, Dumbbell, Timer } from 'lucide-react'
 import type { Exercise } from '../../lib/types'
 import type { ExerciseForm } from '../../lib/exerciseForm'
+import { NumericInput } from '../ui/NumericInput'
 
 const inputClass = 'field'
 
@@ -23,7 +24,12 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
       <div className="grid grid-cols-2 gap-2">
         <label className="block text-xs text-muted">
           סטים
-          <input {...bind('sets')} inputMode="numeric" className={`mt-1 ${inputClass}`} />
+          <NumericInput
+            decimals={0}
+            value={form.sets}
+            onChange={(sets) => setForm((p) => ({ ...p, sets }))}
+            className={`mt-1 ${inputClass}`}
+          />
         </label>
         <label className="block text-xs text-muted">
           חזרות

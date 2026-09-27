@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Scale } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
+import { formatKg, parsePositiveDecimal } from '../../lib/numericInput'
 import { todayKey } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
+import { NumericInput } from '../ui/NumericInput'
 
 export function DailyWeightCard() {
   const { weightLogs, addWeight } = useAppData()
@@ -18,7 +20,7 @@ export function DailyWeightCard() {
       action={
         <span className="flex items-center gap-1 text-xs text-muted">
           <Scale className="size-3.5 text-blue-600" strokeWidth={1.75} />
-          {latest ? `${latest.weightKg} ק״ג` : 'אין מדידה'}
+          {latest ? `${formatKg(latest.weightKg)} ק״ג` : 'אין מדידה'}
         </span>
       }
     >
@@ -26,8 +28,8 @@ export function DailyWeightCard() {
         className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]"
         onSubmit={(e) => {
           e.preventDefault()
-          const w = Number(weight.replace(',', '.'))
-          if (!Number.isFinite(w) || w <= 0) return
+          const w = parsePositiveDecimal(weight)
+          if (w == null) return
           addWeight({ weightKg: w, loggedAt: date })
           setWeight('')
           setSaved(true)
@@ -46,12 +48,10 @@ export function DailyWeightCard() {
         </label>
         <label className="block text-xs text-muted">
           משקל (ק״ג)
-          <input
-            inputMode="decimal"
+          <NumericInput
             value={weight}
-            onChange={(e) => setWeight(e.target.value)}
-            placeholder={latest ? String(latest.weightKg) : '75.0'}
-            className="mt-1 field"
+            onChange={setWeight}
+            placeholder={latest ? formatKg(latest.weightKg) : '70.00'}
             required
           />
         </label>

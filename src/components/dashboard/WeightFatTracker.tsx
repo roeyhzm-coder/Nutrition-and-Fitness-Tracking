@@ -1,3 +1,4 @@
+import { formatKg } from '../../lib/numericInput'
 import type { WeightEntry } from '../../lib/types'
 import { Card } from '../ui/Card'
 
@@ -32,7 +33,7 @@ export function WeightFatTracker({ entries }: WeightTrackerProps) {
                     {new Date(e.loggedAt).toLocaleDateString('he-IL')}
                   </td>
                   <td className="px-2 py-3 font-display font-bold tabular-nums text-text">
-                    {e.weightKg} ק״ג
+                    {formatKg(e.weightKg)} ק״ג
                   </td>
                   <td className="px-2 py-2 text-muted">{e.note ?? '—'}</td>
                 </tr>

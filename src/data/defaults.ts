@@ -4,17 +4,22 @@ import type {
   Phase,
   PhaseMacroPresets,
   SavedMeal,
+  UserProfile,
+  WeightEntry,
   WorkoutDay,
   WorkoutProgram,
 } from '../lib/types'
-import { normalizeWorkoutDay, todayKey, uid } from '../lib/types'
+import { normalizeWorkoutDay, todayKey, toLoggedAt, uid } from '../lib/types'
 import { DEFAULT_WORKOUT_DAYS, createOfficialPrograms } from './workouts'
 
+export const PLAN_SEED_VERSION = 1
+export const PLAN_SEED_KEY = 'tn.targetsSeedVersion'
+
 export const DEFAULT_MACRO_BULK: MacroTargets = {
-  calories: 2800,
-  protein: 180,
-  carbs: 300,
-  fats: 80,
+  calories: 2600,
+  protein: 155,
+  carbs: 350,
+  fats: 65,
 }
 
 export const DEFAULT_MACRO_CUT: MacroTargets = {
@@ -48,15 +53,65 @@ export function normalizeMacroPresets(
 export const DEFAULT_PHASE: Phase = 'bulk'
 
 export const DEFAULT_GOAL: GoalSettings = {
-  startDate: todayKey(),
-  totalDays: 84,
-  targetWeightKg: null,
-  targetBodyFatPct: null,
+  startDate: '2026-09-26',
+  totalDays: 196,
+  targetWeightKg: 75.5,
+  targetBodyFatPct: 15,
   weeklyWorkoutTarget: 5,
-  masterStartDate: todayKey(),
-  masterTotalDays: 1200,
+  masterStartDate: '2026-09-26',
+  masterTotalDays: 1100,
   masterTargetWeightKg: 80,
   masterTargetBodyFatPct: 9,
+  masterName: 'גוף אל יווני',
+  phaseName: 'מסה מבוססת הרגלים',
+  phaseNumber: 1,
+  totalPhases: 6,
+  startWeightKg: 70,
+}
+
+export const DEFAULT_PROFILE: UserProfile = {
+  age: 26,
+  heightCm: 182,
+  sex: 'male',
+  startWeightKg: 70,
+  estimatedBodyFatPct: 14,
+  activityLevel: 'sedentary',
+  avgSleepHours: 8,
+  workStyle: null,
+  avoidFoods: '',
+  allergies: '',
+  supplements: '',
+  injuries: '',
+}
+
+export const SEED_WEIGHT_ENTRY: WeightEntry = {
+  id: 'seed-weight-phase1-2026-09-26',
+  weightKg: 70,
+  bodyFatPct: 14,
+  loggedAt: '2026-09-26T12:00:00',
+  note: 'התחלת שלב 1',
+}
+
+export function applySeedWeightLogs(prev: WeightEntry[]): WeightEntry[] {
+  const withoutSeed = prev.filter(
+    (w) =>
+      w.id !== SEED_WEIGHT_ENTRY.id && w.id !== 'seed-weight-current',
+  )
+  const next = [...withoutSeed, SEED_WEIGHT_ENTRY].sort((a, b) =>
+    a.loggedAt.localeCompare(b.loggedAt),
+  )
+  const latest = next.at(-1)
+  if (latest && latest.weightKg === 70) return next
+  return [
+    ...next,
+    {
+      id: 'seed-weight-current',
+      weightKg: 70,
+      bodyFatPct: 14,
+      loggedAt: toLoggedAt(todayKey()),
+      note: 'משקל עדכני',
+    },
+  ]
 }
 
 /** @deprecated */

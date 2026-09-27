@@ -49,8 +49,18 @@ export function summarizePhase(input: {
     .filter((w) => w.loggedAt.slice(0, 10) < startDate)
     .at(-1)
   const startWeightKg =
-    weightsInRange[0]?.weightKg ?? lastBefore?.weightKg ?? null
+    weightsInRange[0]?.weightKg ??
+    lastBefore?.weightKg ??
+    input.goal.startWeightKg ??
+    null
   const endWeightKg = weightsInRange.at(-1)?.weightKg ?? null
+  const fatsInRange = weightsInRange.filter((w) => w.bodyFatPct != null)
+  const lastFatBefore = weights
+    .filter((w) => w.loggedAt.slice(0, 10) < startDate && w.bodyFatPct != null)
+    .at(-1)
+  const startBodyFatPct =
+    fatsInRange[0]?.bodyFatPct ?? lastFatBefore?.bodyFatPct ?? null
+  const endBodyFatPct = fatsInRange.at(-1)?.bodyFatPct ?? null
 
   const caloriesByDay = new Map<string, number>()
   for (const f of input.foodLogs) {
@@ -69,11 +79,15 @@ export function summarizePhase(input: {
     endDate,
     plannedDays: input.goal.totalDays,
     actualDays: daysBetween(startDate, endDate),
+    name: input.goal.phaseName,
     startWeightKg,
     endWeightKg,
+    startBodyFatPct,
+    endBodyFatPct,
     avgCalories,
     targetWeightKg: input.goal.targetWeightKg,
     macroTargets: input.macroTargets,
+    result: 'completed',
   }
 }
 
@@ -124,6 +138,19 @@ function fromRow(row: PhaseHistoryRow): PhaseHistoryEntry {
     actualDays: Number(row.actual_days),
     startWeightKg: num(row.start_weight_kg),
     endWeightKg: num(row.end_weight_kg),
+    startBodyFatPct: num(
+      (row as PhaseHistoryRow & { start_body_fat_pct?: number | null })
+        .start_body_fat_pct ?? null,
+    ),
+    endBodyFatPct: num(
+      (row as PhaseHistoryRow & { end_body_fat_pct?: number | null })
+        .end_body_fat_pct ?? null,
+    ),
+    name:
+      (row as PhaseHistoryRow & { name?: string | null }).name ?? undefined,
+    result:
+      (row as PhaseHistoryRow & { result?: PhaseHistoryEntry['result'] })
+        .result ?? 'completed',
     avgCalories: num(row.avg_calories),
     targetWeightKg: num(row.target_weight_kg),
     macroTargets: row.macro_targets,

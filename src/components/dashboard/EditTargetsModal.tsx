@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { displayDecimal, parseDecimal, parseInteger } from '../../lib/numericInput'
 import type { MacroTargets } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
+import { NumericInput } from '../ui/NumericInput'
 
 type EditTargetsModalProps = {
   open: boolean
@@ -11,6 +13,17 @@ type EditTargetsModalProps = {
   title?: string
 }
 
+type Form = Record<keyof MacroTargets, string>
+
+function toForm(targets: MacroTargets): Form {
+  return {
+    calories: displayDecimal(targets.calories),
+    protein: displayDecimal(targets.protein),
+    carbs: displayDecimal(targets.carbs),
+    fats: displayDecimal(targets.fats),
+  }
+}
+
 export function EditTargetsModal({
   open,
   targets,
@@ -18,26 +31,20 @@ export function EditTargetsModal({
   onSave,
   title = 'עריכת יעדים יומיים',
 }: EditTargetsModalProps) {
-  const [form, setForm] = useState(targets)
+  const [form, setForm] = useState<Form>(() => toForm(targets))
 
   useEffect(() => {
-    if (open) setForm(targets)
+    if (open) setForm(toForm(targets))
   }, [open, targets])
 
-  function field(key: keyof MacroTargets, label: string) {
+  function field(key: keyof MacroTargets, label: string, decimals = 0) {
     return (
       <label className="block text-xs text-muted">
         {label}
-        <input
-          inputMode="numeric"
+        <NumericInput
+          decimals={decimals}
           value={form[key]}
-          onChange={(e) =>
-            setForm((prev) => ({
-              ...prev,
-              [key]: Number(e.target.value) || 0,
-            }))
-          }
-          className="mt-1 field"
+          onChange={(next) => setForm((prev) => ({ ...prev, [key]: next }))}
         />
       </label>
     )
@@ -49,15 +56,20 @@ export function EditTargetsModal({
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault()
-          onSave(form)
+          onSave({
+            calories: parseInteger(form.calories) ?? 0,
+            protein: parseDecimal(form.protein) ?? 0,
+            carbs: parseDecimal(form.carbs) ?? 0,
+            fats: parseDecimal(form.fats) ?? 0,
+          })
           onClose()
         }}
       >
         <div className="grid grid-cols-2 gap-2">
-          {field('calories', 'קלוריות')}
-          {field('protein', 'חלבון (ג׳)')}
-          {field('carbs', 'פחמימות (ג׳)')}
-          {field('fats', 'שומנים (ג׳)')}
+          {field('calories', 'קלוריות', 0)}
+          {field('protein', 'חלבון (ג׳)', 2)}
+          {field('carbs', 'פחמימות (ג׳)', 2)}
+          {field('fats', 'שומנים (ג׳)', 2)}
         </div>
         <Button type="submit" className="w-full" variant="accent">
           שמור יעדים

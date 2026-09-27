@@ -11,10 +11,14 @@ import {
 import {
   cloneProgram,
   createDefaultPrograms,
+  applySeedWeightLogs,
   DEFAULT_GOAL,
   DEFAULT_PHASE,
   DEFAULT_PHASE_MACROS,
+  DEFAULT_PROFILE,
   DEFAULT_SAVED_MEALS,
+  PLAN_SEED_KEY,
+  PLAN_SEED_VERSION,
   normalizeMacroPresets,
 } from '../data/defaults'
 import {
@@ -65,7 +69,6 @@ import type {
 } from '../lib/types'
 import {
   dayAllExercises,
-  EMPTY_PROFILE,
   normalizeGoal,
   normalizeProfile,
   normalizeWorkoutDay,
@@ -198,9 +201,11 @@ type AppDataContextValue = {
 
 export type NewPhaseInput = {
   phase: Phase
+  phaseName?: string
   totalDays: number
   targetWeightKg: number | null
   targetBodyFatPct: number | null
+  startWeightKg?: number | null
   macros: MacroTargets
 }
 
@@ -257,8 +262,34 @@ function migrateStoredPlan() {
   localStorage.removeItem('tn.librarySeedVersion.v1')
 }
 
+function needsPlanSeed() {
+  return Number(localStorage.getItem(PLAN_SEED_KEY) ?? 0) < PLAN_SEED_VERSION
+}
+
+function markPlanSeeded() {
+  localStorage.setItem(PLAN_SEED_KEY, String(PLAN_SEED_VERSION))
+}
+
+/** Writes Phase 1 / master-plan targets before the first React read. */
+function migratePlanTargets() {
+  if (!needsPlanSeed()) return
+  localStorage.setItem('tn.goal.v2', JSON.stringify(DEFAULT_GOAL))
+  localStorage.setItem('tn.phase', JSON.stringify(DEFAULT_PHASE))
+  localStorage.setItem(
+    'tn.macroPresets.v1',
+    JSON.stringify(DEFAULT_PHASE_MACROS),
+  )
+  localStorage.setItem('tn.profile.v1', JSON.stringify(DEFAULT_PROFILE))
+  const weights = readStored<WeightEntry[]>('tn.weightLogs', [])
+  localStorage.setItem(
+    'tn.weightLogs',
+    JSON.stringify(applySeedWeightLogs(weights)),
+  )
+}
+
 export function AppDataProvider({ children }: { children: ReactNode }) {
   useState(migrateStoredPlan)
+  useState(migratePlanTargets)
   const defaults = useMemo(() => createDefaultPrograms(), [])
   const [phase, setPhaseState] = useLocalStorage<Phase>(
     'tn.phase',
@@ -359,7 +390,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   )
   const [profileRaw, setProfileRaw] = useLocalStorage<UserProfile>(
     'tn.profile.v1',
-    EMPTY_PROFILE,
+    DEFAULT_PROFILE,
   )
   const profile = useMemo(() => normalizeProfile(profileRaw), [profileRaw])
   const setProfile = useCallback(
@@ -811,6 +842,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     async function hydrate() {
       const remote = await pullAppState()
       if (cancelled || !remote) {
+        if (needsPlanSeed()) {
+          setPhaseState(DEFAULT_PHASE)
+          setGoal(DEFAULT_GOAL)
+          setMacroPresets(DEFAULT_PHASE_MACROS)
+          setProfileRaw(DEFAULT_PROFILE)
+          setWeightLogs((prev) => applySeedWeightLogs(prev))
+          markPlanSeeded()
+        }
         hydratedRef.current = true
         return
       }
@@ -852,6 +891,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (remote.lifestyleLogs && Object.keys(remote.lifestyleLogs).length) {
         setLifestyleLogs(remote.lifestyleLogs)
       }
+      if (needsPlanSeed()) {
+        skipNextPush.current = false
+        setPhaseState(DEFAULT_PHASE)
+        setGoal(DEFAULT_GOAL)
+        setMacroPresets(DEFAULT_PHASE_MACROS)
+        setProfileRaw(DEFAULT_PROFILE)
+        setWeightLogs((prev) => applySeedWeightLogs(prev))
+        markPlanSeeded()
+      }
       setStateSyncStatus('synced')
       hydratedRef.current = true
     }
@@ -873,6 +921,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setProfileRaw,
     setActivityLogs,
     setLifestyleLogs,
+    setWeightLogs,
   ])
 
   useEffect(() => {
@@ -1133,12 +1182,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       void pushPhaseHistory([entry])
       setMacroPresets((prev) => ({ ...prev, [next.phase]: next.macros }))
       setPhaseState(next.phase)
+      const latestWeight =
+        next.startWeightKg ??
+        [...weightLogs].sort((a, b) => a.loggedAt.localeCompare(b.loggedAt)).at(-1)
+          ?.weightKg ??
+        goal.startWeightKg
       setGoal({
         ...goal,
         startDate: todayKey(),
         totalDays: Math.max(1, Math.round(next.totalDays) || 1),
         targetWeightKg: next.targetWeightKg,
         targetBodyFatPct: next.targetBodyFatPct,
+        phaseName: next.phaseName?.trim() || goal.phaseName,
+        phaseNumber: (goal.phaseNumber || 1) + 1,
+        startWeightKg: latestWeight ?? null,
       })
       return entry
     },

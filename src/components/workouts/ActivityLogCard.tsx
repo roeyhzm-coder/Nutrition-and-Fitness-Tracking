@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
+import { parseInteger } from '../../lib/numericInput'
 import type { Intensity } from '../../lib/types'
 import { INTENSITY_LABELS } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { IconButton } from '../ui/IconButton'
+import { NumericInput } from '../ui/NumericInput'
 
 const SUGGESTED_SPORTS = [
   'חדר כושר',
@@ -72,7 +74,7 @@ export function ActivityLogCard() {
           ).toISOString()
           addActivityLog({
             sport,
-            durationMin: Math.max(0, Number(duration) || 0),
+            durationMin: Math.max(0, parseInteger(duration) ?? 0),
             intensity: intensity || null,
             notes: notes.trim() || undefined,
             loggedAt,
@@ -113,10 +115,10 @@ export function ActivityLogCard() {
           ))}
         </div>
         <div className="grid grid-cols-3 gap-2">
-          <input
-            inputMode="numeric"
+          <NumericInput
+            decimals={0}
             value={duration}
-            onChange={(e) => setDuration(e.target.value)}
+            onChange={setDuration}
             placeholder="דקות"
             className={inputClass}
           />

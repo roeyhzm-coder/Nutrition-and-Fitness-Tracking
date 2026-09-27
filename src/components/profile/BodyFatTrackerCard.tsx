@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useAppData } from '../../context/AppDataContext'
+import { formatKg, formatPct, parsePositiveDecimal } from '../../lib/numericInput'
 import { todayKey } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
+import { NumericInput } from '../ui/NumericInput'
 
 export function BodyFatTrackerCard() {
   const { weightLogs, addBodyFat } = useAppData()
@@ -20,8 +22,8 @@ export function BodyFatTrackerCard() {
         className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]"
         onSubmit={(e) => {
           e.preventDefault()
-          const value = Number(fat.replace(',', '.'))
-          if (!Number.isFinite(value) || value <= 0 || value >= 100) return
+          const value = parsePositiveDecimal(fat)
+          if (value == null || value >= 100) return
           addBodyFat({ bodyFatPct: value, loggedAt: date })
           setFat('')
           setSaved(true)
@@ -40,12 +42,10 @@ export function BodyFatTrackerCard() {
         </label>
         <label className="block text-xs text-muted">
           אחוז שומן
-          <input
-            inputMode="decimal"
+          <NumericInput
             value={fat}
-            onChange={(e) => setFat(e.target.value)}
-            placeholder="%"
-            className="mt-1 field"
+            onChange={setFat}
+            placeholder="14.00"
             required
           />
         </label>
@@ -75,10 +75,10 @@ export function BodyFatTrackerCard() {
                     {new Date(e.loggedAt).toLocaleDateString('he-IL')}
                   </td>
                   <td className="px-2 py-3 font-display font-bold tabular-nums text-text">
-                    {e.bodyFatPct}%
+                    {formatPct(e.bodyFatPct)}%
                   </td>
                   <td className="px-2 py-2 text-muted">
-                    {e.weightKg > 0 ? `${e.weightKg} ק״ג` : '—'}
+                    {e.weightKg > 0 ? `${formatKg(e.weightKg)} ק״ג` : '—'}
                   </td>
                 </tr>
               ))}

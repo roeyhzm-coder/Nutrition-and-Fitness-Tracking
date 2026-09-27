@@ -1,7 +1,9 @@
 import type { Exercise } from '../../lib/types'
 import type { SetLog } from '../../lib/types'
 import { useState } from 'react'
+import { parseDecimal, parseInteger } from '../../lib/numericInput'
 import { Button } from '../ui/Button'
+import { NumericInput } from '../ui/NumericInput'
 
 type SetLoggerProps = {
   exercise: Exercise
@@ -18,10 +20,10 @@ export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
     <form
       onSubmit={(e) => {
         e.preventDefault()
-        const w = Number(weightKg)
-        const r = Number(reps)
-        const pe = Number(rpe)
-        if (!Number.isFinite(w) || !Number.isFinite(r) || r <= 0) return
+        const w = parseDecimal(weightKg)
+        const r = parseInteger(reps)
+        const pe = parseDecimal(rpe) ?? 7
+        if (w == null || r == null || r <= 0) return
         onLog({
           exerciseId: exercise.id,
           exerciseName: exercise.name,
@@ -40,34 +42,28 @@ export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
       <div className="grid grid-cols-3 gap-2">
         <label className="block text-xs text-muted">
           משקל (ק״ג)
-          <input
-            inputMode="decimal"
+          <NumericInput
             value={weightKg}
-            onChange={(e) => setWeightKg(e.target.value)}
-            className="mt-1 field"
+            onChange={setWeightKg}
             required
           />
         </label>
         <label className="block text-xs text-muted">
           חזרות
-          <input
-            inputMode="numeric"
+          <NumericInput
+            decimals={0}
             value={reps}
-            onChange={(e) => setReps(e.target.value)}
-            className="mt-1 field"
+            onChange={setReps}
             required
           />
         </label>
         <label className="block text-xs text-muted">
           RPE
-          <input
-            inputMode="decimal"
+          <NumericInput
+            value={rpe}
+            onChange={setRpe}
             min={1}
             max={10}
-            step={0.5}
-            value={rpe}
-            onChange={(e) => setRpe(e.target.value)}
-            className="mt-1 field"
             required
           />
         </label>
