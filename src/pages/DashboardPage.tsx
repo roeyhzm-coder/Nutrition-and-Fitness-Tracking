@@ -21,16 +21,12 @@ export function DashboardPage() {
   const {
     foodLogs,
     weightLogs,
-    setLogs,
     macroTargets,
     goal,
     setGoal,
     phase,
     setPhase,
     stateSyncStatus,
-    consistencyDayMarks,
-    toggleConsistencyDay,
-    setWeekConsistencyCount,
   } = useAppData()
 
   const [finishOpen, setFinishOpen] = useState(false)
@@ -39,7 +35,6 @@ export function DashboardPage() {
   const todayFood = foodLogs.filter((f) => f.loggedAt.startsWith(today))
   const calories = todayFood.reduce((s, f) => s + f.calories, 0)
   const latest = weightLogs.at(-1)
-  const weeklyTarget = goal.weeklyWorkoutTarget || 5
 
   return (
     <>
@@ -62,14 +57,7 @@ export function DashboardPage() {
         <TodayWorkoutCard />
         <PhaseHistoryCard />
 
-        <WeeklyConsistencyTracker
-          setLogs={setLogs}
-          phaseStartDate={goal.startDate}
-          dayMarks={consistencyDayMarks}
-          onToggleDay={toggleConsistencyDay}
-          onSetWeekCount={setWeekConsistencyCount}
-          targetPerWeek={weeklyTarget}
-        />
+        <WeeklyConsistencyTracker />
 
         <Card title={`יעדי קלוריות היום · ${PHASE_LABELS[phase]}`}>
           <div className="mb-3 flex items-end justify-between gap-3">

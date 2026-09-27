@@ -4,10 +4,11 @@ import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import { dayAllExercises, localDateKey, weekdayNumber, WEEKDAYS } from '../../lib/types'
 import { Card } from '../ui/Card'
 import { dayPlanLabel } from '../../lib/weekPlan'
+import { parseDayMark } from '../../lib/weeklyConsistency'
 import { StartWorkoutButton } from '../workouts/WeeklyPlanParts'
 
 export function TodayWorkoutCard() {
-  const { activeProgram } = useAppData()
+  const { activeProgram, consistencyDayMarks } = useAppData()
   const { workoutLogs } = useWorkoutSession()
   const todayNumber = weekdayNumber()
   const day = activeProgram?.days.find((d) => d.dayNumber === todayNumber)
@@ -16,6 +17,14 @@ export function TodayWorkoutCard() {
   const doneToday = workoutLogs.filter(
     (l) => localDateKey(new Date(l.completedAt)) === today,
   )
+  const todayMark = parseDayMark(consistencyDayMarks[today])
+  const completedFromLogs = doneToday.map((l) => l.workoutName).filter(Boolean)
+  const isDone =
+    todayMark != null ? todayMark.done : completedFromLogs.length > 0
+  const completedName =
+    (todayMark?.done && todayMark.workoutName) ||
+    completedFromLogs.join(', ') ||
+    (day && !day.isRest ? dayPlanLabel(day) : '')
 
   return (
     <Card
@@ -26,7 +35,11 @@ export function TodayWorkoutCard() {
         </Link>
       }
     >
-      {!day || (!day.isRest && exercises.length === 0) ? (
+      {isDone ? (
+        <p className="rounded-2xl bg-blue-50 px-4 py-4 text-center text-sm font-semibold text-blue-700">
+          ✓ בוצע: {completedName || 'אימון'}
+        </p>
+      ) : !day || (!day.isRest && exercises.length === 0) ? (
         <p className="text-sm leading-relaxed text-muted">
           לא נקבע אימון להיום ב{activeProgram?.name ?? 'תוכנית'}.
         </p>
@@ -45,11 +58,6 @@ export function TodayWorkoutCard() {
           <StartWorkoutButton day={day} className="w-full" />
         </div>
       )}
-      {doneToday.length ? (
-        <p className="mt-4 rounded-2xl bg-blue-50 px-3 py-2 text-xs font-medium text-blue-600">
-          ✓ בוצע היום: {doneToday.map((l) => l.workoutName).join(', ')}
-        </p>
-      ) : null}
     </Card>
   )
 }

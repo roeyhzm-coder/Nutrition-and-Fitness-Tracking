@@ -273,6 +273,13 @@ export function localDateKey(d = new Date()) {
   return `${y}-${m}-${day}`
 }
 
+export function parseLocalDateKey(date: string) {
+  const [y, m, d] = date.split('-').map(Number)
+  const parsed = new Date(y || 1970, (m || 1) - 1, d || 1)
+  parsed.setHours(0, 0, 0, 0)
+  return parsed
+}
+
 export type LoggedSet = {
   weightKg: number | null
   reps: number | null

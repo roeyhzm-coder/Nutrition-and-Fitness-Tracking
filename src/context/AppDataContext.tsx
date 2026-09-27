@@ -79,6 +79,7 @@ import {
 } from '../lib/types'
 import {
   marksForWeekCount,
+  type ConsistencyDayAssignment,
   type ConsistencyDayMarks,
 } from '../lib/weeklyConsistency'
 
@@ -99,6 +100,7 @@ type AppDataContextValue = {
   setLogs: SetLog[]
   consistencyDayMarks: ConsistencyDayMarks
   toggleConsistencyDay: (date: string) => void
+  setConsistencyDayMark: (date: string, mark: ConsistencyDayAssignment) => void
   setWeekConsistencyCount: (weekStart: Date, count: number) => void
   weightLogs: WeightEntry[]
   foodLogs: FoodLogEntry[]
@@ -756,10 +758,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const current = Object.prototype.hasOwnProperty.call(prev, date)
           ? prev[date]
           : logHas
-        return { ...prev, [date]: !current }
+        const done =
+          typeof current === 'boolean' ? current : current?.done === true
+        return { ...prev, [date]: { done: !done } }
       })
     },
     [setConsistencyDayMarks, setLogs],
+  )
+
+  const setConsistencyDayMark = useCallback(
+    (date: string, mark: ConsistencyDayAssignment) => {
+      setConsistencyDayMarks((prev) => ({ ...prev, [date]: mark }))
+    },
+    [setConsistencyDayMarks],
   )
 
   const setWeekConsistencyCount = useCallback(
@@ -1268,6 +1279,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setLogs,
       consistencyDayMarks,
       toggleConsistencyDay,
+      setConsistencyDayMark,
       setWeekConsistencyCount,
       weightLogs,
       foodLogs,
@@ -1346,6 +1358,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setLogs,
       consistencyDayMarks,
       toggleConsistencyDay,
+      setConsistencyDayMark,
       setWeekConsistencyCount,
       weightLogs,
       foodLogs,

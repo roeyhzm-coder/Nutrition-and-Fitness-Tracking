@@ -14,7 +14,7 @@ import type {
   WorkoutDay,
   WorkoutLog,
 } from '../lib/types'
-import { dayAllExercises, uid } from '../lib/types'
+import { dayAllExercises, localDateKey, uid } from '../lib/types'
 import { useAppData } from './AppDataContext'
 
 type WorkoutSessionValue = {
@@ -66,7 +66,7 @@ function updateExercise(
 }
 
 export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
-  const { activeProgram, addSetLog } = useAppData()
+  const { activeProgram, addSetLog, setConsistencyDayMark } = useAppData()
   const [activeWorkout, setActiveWorkout] = useLocalStorage<ActiveWorkout | null>(
     'tn.activeWorkout.v1',
     null,
@@ -199,10 +199,21 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
         })
       }
     }
+    setConsistencyDayMark(localDateKey(new Date(completedAt)), {
+      done: true,
+      workoutId: activeWorkout.dayId,
+      workoutName: activeWorkout.workoutName,
+    })
     setActiveWorkout(null)
     setTrackerOpen(false)
     return log
-  }, [activeWorkout, addSetLog, setActiveWorkout, setWorkoutLogs])
+  }, [
+    activeWorkout,
+    addSetLog,
+    setActiveWorkout,
+    setConsistencyDayMark,
+    setWorkoutLogs,
+  ])
 
   const cancelWorkout = useCallback(() => {
     setActiveWorkout(null)

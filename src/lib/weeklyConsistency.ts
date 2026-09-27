@@ -1,10 +1,21 @@
 import type { SetLog } from './types'
 
+export type ConsistencyDayAssignment = {
+  done: boolean
+  workoutId?: string
+  workoutName?: string
+}
+
+/** Manual overrides: date (YYYY-MM-DD) → completed + optional workout type */
+export type ConsistencyDayMark = boolean | ConsistencyDayAssignment
+
 export type DaySlot = {
   date: string
   weekday: string
   done: boolean
   fromLog: boolean
+  workoutId?: string
+  workoutName?: string
 }
 
 export type WeekConsistency = {
@@ -18,8 +29,22 @@ export type WeekConsistency = {
   daySlots: DaySlot[]
 }
 
-/** Manual overrides: date (YYYY-MM-DD) → workout completed that day */
-export type ConsistencyDayMarks = Record<string, boolean>
+export type ConsistencyDayMarks = Record<string, ConsistencyDayMark>
+
+export function parseDayMark(
+  mark: ConsistencyDayMark | undefined,
+): ConsistencyDayAssignment | undefined {
+  if (mark === undefined) return undefined
+  if (typeof mark === 'boolean') return { done: mark }
+  if (mark && typeof mark === 'object') {
+    return {
+      done: mark.done === true,
+      workoutId: mark.workoutId,
+      workoutName: mark.workoutName,
+    }
+  }
+  return undefined
+}
 
 const WEEKDAY_HE = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
 
@@ -60,10 +85,21 @@ function isDayDone(
   date: string,
   logDates: Set<string>,
   marks: ConsistencyDayMarks,
-): { done: boolean; fromLog: boolean } {
+): {
+  done: boolean
+  fromLog: boolean
+  workoutId?: string
+  workoutName?: string
+} {
   const fromLog = logDates.has(date)
-  if (Object.prototype.hasOwnProperty.call(marks, date)) {
-    return { done: marks[date] === true, fromLog }
+  const parsed = parseDayMark(marks[date])
+  if (parsed) {
+    return {
+      done: parsed.done,
+      fromLog,
+      workoutId: parsed.workoutId,
+      workoutName: parsed.workoutName,
+    }
   }
   return { done: fromLog, fromLog }
 }
@@ -111,12 +147,18 @@ export function buildRelativeWeeklyConsistency(
       const day = new Date(start)
       day.setDate(start.getDate() + d)
       const date = toKey(day)
-      const { done, fromLog } = isDayDone(date, logDates, marks)
+      const { done, fromLog, workoutId, workoutName } = isDayDone(
+        date,
+        logDates,
+        marks,
+      )
       slots.push({
         date,
         weekday: WEEKDAY_HE[day.getDay()],
         done,
         fromLog,
+        workoutId,
+        workoutName,
       })
     }
 
@@ -147,7 +189,13 @@ export function marksForWeekCount(
   const dates = weekDates(weekStart)
   const n = Math.max(0, Math.min(7, Math.round(count)))
   dates.forEach((date, i) => {
-    next[date] = i < n
+    const shouldDone = i < n
+    const prevMark = parseDayMark(prev[date])
+    next[date] = {
+      done: shouldDone,
+      workoutId: shouldDone ? prevMark?.workoutId : undefined,
+      workoutName: shouldDone ? prevMark?.workoutName : undefined,
+    }
   })
   return next
 }

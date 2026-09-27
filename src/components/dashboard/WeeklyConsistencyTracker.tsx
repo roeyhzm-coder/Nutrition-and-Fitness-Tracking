@@ -1,44 +1,39 @@
 import { useState, type MouseEvent } from 'react'
+import { useAppData } from '../../context/AppDataContext'
+import {
+  consistencyWorkoutOptions,
+  scheduledWorkoutForDate,
+  type ConsistencyWorkoutOption,
+} from '../../lib/weekPlan'
 import {
   buildRelativeWeeklyConsistency,
+  parseDayMark,
   weekTone,
   type ConsistencyDayMarks,
+  type DaySlot,
   type WeekConsistency,
 } from '../../lib/weeklyConsistency'
-import type { SetLog } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
 
-type WeeklyConsistencyTrackerProps = {
-  setLogs: SetLog[]
-  phaseStartDate: string
-  dayMarks: ConsistencyDayMarks
-  onToggleDay: (date: string) => void
-  onSetWeekCount: (weekStart: Date, count: number) => void
-  targetPerWeek?: number
-}
-
-const toneClass = {
-  blue: 'border-cyan-200 bg-cyan-50',
-  green: 'border-blue-200 bg-blue-50',
-  amber: 'border-orange-200 bg-orange-50',
-}
-
-const badgeClass = {
-  blue: 'bg-cyan-50 text-cyan-700',
-  green: 'bg-blue-50 text-blue-700',
-  amber: 'bg-orange-50 text-orange-700',
+function slotLabel(slot: DaySlot, fallbackName?: string) {
+  const name = slot.workoutName || fallbackName
+  if (slot.done && name) return `${slot.weekday} · ${name}`
+  if (slot.done) return `${slot.weekday} · אימון הושלם`
+  return `${slot.weekday} · ${slot.date}`
 }
 
 function WeekRow({
   week,
-  onToggleDay,
+  scheduledName,
+  onSelectDay,
   onEditCount,
 }: {
   week: WeekConsistency
-  onToggleDay: (date: string) => void
+  scheduledName: (date: string) => string | undefined
+  onSelectDay: (slot: DaySlot) => void
   onEditCount: (week: WeekConsistency) => void
 }) {
   const tone = weekTone(week.completed, week.target)
@@ -57,7 +52,15 @@ function WeekRow({
   }
 
   return (
-    <li className={`rounded-2xl border px-4 py-4 ${toneClass[tone]}`}>
+    <li
+      className={`rounded-2xl border px-4 py-4 ${
+        tone === 'blue'
+          ? 'border-cyan-200 bg-cyan-50'
+          : tone === 'green'
+            ? 'border-blue-200 bg-blue-50'
+            : 'border-orange-200 bg-orange-50'
+      }`}
+    >
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
@@ -72,7 +75,14 @@ function WeekRow({
         <button
           type="button"
           onClick={openCount}
-          className={`min-h-11 min-w-11 rounded-2xl px-3 text-sm font-extrabold tabular-nums transition hover:brightness-110 ${badgeClass[tone]}`}
+          className={[
+            'min-h-11 min-w-11 rounded-2xl px-3 text-sm font-extrabold tabular-nums transition hover:brightness-110',
+            tone === 'blue'
+              ? 'bg-cyan-50 text-cyan-700'
+              : tone === 'green'
+                ? 'bg-blue-50 text-blue-700'
+                : 'bg-orange-50 text-orange-700',
+          ].join(' ')}
           aria-label={`עריכת ספירה ${week.completed} מתוך ${week.target}`}
         >
           {week.completed}/{week.target}
@@ -80,52 +90,76 @@ function WeekRow({
       </div>
 
       <div className="mt-3 flex justify-between gap-1">
-        {week.daySlots.map((slot) => (
-          <button
-            key={slot.date}
-            type="button"
-            title={slot.date}
-            onClick={() => onToggleDay(slot.date)}
-            className={[
-              'flex size-11 flex-col items-center justify-center rounded-full text-[10px] font-bold transition',
-              slot.done
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                : 'bg-slate-50 text-muted ring-1 ring-slate-200',
-            ].join(' ')}
-            aria-pressed={slot.done}
-            aria-label={`${slot.weekday} ${slot.date}`}
-          >
-            <span>{slot.weekday}</span>
-          </button>
-        ))}
+        {week.daySlots.map((slot) => {
+          const name = slot.workoutName || scheduledName(slot.date)
+          return (
+            <button
+              key={slot.date}
+              type="button"
+              title={slotLabel(slot, name)}
+              onClick={() => onSelectDay(slot)}
+              className={[
+                'flex size-11 flex-col items-center justify-center rounded-full text-[10px] font-bold transition',
+                slot.done
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                  : 'bg-slate-50 text-muted ring-1 ring-slate-200',
+              ].join(' ')}
+              aria-pressed={slot.done}
+              aria-label={slotLabel(slot, name)}
+            >
+              <span>{slot.weekday}</span>
+            </button>
+          )
+        })}
       </div>
     </li>
   )
 }
 
-export function WeeklyConsistencyTracker({
-  setLogs,
-  phaseStartDate,
-  dayMarks,
-  onToggleDay,
-  onSetWeekCount,
-  targetPerWeek = 5,
-}: WeeklyConsistencyTrackerProps) {
+export function WeeklyConsistencyTracker() {
+  const {
+    setLogs,
+    goal,
+    consistencyDayMarks,
+    setConsistencyDayMark,
+    setWeekConsistencyCount,
+    activeProgram,
+    workoutTemplates,
+  } = useAppData()
   const [historyOpen, setHistoryOpen] = useState(false)
   const [editWeek, setEditWeek] = useState<WeekConsistency | null>(null)
   const [countInput, setCountInput] = useState('0')
+  const [pickerDate, setPickerDate] = useState<string | null>(null)
 
-  const preview = buildRelativeWeeklyConsistency(setLogs, phaseStartDate, {
+  const targetPerWeek = goal.weeklyWorkoutTarget || 5
+  const options = consistencyWorkoutOptions(workoutTemplates)
+
+  const preview = buildRelativeWeeklyConsistency(setLogs, goal.startDate, {
     weeksBack: 3,
     target: targetPerWeek,
-    dayMarks,
+    dayMarks: consistencyDayMarks,
   })
 
-  const allWeeks = buildRelativeWeeklyConsistency(setLogs, phaseStartDate, {
+  const allWeeks = buildRelativeWeeklyConsistency(setLogs, goal.startDate, {
     weeksBack: 'all',
     target: targetPerWeek,
-    dayMarks,
+    dayMarks: consistencyDayMarks,
   })
+
+  function scheduledFor(date: string): ConsistencyWorkoutOption {
+    return scheduledWorkoutForDate(activeProgram, date)
+  }
+
+  function assignedFor(date: string): ConsistencyWorkoutOption {
+    const mark = parseDayMark(consistencyDayMarks[date])
+    if (mark?.done && mark.workoutName) {
+      return {
+        id: mark.workoutId || mark.workoutName,
+        name: mark.workoutName,
+      }
+    }
+    return scheduledFor(date)
+  }
 
   function openEdit(week: WeekConsistency) {
     setEditWeek(week)
@@ -135,9 +169,42 @@ export function WeeklyConsistencyTracker({
   function saveCount() {
     if (!editWeek) return
     const n = Math.max(0, Math.min(7, Number(countInput) || 0))
-    onSetWeekCount(editWeek.start, n)
+    setWeekConsistencyCount(editWeek.start, n)
     setEditWeek(null)
   }
+
+  function handleSelectDay(slot: DaySlot) {
+    if (!slot.done) {
+      const scheduled = scheduledFor(slot.date)
+      setConsistencyDayMark(slot.date, {
+        done: true,
+        workoutId: scheduled.id,
+        workoutName: scheduled.name,
+      })
+    }
+    setPickerDate(slot.date)
+  }
+
+  function assignWorkout(date: string, workout: ConsistencyWorkoutOption) {
+    setConsistencyDayMark(date, {
+      done: true,
+      workoutId: workout.id,
+      workoutName: workout.name,
+    })
+  }
+
+  function unmarkDay(date: string) {
+    setConsistencyDayMark(date, { done: false })
+    setPickerDate(null)
+  }
+
+  const pickerWeekday =
+    pickerDate &&
+    [...preview, ...allWeeks]
+      .flatMap((w) => w.daySlots)
+      .find((s) => s.date === pickerDate)?.weekday
+
+  const pickerAssigned = pickerDate ? assignedFor(pickerDate) : null
 
   return (
     <>
@@ -148,14 +215,15 @@ export function WeeklyConsistencyTracker({
         }
       >
         <p className="mb-3 text-xs text-muted">
-          לחץ על תג הספירה או על יום לסימון מהיר. הצבע מתעדכן מיד.
+          לחץ על יום כדי לסמן אימון, לבחור תבנית או לבטל. הצבע מתעדכן מיד.
         </p>
         <ul className="space-y-2">
           {preview.map((week) => (
             <WeekRow
               key={week.weekKey}
               week={week}
-              onToggleDay={onToggleDay}
+              scheduledName={(date) => scheduledFor(date).name}
+              onSelectDay={handleSelectDay}
               onEditCount={openEdit}
             />
           ))}
@@ -180,11 +248,62 @@ export function WeeklyConsistencyTracker({
             <WeekRow
               key={week.weekKey}
               week={week}
-              onToggleDay={onToggleDay}
+              scheduledName={(date) => scheduledFor(date).name}
+              onSelectDay={handleSelectDay}
               onEditCount={openEdit}
             />
           ))}
         </ul>
+      </Modal>
+
+      <Modal
+        open={!!pickerDate}
+        title={
+          pickerDate
+            ? `אימון ליום ${pickerWeekday ?? ''} · ${pickerDate}`
+            : 'בחירת אימון'
+        }
+        onClose={() => setPickerDate(null)}
+      >
+        {pickerDate && pickerAssigned ? (
+          <div className="space-y-4">
+            <p className="rounded-2xl bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700">
+              אימון משויך: {pickerAssigned.name}
+            </p>
+            <div>
+              <p className="mb-2 text-xs text-muted">החלף תבנית אימון</p>
+              <div className="grid grid-cols-2 gap-2">
+                {options.map((option) => {
+                  const active =
+                    pickerAssigned.id === option.id ||
+                    pickerAssigned.name === option.name
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => assignWorkout(pickerDate, option)}
+                      className={[
+                        'min-h-11 rounded-2xl px-3 text-sm font-semibold transition',
+                        active
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                          : 'bg-slate-100 text-muted hover:text-text',
+                      ].join(' ')}
+                    >
+                      {option.name}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+            <Button
+              className="w-full"
+              variant="surface"
+              onClick={() => unmarkDay(pickerDate)}
+            >
+              בטל סימון ליום זה
+            </Button>
+          </div>
+        ) : null}
       </Modal>
 
       <Modal
@@ -240,5 +359,4 @@ export function WeeklyConsistencyTracker({
   )
 }
 
-// re-export helper used by context
 export type { ConsistencyDayMarks }
