@@ -19,6 +19,7 @@ import { dayAllExercises, WEEKDAYS, weekdayNumber } from '../lib/types'
 import { dayPlanLabel } from '../lib/weekPlan'
 import { DayPlanSelect, StartWorkoutButton } from '../components/workouts/WeeklyPlanParts'
 import { WorkoutHistoryCard } from '../components/workouts/WorkoutHistoryCard'
+import { WorkoutCompletedBadge } from '../components/workouts/WorkoutCompletedBadge'
 import type { ExerciseForm } from '../lib/exerciseForm'
 import {
   EMPTY_EXERCISE_FORM,
@@ -197,6 +198,7 @@ export function WorkoutsPage() {
       />
 
       <div className="space-y-5 px-4 py-5">
+        <WorkoutCompletedBadge />
         <WorkoutLibrary
           currentDayId={day.id}
           currentDayExercises={allExercises}

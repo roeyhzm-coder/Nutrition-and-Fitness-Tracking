@@ -102,6 +102,8 @@ export type SavedMeal = {
   protein: number
   carbs: number
   fats: number
+  /** Optional items list or free-text notes for the preset. */
+  notes?: string
 }
 
 export type Sex = 'male' | 'female'

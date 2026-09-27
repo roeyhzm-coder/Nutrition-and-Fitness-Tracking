@@ -126,22 +126,41 @@ export function createDefaultPrograms(): WorkoutProgram[] {
 
 export const DEFAULT_SAVED_MEALS: SavedMeal[] = [
   {
-    id: 'meal-breakfast',
-    name: 'ארוחת בוקר קבועה',
-    calories: 450,
-    protein: 40,
-    carbs: 35,
-    fats: 12,
+    id: 'meal-protein-oats',
+    name: 'שייק חלבון ושיבולת שועל',
+    calories: 420,
+    protein: 42,
+    carbs: 45,
+    fats: 8,
+    notes: 'שייק חלבון + 40ג׳ שיבולת שועל + מים/חלב',
   },
   {
-    id: 'meal-lunch',
-    name: 'ארוחת צהריים קבועה',
-    calories: 650,
-    protein: 50,
-    carbs: 60,
-    fats: 18,
+    id: 'meal-eggs-toast',
+    name: 'ארוחת ביצים וטוסט',
+    calories: 480,
+    protein: 32,
+    carbs: 35,
+    fats: 22,
+    notes: '3 ביצים + 2 פרוסות לחם מלא + ירקות',
   },
 ]
+
+const PRESET_MEAL_KEYS = ['user_preset_meals', 'tn.savedMeals.v2'] as const
+
+/** Load persisted preset meals, migrating legacy keys; never returns empty. */
+export function loadPresetMeals(): SavedMeal[] {
+  try {
+    for (const key of PRESET_MEAL_KEYS) {
+      const raw = localStorage.getItem(key)
+      if (raw == null) continue
+      const parsed = JSON.parse(raw) as SavedMeal[]
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+    }
+  } catch {
+    /* fall through */
+  }
+  return DEFAULT_SAVED_MEALS
+}
 
 export function cloneProgram(
   name: string,

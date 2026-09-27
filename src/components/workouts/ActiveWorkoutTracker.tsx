@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, Dumbbell, Plus, Timer, X } from 'lucide-react'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import {
@@ -204,16 +204,45 @@ export function ActiveWorkoutTracker() {
     finishWorkout,
     cancelWorkout,
   } = useWorkoutSession()
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<number | null>(null)
 
-  if (!activeWorkout) return null
-  return trackerOpen ? (
-    <TrackerPanel
-      onMinimize={minimizeTracker}
-      onFinish={finishWorkout}
-      onCancel={cancelWorkout}
-    />
-  ) : (
-    <MinimizedBar onOpen={openTracker} />
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
+    }
+  }, [])
+
+  function handleFinish() {
+    const log = finishWorkout()
+    if (!log) return
+    setToast('🎉 האימון נשמר בהצלחה!')
+    if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), 3500)
+  }
+
+  return (
+    <>
+      {activeWorkout ? (
+        trackerOpen ? (
+          <TrackerPanel
+            onMinimize={minimizeTracker}
+            onFinish={handleFinish}
+            onCancel={cancelWorkout}
+          />
+        ) : (
+          <MinimizedBar onOpen={openTracker} />
+        )
+      ) : null}
+      {toast ? (
+        <div
+          role="status"
+          className="fixed inset-x-3 bottom-28 z-[60] mx-auto max-w-md rounded-2xl bg-emerald-600 px-4 py-3.5 text-center text-sm font-bold text-white shadow-xl shadow-emerald-600/30"
+        >
+          {toast}
+        </div>
+      ) : null}
+    </>
   )
 }
 

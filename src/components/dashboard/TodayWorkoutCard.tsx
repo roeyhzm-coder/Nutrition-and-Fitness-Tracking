@@ -6,6 +6,7 @@ import { Card } from '../ui/Card'
 import { dayPlanLabel } from '../../lib/weekPlan'
 import { parseDayMark } from '../../lib/weeklyConsistency'
 import { StartWorkoutButton } from '../workouts/WeeklyPlanParts'
+import { WorkoutCompletedBadge } from '../workouts/WorkoutCompletedBadge'
 
 export function TodayWorkoutCard() {
   const { activeProgram, consistencyDayMarks } = useAppData()
@@ -36,9 +37,12 @@ export function TodayWorkoutCard() {
       }
     >
       {isDone ? (
-        <p className="rounded-2xl bg-blue-50 px-4 py-4 text-center text-sm font-semibold text-blue-700">
-          ✓ בוצע: {completedName || 'אימון'}
-        </p>
+        <div className="space-y-2">
+          <WorkoutCompletedBadge />
+          {completedName ? (
+            <p className="text-center text-xs text-muted">{completedName}</p>
+          ) : null}
+        </div>
       ) : !day || (!day.isRest && exercises.length === 0) ? (
         <p className="text-sm leading-relaxed text-muted">
           לא נקבע אימון להיום ב{activeProgram?.name ?? 'תוכנית'}.

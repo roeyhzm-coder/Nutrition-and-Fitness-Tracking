@@ -17,6 +17,7 @@ import {
   DEFAULT_PHASE_MACROS,
   DEFAULT_PROFILE,
   DEFAULT_SAVED_MEALS,
+  loadPresetMeals,
   PLAN_SEED_KEY,
   PLAN_SEED_VERSION,
   normalizeMacroPresets,
@@ -179,7 +180,7 @@ type AppDataContextValue = {
     patch: Partial<Omit<FoodLogEntry, 'id' | 'loggedAt'>>,
   ) => void
   deleteFood: (id: string) => void
-  logSavedMeal: (mealId: string) => void
+  logSavedMeal: (mealId: string) => boolean
   addHabit: (label: string) => void
   updateHabit: (id: string, label: string) => void
   deleteHabit: (id: string) => void
@@ -380,9 +381,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     DEFAULT_FOOD_CATEGORIES,
   )
   const [savedMeals, setSavedMeals] = useLocalStorage<SavedMeal[]>(
-    'tn.savedMeals.v2',
-    DEFAULT_SAVED_MEALS,
+    'user_preset_meals',
+    loadPresetMeals(),
   )
+
+  // Keep preset templates permanent: never leave the list empty after reload/sync.
+  useEffect(() => {
+    if (savedMeals.length === 0) setSavedMeals(DEFAULT_SAVED_MEALS)
+  }, [savedMeals.length, setSavedMeals])
   const [recipes, setRecipes] = useLocalStorage<Recipe[]>(
     'tn.recipes.v3',
     DEFAULT_RECIPES,
@@ -1073,7 +1079,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const logSavedMeal = useCallback(
     (mealId: string) => {
       const meal = savedMeals.find((m) => m.id === mealId)
-      if (!meal) return
+      if (!meal) return false
       addFood({
         name: meal.name,
         grams: 1,
@@ -1083,6 +1089,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         fats: meal.fats,
         source: 'saved-meal',
       })
+      return true
     },
     [savedMeals, addFood],
   )

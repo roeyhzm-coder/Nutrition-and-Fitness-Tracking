@@ -65,6 +65,28 @@ function updateExercise(
   }
 }
 
+function workoutLabel(day: WorkoutDay) {
+  return day.sessions.map((s) => s.name).join(' + ') || day.focus || day.title
+}
+
+/** Prefer the latest completed log for the same template/day name. */
+function findLastTemplateLog(
+  logs: WorkoutLog[],
+  workoutName: string,
+  dayId: string,
+): WorkoutLog | null {
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const log = logs[i]
+    if (log.workoutName === workoutName || log.dayId === dayId) return log
+  }
+  return null
+}
+
+function doneSetsFrom(sets: LoggedSet[] | undefined): LoggedSet[] | null {
+  const done = sets?.filter((s) => s.done)
+  return done?.length ? done : null
+}
+
 export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
   const { activeProgram, addSetLog, setConsistencyDayMark } = useAppData()
   const [activeWorkout, setActiveWorkout] = useLocalStorage<ActiveWorkout | null>(
@@ -81,8 +103,8 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     (exerciseName: string) => {
       for (let i = workoutLogs.length - 1; i >= 0; i--) {
         const ex = workoutLogs[i].exercises.find((e) => e.name === exerciseName)
-        const done = ex?.sets.filter((s) => s.done)
-        if (done?.length) return done
+        const done = doneSetsFrom(ex?.sets)
+        if (done) return done
       }
       return null
     },
@@ -95,17 +117,23 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       if (activeWorkout) return
       const exercises = dayAllExercises(day)
       if (!exercises.length || !activeProgram) return
+      const name = workoutLabel(day)
+      const lastLog = findLastTemplateLog(workoutLogs, name, day.id)
+
       setActiveWorkout({
         id: uid(),
         programId: activeProgram.id,
         programName: activeProgram.name,
         dayId: day.id,
         dayNumber: day.dayNumber,
-        workoutName:
-          day.sessions.map((s) => s.name).join(' + ') || day.focus || day.title,
+        workoutName: name,
         startedAt: new Date().toISOString(),
         exercises: exercises.map((ex) => {
-          const last = lastPerformance(ex.name)
+          const fromTemplate = lastLog?.exercises.find(
+            (e) => e.exerciseId === ex.id || e.name === ex.name,
+          )
+          const last =
+            doneSetsFrom(fromTemplate?.sets) ?? lastPerformance(ex.name)
           const targetKg = parseKg(ex.weight)
           return {
             exerciseId: ex.id,
@@ -115,16 +143,19 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
             targetWeight: ex.weight,
             rest: ex.rest,
             imageUrl: ex.imageUrl,
-            sets: Array.from({ length: ex.sets }, (_, i) => ({
-              weightKg: last?.[i]?.weightKg ?? last?.at(-1)?.weightKg ?? targetKg,
-              reps: null,
-              done: false,
-            })),
+            sets: Array.from({ length: ex.sets }, (_, i) => {
+              const prev = last?.[i] ?? last?.at(-1)
+              return {
+                weightKg: prev?.weightKg ?? targetKg,
+                reps: prev?.reps ?? null,
+                done: false,
+              }
+            }),
           }
         }),
       })
     },
-    [activeWorkout, activeProgram, lastPerformance, setActiveWorkout],
+    [activeWorkout, activeProgram, lastPerformance, setActiveWorkout, workoutLogs],
   )
 
   const updateSet = useCallback(
@@ -168,7 +199,11 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
               ...ex,
               sets: [
                 ...ex.sets,
-                { weightKg: ex.sets.at(-1)?.weightKg ?? null, reps: null, done: false },
+                {
+                  weightKg: ex.sets.at(-1)?.weightKg ?? null,
+                  reps: ex.sets.at(-1)?.reps ?? null,
+                  done: false,
+                },
               ],
             }))
           : prev,
