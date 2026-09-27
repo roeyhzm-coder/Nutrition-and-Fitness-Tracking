@@ -196,7 +196,7 @@ export function RecipeCatalog() {
     recipesSyncError,
     syncRecipes,
   } = useAppData()
-  const [filter, setFilter] = useState<string>('all')
+  const [filter, setFilter] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | null>(null)
 
@@ -207,9 +207,10 @@ export function RecipeCatalog() {
   }, [])
 
   const list = useMemo(() => {
+    if (filter == null) return []
     if (filter === 'all') return recipes
     const cat = foodCategories.find((c) => c.id === filter)
-    if (!cat) return recipes
+    if (!cat) return []
     return recipes.filter((r) => recipeMatchesCategory(r, cat.label))
   }, [recipes, foodCategories, filter])
 
@@ -217,6 +218,10 @@ export function RecipeCatalog() {
     setToast(message)
     if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
     toastTimer.current = window.setTimeout(() => setToast(null), 2800)
+  }
+
+  function toggleFilter(id: string) {
+    setFilter((prev) => (prev === id ? null : id))
   }
 
   return (
@@ -237,7 +242,7 @@ export function RecipeCatalog() {
         {recipesSyncStatus === 'loading'
           ? 'מושך מתכונים וקטגוריות מ-Supabase…'
           : recipesSyncStatus === 'synced'
-            ? `מסונכרן · ${recipes.length} מתכונים`
+            ? `מסונכרן · ${recipes.length} מתכונים · בחר קטגוריה להצגה`
             : recipesSyncStatus === 'error'
               ? `שגיאת סנכרון: ${recipesSyncError ?? 'לא ידוע'}`
               : 'ממתין לסנכרון'}
@@ -255,7 +260,7 @@ export function RecipeCatalog() {
       <div className="mb-3 flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => setFilter('all')}
+          onClick={() => toggleFilter('all')}
           className={[
             'min-h-11 rounded-2xl px-3 text-xs font-medium transition',
             filter === 'all'
@@ -269,7 +274,7 @@ export function RecipeCatalog() {
           <button
             key={c.id}
             type="button"
-            onClick={() => setFilter(c.id)}
+            onClick={() => toggleFilter(c.id)}
             className={[
               'min-h-11 rounded-2xl px-3 text-xs font-medium transition',
               filter === c.id
@@ -282,15 +287,26 @@ export function RecipeCatalog() {
         ))}
       </div>
 
-      <ul className="space-y-3">
-        {list.map((recipe) => (
-          <RecipeFoodCard
-            key={recipe.id}
-            recipe={recipe}
-            onLogged={showToast}
-          />
-        ))}
-      </ul>
+      {filter == null ? (
+        <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-muted">
+          בחר קטגוריה כדי להציג מתכונים
+        </p>
+      ) : list.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-muted">
+          אין מתכונים בקטגוריה זו
+        </p>
+      ) : (
+        <ul className="space-y-3">
+          {list.map((recipe) => (
+            <RecipeFoodCard
+              key={recipe.id}
+              recipe={recipe}
+              onLogged={showToast}
+            />
+          ))}
+        </ul>
+      )}
     </Card>
   )
 }
+

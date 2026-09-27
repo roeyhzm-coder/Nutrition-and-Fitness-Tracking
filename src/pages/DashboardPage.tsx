@@ -1,5 +1,4 @@
-import { Link } from 'react-router-dom'
-import { Flame, Scale } from 'lucide-react'
+import { Flame } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { ProgressBar } from '../components/ui/ProgressBar'
@@ -11,9 +10,7 @@ import { FinishPhaseModal } from '../components/dashboard/FinishPhaseModal'
 import { PhaseHistoryCard } from '../components/dashboard/PhaseHistoryCard'
 import { TodayWorkoutCard } from '../components/dashboard/TodayWorkoutCard'
 import { WorkoutHistoryCard } from '../components/workouts/WorkoutHistoryCard'
-import { FoodLogList } from '../components/nutrition/FoodLogList'
 import { useAppData } from '../context/AppDataContext'
-import { formatKg } from '../lib/numericInput'
 import { PHASE_LABELS, todayKey } from '../lib/types'
 import { useState } from 'react'
 
@@ -25,7 +22,6 @@ export function DashboardPage() {
     goal,
     setGoal,
     phase,
-    setPhase,
     stateSyncStatus,
   } = useAppData()
 
@@ -38,27 +34,9 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader
-        title="דשבורד"
-        subtitle={`שלב ${goal.phaseNumber} מתוך ${goal.totalPhases} · ${goal.phaseName} · ${PHASE_LABELS[phase]}`}
-      />
+      <PageHeader title="דשבורד" />
 
       <div className="space-y-5 px-4 py-5">
-        <DailyWeightCard />
-
-        <GoalPhaseCard
-          phase={phase}
-          onPhaseChange={setPhase}
-          goal={goal}
-          onSaveGoal={setGoal}
-          currentWeight={latest?.weightKg}
-          onFinishPhase={() => setFinishOpen(true)}
-        />
-        <TodayWorkoutCard />
-        <PhaseHistoryCard />
-
-        <WeeklyConsistencyTracker />
-
         <Card title={`יעדי קלוריות היום · ${PHASE_LABELS[phase]}`}>
           <div className="mb-3 flex items-end justify-between gap-3">
             <span className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
@@ -109,42 +87,22 @@ export function DashboardPage() {
           </p>
         </Card>
 
-        <Card
-          title={`יומן מזון היום · ${todayFood.length}`}
-          action={
-            <Link
-              to="/nutrition#food-log"
-              className="text-xs font-semibold text-blue-600 hover:underline"
-            >
-              ליומן המלא
-            </Link>
-          }
-        >
-          <FoodLogList
-            entries={[...todayFood].reverse().slice(0, 5)}
-            compact
-          />
-          {todayFood.length > 5 ? (
-            <p className="mt-2 text-xs text-muted">
-              מוצגות 5 הרשומות האחרונות מתוך {todayFood.length}
-            </p>
-          ) : null}
-        </Card>
+        <DailyWeightCard />
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/80">
-          <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-muted">משקל עדכני</p>
-            <Scale className="size-4 text-blue-600" strokeWidth={1.75} />
-          </div>
-          <p className="mt-3 font-display text-3xl font-extrabold tabular-nums text-text">
-            {latest ? formatKg(latest.weightKg) : '—'}
-          </p>
-          <p className="mt-1 text-xs text-muted">
-            {latest ? 'ק״ג' : 'אין מדידה'}
-          </p>
-        </div>
+        <TodayWorkoutCard />
 
         <WorkoutHistoryCard limit={3} />
+        <WeeklyConsistencyTracker />
+
+        <GoalPhaseCard
+          phase={phase}
+          goal={goal}
+          onSaveGoal={setGoal}
+          currentWeight={latest?.weightKg}
+          onFinishPhase={() => setFinishOpen(true)}
+        />
+        <PhaseHistoryCard />
+
         <WeightFatTracker entries={weightLogs} />
       </div>
 

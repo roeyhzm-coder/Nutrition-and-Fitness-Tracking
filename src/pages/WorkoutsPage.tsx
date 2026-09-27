@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Library, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, Library, Pencil, Plus, Trash2 } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { SetLogger } from '../components/workouts/SetLogger'
 import { ProgramManager } from '../components/workouts/ProgramManager'
@@ -11,7 +11,6 @@ import {
   ExerciseMedia,
 } from '../components/workouts/ExerciseFields'
 import { Button } from '../components/ui/Button'
-import { Card } from '../components/ui/Card'
 import { IconButton } from '../components/ui/IconButton'
 import { Modal } from '../components/ui/Modal'
 import { useAppData } from '../context/AppDataContext'
@@ -47,6 +46,7 @@ export function WorkoutsPage() {
   const [dayId, setDayId] = useState(() => todayDayId(workoutDays))
   const day = workoutDays.find((d) => d.id === dayId) ?? workoutDays[0]
   const [activeExerciseId, setActiveExerciseId] = useState<string | null>(null)
+  const [dayDetailsOpen, setDayDetailsOpen] = useState(false)
   const [editDayOpen, setEditDayOpen] = useState(false)
   const [editExercise, setEditExercise] = useState<Exercise | null>(null)
   const [addOpen, setAddOpen] = useState(false)
@@ -59,7 +59,13 @@ export function WorkoutsPage() {
   useEffect(() => {
     setDayId(todayDayId(activeProgram?.days ?? []))
     setActiveExerciseId(null)
+    setDayDetailsOpen(false)
   }, [activeProgram?.id])
+
+  useEffect(() => {
+    setDayDetailsOpen(false)
+    setActiveExerciseId(null)
+  }, [dayId])
 
   const allExercises = useMemo(
     () => (day ? dayAllExercises(day) : []),
@@ -167,11 +173,15 @@ export function WorkoutsPage() {
     )
   }
 
+  const dayTitle = `יום ${day.title}${day.dayNumber === todayNumber ? ' · היום' : ''}`
+  const daySummary = day.isRest
+    ? 'יום מנוחה'
+    : `${allExercises.length} תרגילים · ${dayPlanLabel(day)}`
+
   return (
     <>
       <PageHeader
         title="אימונים"
-        subtitle={activeProgram?.name ?? 'תוכניות אימון שמורות'}
         action={
           <IconButton
             label="עריכת יום"
@@ -187,7 +197,6 @@ export function WorkoutsPage() {
       />
 
       <div className="space-y-5 px-4 py-5">
-        <ProgramManager />
         <WorkoutLibrary
           currentDayId={day.id}
           currentDayExercises={allExercises}
@@ -240,79 +249,110 @@ export function WorkoutsPage() {
           })}
         </section>
 
-        <Card
-          title={`יום ${day.title}${day.dayNumber === todayNumber ? ' · היום' : ''}`}
-          action={<StartWorkoutButton day={day} />}
-        >
-          <div className="mb-3">
-            <DayPlanSelect day={day} />
+        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-200/80">
+          <div className="flex items-center gap-2 border-b border-slate-200 px-3 py-2">
+            <button
+              type="button"
+              className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-2 py-2 text-right"
+              onClick={() => setDayDetailsOpen((v) => !v)}
+              aria-expanded={dayDetailsOpen}
+            >
+              <div className="min-w-0 flex-1">
+                <h2 className="font-display text-base font-semibold tracking-tight text-slate-900">
+                  {dayTitle}
+                </h2>
+                <p className="mt-0.5 truncate text-xs text-muted">{daySummary}</p>
+              </div>
+              <ChevronDown
+                className={`size-5 shrink-0 text-muted transition-transform duration-200 ${
+                  dayDetailsOpen ? 'rotate-180' : ''
+                }`}
+                strokeWidth={1.75}
+              />
+            </button>
+            <div className="shrink-0 pe-1">
+              <StartWorkoutButton day={day} />
+            </div>
           </div>
 
-          {day.isRest ? (
-            <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm text-muted">
-              יום מנוחה — אין אימון מתוכנן.
-            </p>
-          ) : (
-            <>
-              <button
-                type="button"
-                className="mb-3 min-h-11 text-sm text-muted hover:text-text"
-                onClick={() => {
-                  setDayFocus(day.focus)
-                  setEditDayOpen(true)
-                }}
-              >
-                {day.focus || 'הוסף מיקוד ליום…'}
-              </button>
+          <div
+            className={[
+              'grid transition-[grid-template-rows] duration-200 ease-out',
+              dayDetailsOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]',
+            ].join(' ')}
+          >
+            <div className="overflow-hidden">
+              <div className="space-y-3 p-5">
+                <DayPlanSelect day={day} />
 
-              <div className="mb-3 flex flex-wrap gap-2">
-                <Button
-                  variant="surface"
-                  onClick={() => setPickTemplateOpen(true)}
-                >
-                  <Library className="size-3.5" strokeWidth={1.75} />
-                  צרף אימון נוסף
-                </Button>
-                <Button variant="surface" onClick={() => openAddExercise(null)}>
-                  <Plus className="size-3.5" strokeWidth={1.75} />
-                  תרגיל
-                </Button>
-              </div>
+                {day.isRest ? (
+                  <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-center text-sm text-muted">
+                    יום מנוחה — אין אימון מתוכנן.
+                  </p>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="min-h-11 text-sm text-muted hover:text-text"
+                      onClick={() => {
+                        setDayFocus(day.focus)
+                        setEditDayOpen(true)
+                      }}
+                    >
+                      {day.focus || 'הוסף מיקוד ליום…'}
+                    </button>
 
-              <div className="space-y-3">
-                {day.sessions.map(renderSession)}
-
-                {(day.exercises.length > 0 || day.sessions.length === 0) && (
-                  <section className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
-                    <div className="mb-2 flex items-center justify-between">
-                      <p className="text-sm font-semibold text-text">
-                        תרגילים עצמאיים
-                      </p>
-                      <IconButton
-                        label="הוסף תרגיל"
-                        tone="accent"
-                        onClick={() => openAddExercise(null)}
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="surface"
+                        onClick={() => setPickTemplateOpen(true)}
                       >
+                        <Library className="size-3.5" strokeWidth={1.75} />
+                        צרף אימון נוסף
+                      </Button>
+                      <Button variant="surface" onClick={() => openAddExercise(null)}>
                         <Plus className="size-3.5" strokeWidth={1.75} />
-                      </IconButton>
+                        תרגיל
+                      </Button>
                     </div>
-                    {day.exercises.length === 0 ? (
-                      <p className="text-sm text-muted">
-                        אין תרגילים עצמאיים. הוסף אימון מהספרייה או תרגיל בודד.
-                      </p>
-                    ) : (
-                      <ul className="space-y-2">
-                        {day.exercises.map(renderExerciseRow)}
-                      </ul>
-                    )}
-                  </section>
+
+                    <div className="space-y-3">
+                      {day.sessions.map(renderSession)}
+
+                      {(day.exercises.length > 0 || day.sessions.length === 0) && (
+                        <section className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4">
+                          <div className="mb-2 flex items-center justify-between">
+                            <p className="text-sm font-semibold text-text">
+                              תרגילים עצמאיים
+                            </p>
+                            <IconButton
+                              label="הוסף תרגיל"
+                              tone="accent"
+                              onClick={() => openAddExercise(null)}
+                            >
+                              <Plus className="size-3.5" strokeWidth={1.75} />
+                            </IconButton>
+                          </div>
+                          {day.exercises.length === 0 ? (
+                            <p className="text-sm text-muted">
+                              אין תרגילים עצמאיים. הוסף אימון מהספרייה או תרגיל בודד.
+                            </p>
+                          ) : (
+                            <ul className="space-y-2">
+                              {day.exercises.map(renderExerciseRow)}
+                            </ul>
+                          )}
+                        </section>
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
-            </>
-          )}
-        </Card>
+            </div>
+          </div>
+        </section>
 
-        {activeExercise && !day.isRest ? (
+        {activeExercise && !day.isRest && dayDetailsOpen ? (
           <SetLogger
             exercise={activeExercise}
             dayId={day.id}

@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react'
 import { Flag, Pencil } from 'lucide-react'
 import {
   calcProcessDay,
-  PHASE_ACTIVE_CLASS,
   PHASE_LABELS,
-  PHASES,
   type GoalSettings,
   type Phase,
 } from '../../lib/types'
@@ -25,7 +23,6 @@ import { ProgressBar } from '../ui/ProgressBar'
 
 type GoalPhaseCardProps = {
   phase: Phase
-  onPhaseChange: (phase: Phase) => void
   goal: GoalSettings
   onSaveGoal: (goal: GoalSettings) => void
   currentWeight?: number | null
@@ -68,7 +65,6 @@ function toForm(goal: GoalSettings): GoalForm {
 
 export function GoalPhaseCard({
   phase,
-  onPhaseChange,
   goal,
   onSaveGoal,
   currentWeight,
@@ -111,24 +107,6 @@ export function GoalPhaseCard({
         title="מטרת על ותהליך"
         className="border-blue-100 bg-gradient-to-b from-blue-50 to-white"
       >
-        <div className="mb-4 grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-50 p-1.5">
-          {PHASES.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => onPhaseChange(p)}
-              className={[
-                'min-h-11 rounded-xl px-3 py-2 text-sm font-bold transition',
-                phase === p
-                  ? PHASE_ACTIVE_CLASS[p]
-                  : 'text-muted hover:bg-slate-100 hover:text-text',
-              ].join(' ')}
-            >
-              {PHASE_LABELS[p]}
-            </button>
-          ))}
-        </div>
-
         <section className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <div className="mb-2 flex items-center justify-between">
             <div>
