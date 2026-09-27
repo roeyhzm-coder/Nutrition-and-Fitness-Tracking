@@ -5,7 +5,6 @@ import type {
   GoalSettings,
   HabitChecks,
   Intensity,
-  LifestyleEntry,
   LifestyleLogs,
   MacroTargets,
   Phase,
@@ -21,15 +20,12 @@ import {
   ACTIVITY_LEVEL_LABELS,
   calcBmi,
   calcProcessDay,
-  dayAllExercises,
-  INTENSITY_LABELS,
   PHASE_LABELS,
-  PHASE_RESULT_LABELS,
   SEX_LABELS,
+  WEEKDAY_SHORT,
   WORK_STYLE_LABELS,
 } from './types'
 import { relativeWeekNumber } from './weeklyConsistency'
-import { summarizePhase } from './phaseHistory'
 
 function average(nums: number[]) {
   if (nums.length === 0) return 0
@@ -60,25 +56,37 @@ function isInRelativeWeek(iso: string, phaseStartDate: string) {
 
 const NA = 'לא צוין'
 
+export const PHASE_BLUEPRINT = [
+  '1. שלב 1: מסה מבוססת הרגלים (יעד מקורי: 70.0 -> 75.5 ק״ג)',
+  '2. שלב 2: מיני-חיטוב ומחיקת שומן (יעד מקורי: 75.5 -> 73.0 ק״ג)',
+  '3. שלב 3: תחזוקה והסתגלות מבנית (יעד מקורי: 73.0 -> 73.5 ק״ג)',
+  '4. שלב 4: מסה מרכזית - צפיפות שריר (יעד מקורי: 73.5 -> 80.0 ק״ג)',
+  '5. שלב 5: חיטוב ביניים ואיפוס (יעד מקורי: 80.0 -> 76.5 ק״ג)',
+  '6. שלב 6: מסת פריצה וחיטוב סופי (יעד סופי: 80.0 ק״ג ו-9% שומן)',
+] as const
+
 const SYSTEM_CONTEXT_BLOCK = `---
 [SYSTEM_CONTEXT_FOR_AI]
 - Project: Nutrition & Fitness PWA Tracker
-- Repository: GitHub (Nutrition-and-Fitness-Tracking)
-- Hosting: Netlify (fitpwa-tracker.netlify.app)
-- Stack: React + Vite, TypeScript, PWA (Service Worker)
-- Database & Auth: Supabase (food_logs, user_profiles, phases_history)
-- Local Workspace: fitpwa
-- Purpose: 1200-day body transformation tracking across dynamic phases
+- Repository: GitHub (roeyhzm-coder/Nutrition-and-Fitness-Tracking)
+- Hosting: Vercel (https://training-and-nutrition-plan-trackin.vercel.app)
+- Stack: React + Vite, TypeScript, Tailwind CSS, Supabase
 ---`
 
-function localDateKey(d: Date) {
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+const RECALIBRATION_DIRECTIVE = `## הנחיית כיול דינמי ל-AI (Dynamic Recalibration Directive)
+1. שלד התוכנית המקורי משמש כקו מנחה בלבד. אין להיצמד למספרים היסטוריים אם קצב ההתקדמות בפועל שונה מהתכנון.
+2. בסיום שלב או בצומת החלטה, יש לנתח את המצב הפיזיולוגי הקיים (קצב עלייה/ירידה שבועי, שינוי אחוזי שומן ועומס אימונים) ולבצע כיול מחדש (Recalibration): לקבוע האם יש צורך בהארכת השלב, מעבר מיידי לחיטוב, או שלב תחזוקה.
+3. ספק יעדי קלוריות ומאקרו מדויקים והתאמות אימונים מעשיות לשלב הבא בהתאם לנתוני האמת שהושגו.`
+
+function fmtNum(value: number | null | undefined, digits = 0) {
+  if (value == null || !Number.isFinite(value)) return NA
+  return digits ? value.toFixed(digits) : String(Math.round(value))
 }
 
-function fmtNum(value: number | null | undefined, unit = '', digits = 0) {
+function fmtSigned(value: number | null | undefined, digits = 2) {
   if (value == null || !Number.isFinite(value)) return NA
-  return `${digits ? value.toFixed(digits) : Math.round(value)}${unit}`
+  const sign = value > 0 ? '+' : ''
+  return `${sign}${value.toFixed(digits)}`
 }
 
 function fmtText(value: string | null | undefined) {
@@ -87,7 +95,7 @@ function fmtText(value: string | null | undefined) {
 }
 
 function fmtMinutes(total: number) {
-  if (total <= 0) return NA
+  if (total <= 0) return ''
   const h = Math.floor(total / 60)
   const m = Math.round(total % 60)
   if (!h) return `${m} דק׳`
@@ -128,18 +136,49 @@ export function aggregateActivities(logs: ActivityLog[]): SportSummary[] {
   )
 }
 
-function formatSport(s: SportSummary) {
-  const intensity =
-    (Object.keys(INTENSITY_LABELS) as Intensity[])
-      .filter((k) => s.intensities[k] > 0)
-      .map((k) => `${INTENSITY_LABELS[k]} ×${s.intensities[k]}`)
-      .join(', ') || NA
-  const notes = s.notes.length ? s.notes.join(' | ') : NA
-  return `### ${s.name}
-- אימונים השבוע: ${s.sessions}
-- משך מצטבר: ${fmtMinutes(s.totalMin)}
-- עצימות: ${intensity}
-- הערות: ${notes}`
+function formatActivitiesSummary(summaries: SportSummary[]) {
+  if (summaries.length === 0) return NA
+  return summaries
+    .map((s) => {
+      const mins = fmtMinutes(s.totalMin)
+      return mins ? `${s.name} ×${s.sessions} (${mins})` : `${s.name} ×${s.sessions}`
+    })
+    .join(' · ')
+}
+
+function formatSplitSummary(days: WorkoutDay[]) {
+  if (days.length === 0) return NA
+  return days
+    .map((d) => {
+      const label = WEEKDAY_SHORT[d.dayNumber - 1] ?? d.title
+      const sessions = (d.sessions ?? []).map((s) => s.name.trim()).filter(Boolean)
+      if (d.isRest && sessions.length === 0) return `${label} מנוחה`
+      if (sessions.length) return `${label} ${sessions.join('+')}`
+      if (d.focus.trim()) return `${label} ${d.focus}`
+      return `${label} ${d.title}`
+    })
+    .join(' · ')
+}
+
+/** Weekly rate from the latest weigh-in vs the closest entry ~7 days earlier. */
+function weeklyWeightRate(sorted: WeightEntry[]): number | null {
+  if (sorted.length < 2) return null
+  const latest = sorted.at(-1)
+  if (!latest) return null
+  const target = new Date(latest.loggedAt).getTime() - 7 * 86400000
+  let prev: WeightEntry | null = null
+  for (const w of sorted) {
+    if (w.id === latest.id) break
+    if (new Date(w.loggedAt).getTime() <= target) prev = w
+  }
+  prev ??= sorted[0]
+  if (prev.id === latest.id) return null
+  const days = Math.max(
+    1,
+    (new Date(latest.loggedAt).getTime() - new Date(prev.loggedAt).getTime()) /
+      86400000,
+  )
+  return ((latest.weightKg - prev.weightKg) / days) * 7
 }
 
 export function buildAiExportPrompt(input: {
@@ -158,27 +197,17 @@ export function buildAiExportPrompt(input: {
   phaseHistory: PhaseHistoryEntry[]
 }): string {
   const phaseStart = input.goal.startDate
-  const { profile } = input
+  const { profile, goal, macroTargets } = input
+
   const weekSets = input.setLogs.filter((s) =>
     isInRelativeWeek(s.loggedAt, phaseStart),
   )
   const weekActivities = input.activityLogs.filter((a) =>
     isInRelativeWeek(a.loggedAt, phaseStart),
   )
-  const sportSummaries = aggregateActivities(weekActivities)
-  const weekStart = startOfRelativeWeek(phaseStart)
-  const weekLifestyle = Object.entries(input.lifestyleLogs)
-    .filter(([date]) => isInRelativeWeek(`${date}T12:00:00`, phaseStart))
-    .map(([, entry]) => entry)
-  const pickAvg = (key: keyof LifestyleEntry) => {
-    const vals = weekLifestyle
-      .map((e) => e[key])
-      .filter((v): v is number => v != null && Number.isFinite(v))
-    return vals.length ? average(vals) : null
-  }
-  const avgSteps = pickAvg('steps')
-  const avgSleep = pickAvg('sleepHours')
-  const avgRecovery = pickAvg('recovery')
+  const activitiesSummary = formatActivitiesSummary(
+    aggregateActivities(weekActivities),
+  )
 
   const sortedWeights = [...input.weightLogs].sort((a, b) =>
     a.loggedAt.localeCompare(b.loggedAt),
@@ -195,11 +224,12 @@ export function buildAiExportPrompt(input: {
     startWeight != null && currentWeight != null
       ? currentWeight - startWeight
       : null
-  const weekWeights = input.weightLogs.filter((w) =>
-    isInRelativeWeek(w.loggedAt, phaseStart),
-  )
+
   const weekFoods = input.foodLogs.filter((f) =>
     isInRelativeWeek(f.loggedAt, phaseStart),
+  )
+  const weekWeights = input.weightLogs.filter((w) =>
+    isInRelativeWeek(w.loggedAt, phaseStart),
   )
 
   const setLogDays = new Set(weekSets.map((s) => s.loggedAt.slice(0, 10)))
@@ -208,19 +238,7 @@ export function buildAiExportPrompt(input: {
     ...weekActivities.map((a) => a.loggedAt.slice(0, 10)),
   ])
   const workoutsThisWeek = workoutDaysSet.size
-  const targetPerWeek = input.goal.weeklyWorkoutTarget || 5
-  const metTarget = workoutsThisWeek >= targetPerWeek
-
-  const topExercises = Object.entries(
-    weekSets.reduce<Record<string, number>>((acc, s) => {
-      acc[s.exerciseName] = (acc[s.exerciseName] ?? 0) + 1
-      return acc
-    }, {}),
-  )
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([name, count]) => `- ${name}: ${count} סטים`)
-    .join('\n')
+  const targetPerWeek = goal.weeklyWorkoutTarget || 5
 
   const macrosByDay = new Map<
     string,
@@ -240,191 +258,92 @@ export function buildAiExportPrompt(input: {
     curr.fats += f.fats
     macrosByDay.set(day, curr)
   }
-  const days = [...macrosByDay.values()]
-  const avgCalories = average(days.map((d) => d.calories))
-  const avgProtein = average(days.map((d) => d.protein))
-  const avgCarbs = average(days.map((d) => d.carbs))
-  const avgFats = average(days.map((d) => d.fats))
+  const loggedDays = [...macrosByDay.values()]
+  const avgCalories = loggedDays.length
+    ? average(loggedDays.map((d) => d.calories))
+    : null
+  const avgProtein = loggedDays.length
+    ? average(loggedDays.map((d) => d.protein))
+    : null
+  const avgCarbs = loggedDays.length
+    ? average(loggedDays.map((d) => d.carbs))
+    : null
+  const avgFats = loggedDays.length
+    ? average(loggedDays.map((d) => d.fats))
+    : null
 
-  const weights = weekWeights.map((w) => w.weightKg)
-  const fats = weekWeights
-    .map((w) => w.bodyFatPct)
-    .filter((v): v is number => v != null)
-  const avgWeight = average(weights)
-  const avgFat = average(fats)
+  const avgWeightWeek = weekWeights.length
+    ? average(weekWeights.map((w) => w.weightKg))
+    : null
+  const weeklyRate = weeklyWeightRate(sortedWeights)
 
-  const masterDay = calcProcessDay(
-    input.goal.masterStartDate,
-    input.goal.masterTotalDays,
-  )
-  const phaseDay = calcProcessDay(input.goal.startDate, input.goal.totalDays)
-  const relativeWeek = relativeWeekNumber(phaseStart)
-  const phaseLabel = PHASE_LABELS[input.phase]
-  const currentSummary = summarizePhase({
-    phase: input.phase,
-    goal: input.goal,
-    macroTargets: input.macroTargets,
-    weightLogs: input.weightLogs,
-    foodLogs: input.foodLogs,
-  })
-
-  const masterName = input.goal.masterName || 'גוף אל יווני'
-  const masterWeight = input.goal.masterTargetWeightKg ?? 80
-  const masterFat = input.goal.masterTargetBodyFatPct ?? 9
+  const masterDay = calcProcessDay(goal.masterStartDate, goal.masterTotalDays)
+  const phaseDay = calcProcessDay(goal.startDate, goal.totalDays)
+  const phaseWeek = relativeWeekNumber(phaseStart)
+  const phaseTotalWeeks = Math.max(1, Math.round(goal.totalDays / 7))
   const masterPercent = (
-    (masterDay / Math.max(1, input.goal.masterTotalDays)) *
+    (masterDay / Math.max(1, goal.masterTotalDays)) *
     100
   ).toFixed(1)
-  const phaseName = input.goal.phaseName || PHASE_LABELS[input.phase]
-  const phaseNumber = input.goal.phaseNumber || 1
-  const totalPhases = input.goal.totalPhases || 6
-  const phaseWeeks = Math.max(1, Math.round(input.goal.totalDays / 7))
-  const phaseStartWeight =
-    input.goal.startWeightKg ?? currentSummary.startWeightKg ?? startWeight
-  const phaseTargetWeight = input.goal.targetWeightKg
-  const phaseTargetFat = input.goal.targetBodyFatPct
-  const weightDirection =
-    phaseStartWeight != null &&
-    phaseTargetWeight != null &&
-    phaseTargetWeight > phaseStartWeight
-      ? 'עלייה מ-'
-      : phaseStartWeight != null &&
-          phaseTargetWeight != null &&
-          phaseTargetWeight < phaseStartWeight
-        ? 'ירידה מ-'
-        : 'מ-'
-  const phaseWeight =
-    phaseTargetWeight != null ? `${phaseTargetWeight.toFixed(2)} ק״ג` : NA
-  const phaseFat =
-    phaseTargetFat != null ? `${phaseTargetFat.toFixed(2)}%` : NA
-  const phaseGoalsLine =
-    phaseTargetWeight != null
-      ? `יעדי השלב: ${phaseTargetWeight.toFixed(2)} ק״ג (${weightDirection}${fmtNum(phaseStartWeight, ' ק״ג', 2)}) · עד ${phaseTargetFat != null ? phaseTargetFat.toFixed(2) : NA}% שומן`
-      : `יעדי השלב: ${NA}`
-
-  const keyExercises =
-    topExercises ||
-    input.workoutDays
-      .flatMap((d) => {
-        const sessions = (d.sessions ?? [])
-          .map((s) => `- יום ${d.dayNumber} · ${s.name}`)
-          .slice(0, 2)
-        const ex = dayAllExercises(d)
-          .slice(0, 2)
-          .map((e) => `- יום ${d.dayNumber}: ${e.name}`)
-        return sessions.length ? sessions : ex
-      })
-      .slice(0, 8)
-      .join('\n') ||
-    '- אין תרגילים'
-
-  const programLines = input.workoutDays
-    .map((d) => {
-      const blocks =
-        (d.sessions ?? []).map((s) => s.name).join(' + ') ||
-        'תרגילים עצמאיים'
-      return `יום ${d.dayNumber} ${d.title} (${blocks})`
-    })
-    .join(' | ')
+  const masterName = goal.masterName || 'גוף אל יווני'
+  const masterWeight = goal.masterTargetWeightKg ?? 80
+  const masterFat = goal.masterTargetBodyFatPct ?? 9
+  const phaseName = goal.phaseName || PHASE_LABELS[input.phase]
+  const phaseNumber = goal.phaseNumber || 1
+  const totalPhases = goal.totalPhases || 6
 
   const historySection = input.phaseHistory.length
     ? input.phaseHistory
         .map((h, i) => {
           const type = PHASE_LABELS[h.phase]
           const name = h.name?.trim() || type
-          const result = PHASE_RESULT_LABELS[h.result ?? 'completed']
-          return `- שלב ${i + 1}: ${name} (${type}) | ${h.startDate} עד ${h.endDate} | התחלה: ${fmtNum(h.startWeightKg, ' ק״ג', 2)} (${fmtNum(h.startBodyFatPct, '%', 2)}) -> סיום: ${fmtNum(h.endWeightKg, ' ק״ג', 2)} (${fmtNum(h.endBodyFatPct, '%', 2)}) | תוצאה: ${result}`
+          return `- שלב ${i + 1} (${name}, ${type}): ${h.startDate} עד ${h.endDate} | משקל התחלה: ${fmtNum(h.startWeightKg, 2)} ק״ג -> משקל סיום: ${fmtNum(h.endWeightKg, 2)} ק״ג (יעד היה ${fmtNum(h.targetWeightKg, 2)} ק״ג) | שומן: ${fmtNum(h.endBodyFatPct, 2)}% | ממוצע צריכה בפועל: ${fmtNum(h.avgCalories)} קק״ל`
         })
         .join('\n')
-    : 'לא צוין (שלב ראשון בתהליך)'
-
-  const sportsSection = sportSummaries.length
-    ? sportSummaries.map(formatSport).join('\n\n')
-    : `- ${NA} (לא תועדו פעילויות השבוע)`
-  const setLogLine = setLogDays.size
-    ? `- רישום סטים (חדר כושר): ${setLogDays.size} ימים · ${weekSets.length} סטים`
-    : '- רישום סטים (חדר כושר): לא תועדו סטים השבוע'
-  const weekEnd = new Date(weekStart)
-  weekEnd.setDate(weekEnd.getDate() + 6)
+    : '- אין שלבים קודמים (זהו שלב 1 בתהליך הכולל)'
 
   return `אנא נתח את הנתונים שלי לאימונים ותזונה ותן המלצות ממוקדות בעברית:
 
 ## מדדי גוף ובסיס (Biometrics)
-- גיל: ${fmtNum(profile.age)}
-- מין: ${profile.sex ? SEX_LABELS[profile.sex] : NA}
-- גובה: ${fmtNum(profile.heightCm, ' ס״מ')}
-- משקל התחלתי: ${fmtNum(startWeight, ' ק״ג', 2)}
-- משקל עדכני: ${fmtNum(currentWeight, ' ק״ג', 2)}
-- משקל יעד: ${fmtNum(input.goal.masterTargetWeightKg, ' ק״ג', 2)}
-- שינוי מתחילת התהליך: ${weightDelta != null ? `${weightDelta > 0 ? '+' : ''}${weightDelta.toFixed(2)} ק״ג` : NA}
-- אחוז שומן מוערך: ${fmtNum(latestFat, '%', 2)}
-- BMI: ${fmtNum(bmi, '', 1)}
-- רמת פעילות יומית: ${profile.activityLevel ? ACTIVITY_LEVEL_LABELS[profile.activityLevel] : NA}
-- שעות שינה ממוצעות (פרופיל): ${fmtNum(profile.avgSleepHours, ' ש׳', 1)}
-- סגנון עבודה: ${profile.workStyle ? WORK_STYLE_LABELS[profile.workStyle] : NA}
+- גיל: ${fmtNum(profile.age)} | מין: ${profile.sex ? SEX_LABELS[profile.sex] : NA} | גובה: ${fmtNum(profile.heightCm)} ס״מ
+- משקל התחלתי: ${fmtNum(startWeight, 2)} ק״ג | משקל עדכני: ${fmtNum(currentWeight, 2)} ק״ג (שינוי: ${fmtSigned(weightDelta)} ק״ג)
+- אחוז שומן מוערך: ${fmtNum(latestFat, 2)}% | BMI: ${fmtNum(bmi, 1)}
+- שעות שינה ממוצעות: ${fmtNum(profile.avgSleepHours, 1)} ש׳ | רמת פעילות: ${profile.activityLevel ? ACTIVITY_LEVEL_LABELS[profile.activityLevel] : NA} | עבודה: ${profile.workStyle ? WORK_STYLE_LABELS[profile.workStyle] : NA}
 
 ## מטרת על ארוכת טווח (Master Plan)
-- מטרת על: ${masterName} (${masterWeight.toFixed(2)} ק״ג ו-${masterFat.toFixed(2)}% שומן)
-- התקדמות כללית: יום ${masterDay} מתוך ${input.goal.masterTotalDays} (${masterPercent}% מהיעד הכולל)
-- תאריך התחלה: ${input.goal.masterStartDate}
+- יעד: ${masterName} (${fmtNum(masterWeight, 0)} ק״ג ו-${fmtNum(masterFat, 0)}% שומן)
+- התקדמות: יום ${masterDay} מתוך ${goal.masterTotalDays} (${masterPercent}%)
+- תאריך התחלה: ${goal.masterStartDate}
 
-## שלב נוכחי (Current Phase)
-- שלב פעיל: שלב ${phaseNumber} מתוך ${totalPhases} (${phaseName}) · סוג: ${phaseLabel}
-- התקדמות בשלב: יום ${phaseDay} מתוך ${input.goal.totalDays} (שבוע ${relativeWeek} מתוך ${phaseWeeks})
-- ${phaseGoalsLine}
-- תאריך תחילת שלב: ${input.goal.startDate}
-- משקל בתחילת השלב: ${fmtNum(phaseStartWeight, ' ק״ג', 2)}
-- ממוצע קלוריות בשלב עד כה: ${fmtNum(currentSummary.avgCalories, ' קק״ל')}
-- יעדי מאקרו: ${input.macroTargets.calories} קק״ל · חלבון ${input.macroTargets.protein}ג׳ · פחמימות ${input.macroTargets.carbs}ג׳ · שומן ${input.macroTargets.fats}ג׳
+## שלד התוכנית המקורית (6-Phase Blueprint Reference)
+${PHASE_BLUEPRINT.join('\n')}
 
-## היסטוריית שלבים (Phase History)
-היסטוריית שלבים קודמים:
+## שלב פעיל נוכחי (Current Phase)
+- שלב ${phaseNumber} מתוך ${totalPhases}: ${phaseName} (סוג: ${PHASE_LABELS[input.phase]})
+- התקדמות בשלב: יום ${phaseDay} מתוך ${goal.totalDays} (שבוע ${phaseWeek} מתוך ${phaseTotalWeeks})
+- יעד משקל לשלב: ${fmtNum(goal.targetWeightKg, 2)} ק״ג | יעד שומן: עד ${fmtNum(goal.targetBodyFatPct, 2)}%
+- יעדי מאקרו יומיים: ${fmtNum(macroTargets.calories)} קק״ל | חלבון: ${fmtNum(macroTargets.protein)}ג׳ | שומן: ${fmtNum(macroTargets.fats)}ג׳ | פחמימות: ${fmtNum(macroTargets.carbs)}ג׳
+
+## היסטוריית שלבים קודמים (תכנון מול ביצוע בפועל)
 ${historySection}
 
-## אימונים ועקביות שבועית
-- טווח השבוע: ${localDateKey(weekStart)} – ${localDateKey(weekEnd)}
-- ${workoutsThisWeek} מתוך ${targetPerWeek} ימי אימון השבוע
-- עמידה ביעד: ${metTarget ? 'כן' : 'לא'}
-- סה״כ סטים השבוע: ${weekSets.length}
-- תרגילים מרכזיים:
-${keyExercises}
-- תוכנית נוכחית: ${programLines || NA}
+## עקביות ואימונים שבועיים
+- אימונים השבוע: ${workoutsThisWeek} מתוך ${targetPerWeek} ימים
+- סה״כ סטים מתועדים השבוע: ${weekSets.length}
+- חלוקת תוכנית: ${formatSplitSummary(input.workoutDays)}
+- פילוח פעילויות: ${activitiesSummary}
 
-## פילוח ענפי ספורט השבוע (Dynamic Activities)
-${setLogLine}
-${sportsSection}
-
-## פעילות יומית ואורח חיים (Lifestyle & NEAT)
-- רמת פעילות מוגדרת: ${profile.activityLevel ? ACTIVITY_LEVEL_LABELS[profile.activityLevel] : NA}
-- סגנון עבודה: ${profile.workStyle ? WORK_STYLE_LABELS[profile.workStyle] : NA}
-- שעות שינה ממוצעות (פרופיל): ${fmtNum(profile.avgSleepHours, ' ש׳', 1)}
-- ממוצע צעדים יומי (יומן): ${avgSteps != null ? Math.round(avgSteps).toLocaleString('he-IL') : NA}
-- ממוצע שעות שינה (יומן שבועי): ${fmtNum(avgSleep, ' ש׳', 1)}
-- מדד התאוששות ממוצע (1–10): ${fmtNum(avgRecovery, '', 1)}
-- ימים מתועדים השבוע: ${weekLifestyle.length || NA}
-
-## תזונה, מגבלות ובריאות
+## תזונה ובריאות
 - מאכלים שנמנעים מהם: ${fmtText(profile.avoidFoods)}
-- אלרגיות / רגישויות מזון: ${fmtText(profile.allergies)}
-- תוספי תזונה בשימוש שוטף: ${fmtText(profile.supplements)}
-- רגישויות מפרקיות / פציעות עבר: ${fmtText(profile.injuries)}
+- תוספי תזונה: ${fmtText(profile.supplements)}
+- רגישויות מפרקיות / פציעות: ${fmtText(profile.injuries)}
 
-## משקל, אחוזי שומן ומאקרו
-- ממוצע שקילה השבוע: ${fmtNum(avgWeight || null, ' ק״ג', 1)} (יעד שלב: ${phaseWeight})
-- ממוצע אחוזי שומן השבוע: ${fmtNum(avgFat || null, '%', 1)} (יעד שלב: ${phaseFat})
-- יעדי מאקרו לשלב: ${input.macroTargets.calories} קק״ל · חלבון ${input.macroTargets.protein}ג׳ · פחמימות ${input.macroTargets.carbs}ג׳ · שומן ${input.macroTargets.fats}ג׳
-- ממוצע קלוריות: ${fmtNum(avgCalories || null, ' קק״ל')}
-- ממוצע חלבון: ${fmtNum(avgProtein || null, 'ג׳')}
-- ממוצע פחמימות: ${fmtNum(avgCarbs || null, 'ג׳')}
-- ממוצע שומן: ${fmtNum(avgFats || null, 'ג׳')}
-- ימים עם רישום מזון: ${days.length}
+## ממוצעים שבועיים בפועל (Actual Weekly Averages)
+- ממוצע שקילה השבוע: ${fmtNum(avgWeightWeek, 2)} ק״ג (קצב שבועי: ${fmtSigned(weeklyRate)} ק״ג/שבוע)
+- ממוצע קלוריות ומאקרו בפועל: ${fmtNum(avgCalories)} קק״ל | חלבון: ${fmtNum(avgProtein, 1)}ג׳ | שומן: ${fmtNum(avgFats, 1)}ג׳ | פחמימות: ${fmtNum(avgCarbs, 1)}ג׳
+- ימים עם רישום מזון מלא: ${loggedDays.length}/7
 
-## בקשה
-1. הערך התקדמות מול מטרת העל (גוף אל יווני) ומול השלב הנוכחי, בהשוואה לשלבים הקודמים.
-2. בדוק עקביות אימונים מול יעד 5 בשבוע, כולל איזון בין ענפי הספורט והעומס המצטבר.
-3. בדוק התאמה בין צריכת המאקרו ליעדי השלב בהתחשב בהוצאה האנרגטית (אימונים + צעדים).
-4. התחשב במגבלות, אלרגיות, תוספים ופציעות שצוינו.
-5. הצע התאמות מעשיות לשבוע היחסי הבא בעברית קצרה.
+${RECALIBRATION_DIRECTIVE}
 
 ${SYSTEM_CONTEXT_BLOCK}`
 }
