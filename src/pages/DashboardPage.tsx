@@ -113,7 +113,7 @@ export function DashboardPage() {
           title={`יומן מזון היום · ${todayFood.length}`}
           action={
             <Link
-              to="/nutrition"
+              to="/nutrition#food-log"
               className="text-xs font-semibold text-blue-600 hover:underline"
             >
               ליומן המלא

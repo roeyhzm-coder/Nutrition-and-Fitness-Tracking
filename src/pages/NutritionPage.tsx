@@ -6,6 +6,7 @@ import { FoodSearch } from '../components/nutrition/FoodSearch'
 import { RecipeCatalog } from '../components/nutrition/RecipeCatalog'
 import { SavedMeals } from '../components/nutrition/SavedMeals'
 import { ImportMealsModal } from '../components/nutrition/ImportMealsModal'
+import { FoodLogList } from '../components/nutrition/FoodLogList'
 import { AddFoodModal } from '../components/dashboard/AddFoodModal'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -14,12 +15,14 @@ import {
   PHASE_ACTIVE_CLASS,
   PHASE_LABELS,
   PHASES,
+  todayKey,
 } from '../lib/types'
 
 export function NutritionPage() {
   const { foodLogs, addFood, macroTargets, phase, setPhase } = useAppData()
   const [foodOpen, setFoodOpen] = useState(false)
   const { hash } = useLocation()
+  const today = todayKey()
 
   useEffect(() => {
     if (!hash) return
@@ -27,6 +30,10 @@ export function NutritionPage() {
       .getElementById(hash.slice(1))
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [hash])
+
+  const todayFood = [...foodLogs]
+    .filter((f) => f.loggedAt.startsWith(today))
+    .reverse()
 
   return (
     <>
@@ -42,8 +49,13 @@ export function NutritionPage() {
       <div className="space-y-5 px-4 py-5">
         <MacroTargetsView logs={foodLogs} targets={macroTargets} />
         <SavedMeals />
-        <FoodSearch onAdd={addFood} />
+        <section id="food-log">
+          <Card title="יומן מזון להיום">
+            <FoodLogList entries={todayFood} />
+          </Card>
+        </section>
         <RecipeCatalog />
+        <FoodSearch onAdd={addFood} />
         <ImportMealsModal />
         <Card title="שלב תזונה">
           <div className="mb-3 grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-50 p-1.5">

@@ -1,4 +1,5 @@
 import { useState, type MouseEvent } from 'react'
+import { Pencil } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import {
   consistencyWorkoutOptions,
@@ -28,12 +29,14 @@ function slotLabel(slot: DaySlot, fallbackName?: string) {
 function WeekRow({
   week,
   scheduledName,
-  onSelectDay,
+  onToggleDay,
+  onEditDay,
   onEditCount,
 }: {
   week: WeekConsistency
   scheduledName: (date: string) => string | undefined
-  onSelectDay: (slot: DaySlot) => void
+  onToggleDay: (slot: DaySlot) => void
+  onEditDay: (slot: DaySlot) => void
   onEditCount: (week: WeekConsistency) => void
 }) {
   const tone = weekTone(week.completed, week.target)
@@ -93,22 +96,32 @@ function WeekRow({
         {week.daySlots.map((slot) => {
           const name = slot.workoutName || scheduledName(slot.date)
           return (
-            <button
-              key={slot.date}
-              type="button"
-              title={slotLabel(slot, name)}
-              onClick={() => onSelectDay(slot)}
-              className={[
-                'flex size-11 flex-col items-center justify-center rounded-full text-[10px] font-bold transition',
-                slot.done
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
-                  : 'bg-slate-50 text-muted ring-1 ring-slate-200',
-              ].join(' ')}
-              aria-pressed={slot.done}
-              aria-label={slotLabel(slot, name)}
-            >
-              <span>{slot.weekday}</span>
-            </button>
+            <div key={slot.date} className="flex flex-col items-center gap-1">
+              <button
+                type="button"
+                title={slotLabel(slot, name)}
+                onClick={() => onToggleDay(slot)}
+                className={[
+                  'flex size-11 flex-col items-center justify-center rounded-full text-[10px] font-bold transition',
+                  slot.done
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20'
+                    : 'bg-slate-50 text-muted ring-1 ring-slate-200',
+                ].join(' ')}
+                aria-pressed={slot.done}
+                aria-label={slotLabel(slot, name)}
+              >
+                <span>{slot.weekday}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onEditDay(slot)}
+                className="flex size-6 items-center justify-center rounded-full text-muted transition hover:bg-white hover:text-blue-600"
+                aria-label={`עריכת אימון ליום ${slot.weekday}`}
+                title={name ? `עריכת אימון · ${name}` : 'עריכת אימון'}
+              >
+                <Pencil className="size-3" strokeWidth={2} />
+              </button>
+            </div>
           )
         })}
       </div>
@@ -173,7 +186,20 @@ export function WeeklyConsistencyTracker() {
     setEditWeek(null)
   }
 
-  function handleSelectDay(slot: DaySlot) {
+  function handleToggleDay(slot: DaySlot) {
+    if (slot.done) {
+      setConsistencyDayMark(slot.date, { done: false })
+      return
+    }
+    const scheduled = scheduledFor(slot.date)
+    setConsistencyDayMark(slot.date, {
+      done: true,
+      workoutId: scheduled.id,
+      workoutName: scheduled.name,
+    })
+  }
+
+  function handleEditDay(slot: DaySlot) {
     if (!slot.done) {
       const scheduled = scheduledFor(slot.date)
       setConsistencyDayMark(slot.date, {
@@ -215,7 +241,7 @@ export function WeeklyConsistencyTracker() {
         }
       >
         <p className="mb-3 text-xs text-muted">
-          לחץ על יום כדי לסמן אימון, לבחור תבנית או לבטל. הצבע מתעדכן מיד.
+          לחץ על יום לסימון מהיר. עיפרון קטן מחליף את תבנית האימון.
         </p>
         <ul className="space-y-2">
           {preview.map((week) => (
@@ -223,7 +249,8 @@ export function WeeklyConsistencyTracker() {
               key={week.weekKey}
               week={week}
               scheduledName={(date) => scheduledFor(date).name}
-              onSelectDay={handleSelectDay}
+              onToggleDay={handleToggleDay}
+              onEditDay={handleEditDay}
               onEditCount={openEdit}
             />
           ))}
@@ -249,7 +276,8 @@ export function WeeklyConsistencyTracker() {
               key={week.weekKey}
               week={week}
               scheduledName={(date) => scheduledFor(date).name}
-              onSelectDay={handleSelectDay}
+              onToggleDay={handleToggleDay}
+              onEditDay={handleEditDay}
               onEditCount={openEdit}
             />
           ))}
