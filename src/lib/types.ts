@@ -205,10 +205,13 @@ export type ProcessSettings = GoalSettings
 export type Exercise = {
   id: string
   name: string
+  /** Default set count used when starting a workout with no history. */
   sets: number
+  /** Default / prescribed reps (free text, e.g. "8-12"); numeric part seeds set reps. */
   reps: string
   /** Free text, e.g. "2-3 דקות", "60 שניות" */
   rest?: string
+  /** Default / prescribed weight (free text); numeric part seeds set weightKg. */
   weight?: string
   notes?: string
   /** Demo video / external link */

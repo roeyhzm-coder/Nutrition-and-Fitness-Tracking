@@ -21,9 +21,12 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
   return (
     <>
       <input {...bind('name')} placeholder="שם התרגיל" className={inputClass} required />
+      <p className="text-[11px] text-muted">
+        ערכי ברירת מחדל — משמשים למילוי אוטומטי כשאין היסטוריה לתרגיל
+      </p>
       <div className="grid grid-cols-2 gap-2">
         <label className="block text-xs text-muted">
-          סטים
+          סטים (ברירת מחדל)
           <NumericInput
             decimals={0}
             value={form.sets}
@@ -32,7 +35,7 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
           />
         </label>
         <label className="block text-xs text-muted">
-          חזרות
+          חזרות (ברירת מחדל)
           <input {...bind('reps')} placeholder="8-12 / 30 שניות" className={`mt-1 ${inputClass}`} />
         </label>
         <label className="block text-xs text-muted">
@@ -40,7 +43,7 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
           <input {...bind('rest')} placeholder="2-3 דקות / 60 שניות" className={`mt-1 ${inputClass}`} />
         </label>
         <label className="block text-xs text-muted">
-          משקל
+          משקל (ברירת מחדל)
           <input {...bind('weight')} placeholder='משקל גוף / 10 ק"ג' className={`mt-1 ${inputClass}`} />
         </label>
       </div>

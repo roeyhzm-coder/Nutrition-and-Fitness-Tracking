@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, Dumbbell, Plus, Timer, X } from 'lucide-react'
+import { Check, ChevronDown, Dumbbell, History, Minus, Plus, Timer, Trash2, X } from 'lucide-react'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import {
   displayDecimal,
@@ -79,9 +79,17 @@ type ExerciseBlockProps = {
 }
 
 function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
-  const { updateSet, setExerciseDone, addSet, lastPerformance } = useWorkoutSession()
-  const last = lastPerformance(exercise.name)
+  const {
+    updateSet,
+    setExerciseDone,
+    addSet,
+    removeSet,
+    loadPreviousSets,
+    lastPerformance,
+  } = useWorkoutSession()
+  const last = lastPerformance(exercise.name, exercise.exerciseId)
   const allDone = exercise.sets.length > 0 && exercise.sets.every((s) => s.done)
+  const canRemoveSet = exercise.sets.length > 1
 
   return (
     <li
@@ -139,17 +147,18 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
         </button>
       </div>
 
-      <div className="mt-3 grid grid-cols-[1.5rem_1fr_1fr_2.25rem] items-center gap-2 text-[11px] text-muted">
+      <div className="mt-3 grid grid-cols-[1.5rem_1fr_1fr_2.25rem_2.25rem] items-center gap-2 text-[11px] text-muted">
         <span>#</span>
         <span className="text-center">משקל (ק״ג)</span>
         <span className="text-center">חזרות</span>
         <span className="text-center">בוצע</span>
+        <span className="text-center">הסר</span>
       </div>
       <ul className="mt-1 space-y-1.5">
         {exercise.sets.map((set, setIndex) => (
           <li
             key={setIndex}
-            className="grid grid-cols-[1.5rem_1fr_1fr_2.25rem] items-center gap-2"
+            className="grid grid-cols-[1.5rem_1fr_1fr_2.25rem_2.25rem] items-center gap-2"
           >
             <span className="text-sm font-semibold text-muted">{setIndex + 1}</span>
             <DraftNumberInput
@@ -180,17 +189,49 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
             >
               <Check className="size-4" strokeWidth={2.5} />
             </button>
+            <button
+              type="button"
+              aria-label={`הסר סט ${setIndex + 1}`}
+              title={canRemoveSet ? 'הסר סט' : 'חובה להשאיר לפחות סט אחד'}
+              disabled={!canRemoveSet}
+              onClick={() => removeSet(index, setIndex)}
+              className="flex size-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 text-muted transition hover:border-rose-300 hover:bg-rose-50 hover:text-danger disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-slate-200 disabled:hover:bg-slate-50 disabled:hover:text-muted"
+            >
+              <Trash2 className="size-3.5" strokeWidth={2} />
+            </button>
           </li>
         ))}
       </ul>
-      <button
-        type="button"
-        onClick={() => addSet(index)}
-        className="mt-3 inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-blue-600 hover:underline"
-      >
-        <Plus className="size-3" strokeWidth={2} />
-        הוסף סט
-      </button>
+      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+        <button
+          type="button"
+          onClick={() => addSet(index)}
+          className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-blue-600 hover:underline"
+        >
+          <Plus className="size-3" strokeWidth={2} />
+          הוסף סט
+        </button>
+        {canRemoveSet ? (
+          <button
+            type="button"
+            onClick={() => removeSet(index, exercise.sets.length - 1)}
+            className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-muted hover:text-danger hover:underline"
+          >
+            <Minus className="size-3" strokeWidth={2} />
+            הסר סט אחרון
+          </button>
+        ) : null}
+        {last ? (
+          <button
+            type="button"
+            onClick={() => loadPreviousSets(index)}
+            className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline"
+          >
+            <History className="size-3" strokeWidth={2} />
+            טען מאימון קודם
+          </button>
+        ) : null}
+      </div>
     </li>
   )
 }
