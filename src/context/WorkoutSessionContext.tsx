@@ -7,8 +7,17 @@ import {
   type ReactNode,
 } from 'react'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import {
+  buildSetsFromDefaults,
+  defaultsFromExercise,
+  defaultsFromLoggedSets,
+  exercisePatchFromDefaults,
+  parseDefaultReps,
+  type ExerciseDefaultValues,
+} from '../lib/exerciseDefaults'
 import type {
   ActiveWorkout,
+  Exercise,
   LoggedExercise,
   LoggedSet,
   WorkoutDay,
@@ -29,70 +38,34 @@ type WorkoutSessionValue = {
   addSet: (exIndex: number) => void
   /** Removes a set; always keeps at least one set. */
   removeSet: (exIndex: number, setIndex: number) => void
-  /** Refills weight/reps from the last time this exercise was logged. */
-  loadPreviousSets: (exIndex: number) => boolean
+  /** Restore sets from the exercise's saved defaults. */
+  loadDefaults: (exIndex: number) => boolean
+  /** Persist current set values as the exercise's permanent defaults. */
+  saveAsDefaults: (exIndex: number) => boolean
   finishWorkout: () => WorkoutLog | null
   cancelWorkout: () => void
   workoutLogs: WorkoutLog[]
   deleteWorkoutLog: (id: string) => void
-  /** Most recent completed sets for an exercise (by id or name), across any workout. */
-  lastPerformance: (exerciseName: string, exerciseId?: string) => LoggedSet[] | null
 }
 
 const WorkoutSessionContext = createContext<WorkoutSessionValue | null>(null)
 
-/** Pulls the first numeric kg value from free-text weight (e.g. `10 ק"ג`, `25`). */
-function parseKg(text?: string): number | null {
-  if (!text?.trim()) return null
-  const match = text.match(/(\d+(?:\.\d+)?)/)
-  return match ? Number(match[1]) : null
-}
-
-/** Pulls a default rep count from free-text (e.g. `8-12` → 8, `6` → 6). */
-function parseDefaultReps(text?: string): number | null {
-  if (!text?.trim()) return null
-  const match = text.match(/(\d+)/)
-  return match ? Number(match[1]) : null
-}
-
-function matchesExercise(
-  logged: { exerciseId: string; name: string },
-  exerciseName: string,
-  exerciseId?: string,
-) {
-  if (exerciseId && logged.exerciseId === exerciseId) return true
-  return logged.name === exerciseName
-}
-
 /** Completing a set fills blanks from the previous set's weight and a numeric rep target. */
 function completeSet(ex: LoggedExercise, index: number, sets = ex.sets): LoggedSet {
   const set = sets[index]
-  const targetReps = parseDefaultReps(ex.targetReps)
+  const targetReps =
+    ex.defaultReps != null && Number.isFinite(ex.defaultReps)
+      ? ex.defaultReps
+      : parseDefaultReps(ex.targetReps)
   return {
     ...set,
     done: true,
-    weightKg: set.weightKg ?? sets[index - 1]?.weightKg ?? null,
+    weightKg: set.weightKg ?? sets[index - 1]?.weightKg ?? ex.defaultWeightKg ?? null,
     reps: set.reps ?? targetReps,
   }
 }
 
-function buildSetsFromHistory(
-  setCount: number,
-  last: LoggedSet[] | null,
-  defaultWeightKg: number | null,
-  defaultReps: number | null,
-): LoggedSet[] {
-  return Array.from({ length: Math.max(1, setCount) }, (_, i) => {
-    const prev = last?.[i] ?? last?.at(-1)
-    return {
-      weightKg: prev?.weightKg ?? defaultWeightKg,
-      reps: prev?.reps ?? defaultReps,
-      done: false,
-    }
-  })
-}
-
-function updateExercise(
+function updateLoggedExercise(
   workout: ActiveWorkout,
   exIndex: number,
   fn: (ex: LoggedExercise) => LoggedExercise,
@@ -107,33 +80,53 @@ function workoutLabel(day: WorkoutDay) {
   return day.sessions.map((s) => s.name).join(' + ') || day.focus || day.title
 }
 
-function doneSetsFrom(sets: LoggedSet[] | undefined): LoggedSet[] | null {
-  const done = sets?.filter((s) => s.done)
-  return done?.length ? done : null
+function findProgramExercise(
+  days: WorkoutDay[] | undefined,
+  dayId: string,
+  exerciseId: string,
+): Exercise | undefined {
+  const day = days?.find((d) => d.id === dayId)
+  if (!day) return undefined
+  return dayAllExercises(day).find((e) => e.id === exerciseId)
 }
 
-/** Latest done sets for an exercise across all workout logs (by completedAt). */
-function findLastExercisePerformance(
-  logs: WorkoutLog[],
-  exerciseName: string,
-  exerciseId?: string,
-): LoggedSet[] | null {
-  let best: { at: string; sets: LoggedSet[] } | null = null
-  for (const log of logs) {
-    const ex = log.exercises.find((e) =>
-      matchesExercise(e, exerciseName, exerciseId),
-    )
-    const done = doneSetsFrom(ex?.sets)
-    if (!done) continue
-    if (!best || log.completedAt >= best.at) {
-      best = { at: log.completedAt, sets: done }
-    }
+function loggedTargetsFromDefaults(
+  defaults: ExerciseDefaultValues,
+): Pick<
+  LoggedExercise,
+  'targetSets' | 'targetReps' | 'targetWeight' | 'defaultWeightKg' | 'defaultReps'
+> {
+  const patch = exercisePatchFromDefaults(defaults)
+  return {
+    targetSets: patch.sets,
+    targetReps: patch.reps,
+    targetWeight: patch.weight,
+    defaultWeightKg: patch.defaultWeightKg ?? null,
+    defaultReps: patch.defaultReps ?? null,
   }
-  return best?.sets ?? null
+}
+
+function resolveDefaults(
+  logged: LoggedExercise,
+  programEx?: Exercise,
+): ExerciseDefaultValues {
+  if (programEx) return defaultsFromExercise(programEx)
+  return defaultsFromExercise({
+    sets: logged.targetSets,
+    reps: logged.targetReps,
+    weight: logged.targetWeight,
+    defaultWeightKg: logged.defaultWeightKg,
+    defaultReps: logged.defaultReps,
+  })
 }
 
 export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
-  const { activeProgram, addSetLog, setConsistencyDayMark } = useAppData()
+  const {
+    activeProgram,
+    addSetLog,
+    setConsistencyDayMark,
+    updateExercise: updateProgramExercise,
+  } = useAppData()
   const [activeWorkout, setActiveWorkout] = useLocalStorage<ActiveWorkout | null>(
     'tn.activeWorkout.v1',
     null,
@@ -143,12 +136,6 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     [],
   )
   const [trackerOpen, setTrackerOpen] = useState(false)
-
-  const lastPerformance = useCallback(
-    (exerciseName: string, exerciseId?: string) =>
-      findLastExercisePerformance(workoutLogs, exerciseName, exerciseId),
-    [workoutLogs],
-  )
 
   const startWorkout = useCallback(
     (day: WorkoutDay) => {
@@ -167,36 +154,30 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
         workoutName: name,
         startedAt: new Date().toISOString(),
         exercises: exercises.map((ex) => {
-          // Exercise-level history: last time THIS exercise was performed, any workout type.
-          const last = findLastExercisePerformance(workoutLogs, ex.name, ex.id)
-          const defaultWeightKg = parseKg(ex.weight)
-          const defaultReps = parseDefaultReps(ex.reps)
+          const defaults = defaultsFromExercise(ex)
           return {
             exerciseId: ex.id,
             name: ex.name,
             targetSets: ex.sets,
             targetReps: ex.reps,
             targetWeight: ex.weight,
+            defaultWeightKg: defaults.weightKg,
+            defaultReps: defaults.reps,
             rest: ex.rest,
             imageUrl: ex.imageUrl,
-            sets: buildSetsFromHistory(
-              ex.sets,
-              last,
-              defaultWeightKg,
-              defaultReps,
-            ),
+            sets: buildSetsFromDefaults(defaults),
           }
         }),
       })
     },
-    [activeWorkout, activeProgram, setActiveWorkout, workoutLogs],
+    [activeWorkout, activeProgram, setActiveWorkout],
   )
 
   const updateSet = useCallback(
     (exIndex: number, setIndex: number, patch: Partial<LoggedSet>) => {
       setActiveWorkout((prev) =>
         prev
-          ? updateExercise(prev, exIndex, (ex) => {
+          ? updateLoggedExercise(prev, exIndex, (ex) => {
               const sets = ex.sets.map((s, i) => (i === setIndex ? { ...s, ...patch } : s))
               if (patch.done) sets[setIndex] = completeSet(ex, setIndex, sets)
               return { ...ex, sets }
@@ -211,7 +192,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     (exIndex: number, done: boolean) => {
       setActiveWorkout((prev) =>
         prev
-          ? updateExercise(prev, exIndex, (ex) => {
+          ? updateLoggedExercise(prev, exIndex, (ex) => {
               if (!done) return { ...ex, sets: ex.sets.map((s) => ({ ...s, done: false })) }
               const sets = [...ex.sets]
               sets.forEach((_, i) => {
@@ -229,13 +210,14 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     (exIndex: number) => {
       setActiveWorkout((prev) =>
         prev
-          ? updateExercise(prev, exIndex, (ex) => ({
+          ? updateLoggedExercise(prev, exIndex, (ex) => ({
               ...ex,
               sets: [
                 ...ex.sets,
                 {
-                  weightKg: ex.sets.at(-1)?.weightKg ?? null,
-                  reps: ex.sets.at(-1)?.reps ?? null,
+                  weightKg:
+                    ex.sets.at(-1)?.weightKg ?? ex.defaultWeightKg ?? null,
+                  reps: ex.sets.at(-1)?.reps ?? ex.defaultReps ?? null,
                   done: false,
                 },
               ],
@@ -250,7 +232,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     (exIndex: number, setIndex: number) => {
       setActiveWorkout((prev) =>
         prev
-          ? updateExercise(prev, exIndex, (ex) => {
+          ? updateLoggedExercise(prev, exIndex, (ex) => {
               if (ex.sets.length <= 1) return ex
               const nextIndex = Math.min(Math.max(setIndex, 0), ex.sets.length - 1)
               return {
@@ -264,41 +246,58 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     [setActiveWorkout],
   )
 
-  const loadPreviousSets = useCallback(
+  const loadDefaults = useCallback(
     (exIndex: number) => {
       const workout = activeWorkout
       if (!workout) return false
-      const ex = workout.exercises[exIndex]
-      if (!ex) return false
+      const logged = workout.exercises[exIndex]
+      if (!logged) return false
 
-      // Prefer last logged performance for THIS exercise (any workout type / date).
-      const last = findLastExercisePerformance(
-        workoutLogs,
-        ex.name,
-        ex.exerciseId,
+      const programEx = findProgramExercise(
+        activeProgram?.days,
+        workout.dayId,
+        logged.exerciseId,
       )
-      const defaultWeightKg = parseKg(ex.targetWeight)
-      const defaultReps = parseDefaultReps(ex.targetReps)
-      const setCount = last?.length
-        ? Math.max(ex.sets.length, last.length)
-        : Math.max(ex.sets.length, ex.targetSets, 1)
+      const defaults = resolveDefaults(logged, programEx)
 
       setActiveWorkout((prev) =>
         prev
-          ? updateExercise(prev, exIndex, (current) => ({
+          ? updateLoggedExercise(prev, exIndex, (current) => ({
               ...current,
-              sets: buildSetsFromHistory(
-                setCount,
-                last,
-                defaultWeightKg,
-                defaultReps,
-              ),
+              ...loggedTargetsFromDefaults(defaults),
+              sets: buildSetsFromDefaults(defaults),
             }))
           : prev,
       )
       return true
     },
-    [activeWorkout, setActiveWorkout, workoutLogs],
+    [activeProgram?.days, activeWorkout, setActiveWorkout],
+  )
+
+  const saveAsDefaults = useCallback(
+    (exIndex: number) => {
+      const workout = activeWorkout
+      if (!workout) return false
+      const logged = workout.exercises[exIndex]
+      if (!logged) return false
+
+      const defaults = defaultsFromLoggedSets(logged.sets)
+      const patch = exercisePatchFromDefaults(defaults)
+
+      // Persist onto the program exercise (localStorage + Supabase sync via AppData).
+      updateProgramExercise(workout.dayId, logged.exerciseId, patch)
+
+      setActiveWorkout((prev) =>
+        prev
+          ? updateLoggedExercise(prev, exIndex, (current) => ({
+              ...current,
+              ...loggedTargetsFromDefaults(defaults),
+            }))
+          : prev,
+      )
+      return true
+    },
+    [activeWorkout, setActiveWorkout, updateProgramExercise],
   )
 
   const finishWorkout = useCallback(() => {
@@ -360,12 +359,12 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       setExerciseDone,
       addSet,
       removeSet,
-      loadPreviousSets,
+      loadDefaults,
+      saveAsDefaults,
       finishWorkout,
       cancelWorkout,
       workoutLogs,
       deleteWorkoutLog,
-      lastPerformance,
     }),
     [
       activeWorkout,
@@ -375,12 +374,12 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       setExerciseDone,
       addSet,
       removeSet,
-      loadPreviousSets,
+      loadDefaults,
+      saveAsDefaults,
       finishWorkout,
       cancelWorkout,
       workoutLogs,
       deleteWorkoutLog,
-      lastPerformance,
     ],
   )
 

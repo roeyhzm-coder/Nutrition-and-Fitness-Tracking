@@ -1,12 +1,23 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, Dumbbell, History, Minus, Plus, Timer, Trash2, X } from 'lucide-react'
+import {
+  Check,
+  ChevronDown,
+  Dumbbell,
+  Minus,
+  Plus,
+  RotateCcw,
+  Save,
+  Timer,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import {
   displayDecimal,
   parseDecimal,
   parseInteger,
 } from '../../lib/numericInput'
-import type { LoggedExercise, LoggedSet } from '../../lib/types'
+import type { LoggedExercise } from '../../lib/types'
 import { WEEKDAYS } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
@@ -67,10 +78,16 @@ function DraftNumberInput({
   )
 }
 
-function formatSets(sets: LoggedSet[]) {
-  return sets
-    .map((s) => `${s.weightKg ?? 0}×${s.reps ?? '?'}`)
-    .join(', ')
+function formatDefaultSummary(exercise: LoggedExercise) {
+  const weight =
+    exercise.defaultWeightKg != null
+      ? `${exercise.defaultWeightKg} ק״ג`
+      : exercise.targetWeight || '—'
+  const reps =
+    exercise.defaultReps != null
+      ? String(exercise.defaultReps)
+      : exercise.targetReps || '—'
+  return `${exercise.targetSets} סטים · ${weight} · ${reps} חזרות`
 }
 
 type ExerciseBlockProps = {
@@ -84,12 +101,17 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
     setExerciseDone,
     addSet,
     removeSet,
-    loadPreviousSets,
-    lastPerformance,
+    loadDefaults,
+    saveAsDefaults,
   } = useWorkoutSession()
-  const last = lastPerformance(exercise.name, exercise.exerciseId)
+  const [defaultsToast, setDefaultsToast] = useState<string | null>(null)
   const allDone = exercise.sets.length > 0 && exercise.sets.every((s) => s.done)
   const canRemoveSet = exercise.sets.length > 1
+
+  function flash(message: string) {
+    setDefaultsToast(message)
+    window.setTimeout(() => setDefaultsToast(null), 2200)
+  }
 
   return (
     <li
@@ -127,10 +149,11 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
               </span>
             ) : null}
           </div>
-          {last ? (
-            <p className="mt-1 text-[11px] text-muted">
-              פעם קודמת: {formatSets(last)}
-            </p>
+          <p className="mt-1 text-[11px] text-muted">
+            ברירת מחדל: {formatDefaultSummary(exercise)}
+          </p>
+          {defaultsToast ? (
+            <p className="mt-1 text-[11px] font-medium text-emerald-700">{defaultsToast}</p>
           ) : null}
         </div>
         <button
@@ -223,16 +246,25 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
         </button>
         <button
           type="button"
-          title={
-            last
-              ? 'מלא משקל וחזרות מהפעם האחרונה שבה התרגיל בוצע'
-              : 'אין היסטוריה — ימולא לפי ברירות המחדל של התרגיל'
-          }
-          onClick={() => loadPreviousSets(index)}
+          title="שמור את הערכים הנוכחיים כברירת מחדל קבועה לתרגיל"
+          onClick={() => {
+            if (saveAsDefaults(index)) flash('ברירת המחדל נשמרה')
+          }}
+          className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
+        >
+          <Save className="size-3" strokeWidth={2} />
+          שמור כברירת מחדל
+        </button>
+        <button
+          type="button"
+          title="שחזר משקל, חזרות ומספר סטים מברירת המחדל של התרגיל"
+          onClick={() => {
+            if (loadDefaults(index)) flash('ברירת המחדל נטענה')
+          }}
           className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline"
         >
-          <History className="size-3" strokeWidth={2} />
-          טען מאימון קודם
+          <RotateCcw className="size-3" strokeWidth={2} />
+          טען ברירת מחדל
         </button>
       </div>
     </li>

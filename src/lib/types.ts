@@ -205,7 +205,7 @@ export type ProcessSettings = GoalSettings
 export type Exercise = {
   id: string
   name: string
-  /** Default set count used when starting a workout with no history. */
+  /** Default set count used when starting / loading defaults. */
   sets: number
   /** Default / prescribed reps (free text, e.g. "8-12"); numeric part seeds set reps. */
   reps: string
@@ -213,6 +213,10 @@ export type Exercise = {
   rest?: string
   /** Default / prescribed weight (free text); numeric part seeds set weightKg. */
   weight?: string
+  /** Preferred numeric default weight for autofill. */
+  defaultWeightKg?: number | null
+  /** Preferred numeric default reps for autofill. */
+  defaultReps?: number | null
   notes?: string
   /** Demo video / external link */
   mediaUrl?: string
@@ -297,6 +301,9 @@ export type LoggedExercise = {
   targetSets: number
   targetReps: string
   targetWeight?: string
+  /** Numeric defaults mirrored from the exercise definition. */
+  defaultWeightKg?: number | null
+  defaultReps?: number | null
   rest?: string
   imageUrl?: string
   sets: LoggedSet[]

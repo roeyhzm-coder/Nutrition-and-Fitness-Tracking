@@ -22,7 +22,7 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
     <>
       <input {...bind('name')} placeholder="שם התרגיל" className={inputClass} required />
       <p className="text-[11px] text-muted">
-        ערכי ברירת מחדל — משמשים למילוי אוטומטי כשאין היסטוריה לתרגיל
+        ברירות מחדל — ממלאות אוטומטית את הסטים באימון הפעיל (ניתן גם לשמור מהאימון עצמו)
       </p>
       <div className="grid grid-cols-2 gap-2">
         <label className="block text-xs text-muted">
@@ -35,16 +35,35 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
           />
         </label>
         <label className="block text-xs text-muted">
-          חזרות (ברירת מחדל)
+          חזרות (תווית / טווח)
           <input {...bind('reps')} placeholder="8-12 / 30 שניות" className={`mt-1 ${inputClass}`} />
+        </label>
+        <label className="block text-xs text-muted">
+          חזרות מספריות (למילוי)
+          <NumericInput
+            decimals={0}
+            value={form.defaultReps}
+            onChange={(defaultReps) => setForm((p) => ({ ...p, defaultReps }))}
+            placeholder="8"
+            className={`mt-1 ${inputClass}`}
+          />
+        </label>
+        <label className="block text-xs text-muted">
+          משקל (תווית)
+          <input {...bind('weight')} placeholder='משקל גוף / 10 ק"ג' className={`mt-1 ${inputClass}`} />
+        </label>
+        <label className="block text-xs text-muted">
+          משקל בק״ג (למילוי)
+          <NumericInput
+            value={form.defaultWeightKg}
+            onChange={(defaultWeightKg) => setForm((p) => ({ ...p, defaultWeightKg }))}
+            placeholder="10"
+            className={`mt-1 ${inputClass}`}
+          />
         </label>
         <label className="block text-xs text-muted">
           זמן מנוחה
           <input {...bind('rest')} placeholder="2-3 דקות / 60 שניות" className={`mt-1 ${inputClass}`} />
-        </label>
-        <label className="block text-xs text-muted">
-          משקל (ברירת מחדל)
-          <input {...bind('weight')} placeholder='משקל גוף / 10 ק"ג' className={`mt-1 ${inputClass}`} />
         </label>
       </div>
       <textarea
