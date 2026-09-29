@@ -211,26 +211,29 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
           <Plus className="size-3" strokeWidth={2} />
           הוסף סט
         </button>
-        {canRemoveSet ? (
-          <button
-            type="button"
-            onClick={() => removeSet(index, exercise.sets.length - 1)}
-            className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-muted hover:text-danger hover:underline"
-          >
-            <Minus className="size-3" strokeWidth={2} />
-            הסר סט אחרון
-          </button>
-        ) : null}
-        {last ? (
-          <button
-            type="button"
-            onClick={() => loadPreviousSets(index)}
-            className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline"
-          >
-            <History className="size-3" strokeWidth={2} />
-            טען מאימון קודם
-          </button>
-        ) : null}
+        <button
+          type="button"
+          disabled={!canRemoveSet}
+          title={canRemoveSet ? 'הסר סט אחרון' : 'חובה להשאיר לפחות סט אחד'}
+          onClick={() => removeSet(index, exercise.sets.length - 1)}
+          className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-muted hover:text-danger hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-muted disabled:hover:no-underline"
+        >
+          <Minus className="size-3" strokeWidth={2} />
+          הסר סט אחרון
+        </button>
+        <button
+          type="button"
+          title={
+            last
+              ? 'מלא משקל וחזרות מהפעם האחרונה שבה התרגיל בוצע'
+              : 'אין היסטוריה — ימולא לפי ברירות המחדל של התרגיל'
+          }
+          onClick={() => loadPreviousSets(index)}
+          className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline"
+        >
+          <History className="size-3" strokeWidth={2} />
+          טען מאימון קודם
+        </button>
       </div>
     </li>
   )

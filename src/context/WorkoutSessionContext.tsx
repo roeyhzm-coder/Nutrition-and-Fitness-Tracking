@@ -270,21 +270,25 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       if (!workout) return false
       const ex = workout.exercises[exIndex]
       if (!ex) return false
+
+      // Prefer last logged performance for THIS exercise (any workout type / date).
       const last = findLastExercisePerformance(
         workoutLogs,
         ex.name,
         ex.exerciseId,
       )
-      if (!last?.length) return false
-
       const defaultWeightKg = parseKg(ex.targetWeight)
       const defaultReps = parseDefaultReps(ex.targetReps)
+      const setCount = last?.length
+        ? Math.max(ex.sets.length, last.length)
+        : Math.max(ex.sets.length, ex.targetSets, 1)
+
       setActiveWorkout((prev) =>
         prev
           ? updateExercise(prev, exIndex, (current) => ({
               ...current,
               sets: buildSetsFromHistory(
-                Math.max(current.sets.length, last.length),
+                setCount,
                 last,
                 defaultWeightKg,
                 defaultReps,
