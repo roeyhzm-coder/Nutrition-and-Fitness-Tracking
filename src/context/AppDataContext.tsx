@@ -16,8 +16,9 @@ import {
   DEFAULT_PHASE,
   DEFAULT_PHASE_MACROS,
   DEFAULT_PROFILE,
-  DEFAULT_SAVED_MEALS,
   loadPresetMeals,
+  mergeSavedMeals,
+  savedMealsEqual,
   PLAN_SEED_KEY,
   PLAN_SEED_VERSION,
   normalizeMacroPresets,
@@ -427,10 +428,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     loadPresetMeals(),
   )
 
-  // Keep preset templates permanent: never leave the list empty after reload/sync.
+  // Restore system meals and classify item vs meal without dropping staples.
   useEffect(() => {
-    if (savedMeals.length === 0) setSavedMeals(DEFAULT_SAVED_MEALS)
-  }, [savedMeals.length, setSavedMeals])
+    setSavedMeals((prev) => {
+      const next = mergeSavedMeals(prev)
+      return savedMealsEqual(prev, next) ? prev : next
+    })
+  }, [setSavedMeals])
   const [recipes, setRecipes] = useLocalStorage<Recipe[]>(
     'tn.recipes.v3',
     DEFAULT_RECIPES,
@@ -909,7 +913,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (remote.foodCategories?.length) {
         setFoodCategories(remote.foodCategories)
       }
-      if (remote.savedMeals?.length) setSavedMeals(remote.savedMeals)
+      if (remote.savedMeals?.length) {
+        setSavedMeals(mergeSavedMeals(remote.savedMeals))
+      }
       if (remote.foodLogs?.length) setFoodLogs(remote.foodLogs)
       if (remote.profile) setProfileRaw(remote.profile)
       if (remote.activityLogs?.length) setActivityLogs(remote.activityLogs)
@@ -1096,7 +1102,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const addSavedMeal = useCallback(
     (meal: Omit<SavedMeal, 'id'>) => {
-      setSavedMeals((prev) => [...prev, { ...meal, id: uid() }])
+      setSavedMeals((prev) => [
+        ...prev,
+        { kind: 'item', ...meal, id: uid() },
+      ])
     },
     [setSavedMeals],
   )
@@ -1126,7 +1135,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const importMealsAndRecipes = useCallback(
     (meals: SavedMeal[], nextRecipes: Recipe[]) => {
-      if (meals.length) setSavedMeals((prev) => [...prev, ...meals])
+      if (meals.length) {
+        setSavedMeals((prev) => [
+          ...prev,
+          ...meals.map((m) => ({ ...m, kind: m.kind ?? 'meal' })),
+        ])
+      }
       if (nextRecipes.length) setRecipes((prev) => [...prev, ...nextRecipes])
     },
     [setSavedMeals, setRecipes],

@@ -151,6 +151,12 @@ export type Routine = {
   archivedAt: string | null
 }
 
+export type SavedPresetKind = 'item' | 'meal'
+
+export function isSavedPresetKind(value: unknown): value is SavedPresetKind {
+  return value === 'item' || value === 'meal'
+}
+
 export type SavedMeal = {
   id: string
   name: string
@@ -160,6 +166,8 @@ export type SavedMeal = {
   fats: number
   /** Optional items list or free-text notes for the preset. */
   notes?: string
+  /** Individual staple vs a complete meal/recipe. Older records may omit this. */
+  kind?: SavedPresetKind
 }
 
 export type Sex = 'male' | 'female'

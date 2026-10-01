@@ -166,7 +166,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
       unit === 'serving'
         ? `${amount} ${servingHint(product.name, product.brand)} · ${round1(grams)} גרם`
         : `${round1(grams)} גרם`
-    addSavedMeal({ name, ...macros, notes })
+    addSavedMeal({ name, ...macros, notes, kind: 'item' })
     showToast('נשמר לקבועים שלי')
   }
 
@@ -183,6 +183,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
       protein: parseDecimal(custom.protein) ?? 0,
       carbs: parseDecimal(custom.carbs) ?? 0,
       fats: parseDecimal(custom.fats) ?? 0,
+      kind: 'item',
     }
     const grams = parsePositiveDecimal(custom.grams) ?? 1
     onAdd({ ...payload, grams, source: 'manual' })

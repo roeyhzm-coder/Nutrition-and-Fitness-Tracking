@@ -4,12 +4,19 @@ import type {
   Phase,
   PhaseMacroPresets,
   SavedMeal,
+  SavedPresetKind,
   UserProfile,
   WeightEntry,
   WorkoutDay,
   WorkoutProgram,
 } from '../lib/types'
-import { normalizeWorkoutDay, todayKey, toLoggedAt, uid } from '../lib/types'
+import {
+  isSavedPresetKind,
+  normalizeWorkoutDay,
+  todayKey,
+  toLoggedAt,
+  uid,
+} from '../lib/types'
 import { DEFAULT_WORKOUT_DAYS, createOfficialPrograms } from './workouts'
 
 export const PLAN_SEED_VERSION = 1
@@ -133,6 +140,7 @@ export const DEFAULT_SAVED_MEALS: SavedMeal[] = [
     carbs: 45,
     fats: 8,
     notes: 'שייק חלבון + 40ג׳ שיבולת שועל + מים/חלב',
+    kind: 'meal',
   },
   {
     id: 'meal-eggs-toast',
@@ -142,8 +150,61 @@ export const DEFAULT_SAVED_MEALS: SavedMeal[] = [
     carbs: 35,
     fats: 22,
     notes: '3 ביצים + 2 פרוסות לחם מלא + ירקות',
+    kind: 'meal',
   },
 ]
+
+const DEFAULT_SAVED_MEAL_IDS = new Set(DEFAULT_SAVED_MEALS.map((m) => m.id))
+const DEFAULT_SAVED_MEAL_NAMES = new Set(
+  DEFAULT_SAVED_MEALS.map((m) => m.name.trim()),
+)
+
+export function savedPresetKind(meal: SavedMeal): SavedPresetKind {
+  if (isSavedPresetKind(meal.kind)) return meal.kind
+  if (DEFAULT_SAVED_MEAL_IDS.has(meal.id)) return 'meal'
+  if (DEFAULT_SAVED_MEAL_NAMES.has(meal.name.trim())) return 'meal'
+  if (meal.notes && (meal.notes.includes('+') || meal.notes.includes('•'))) {
+    return 'meal'
+  }
+  return 'item'
+}
+
+export function normalizeSavedMeal(meal: SavedMeal): SavedMeal {
+  return { ...meal, kind: savedPresetKind(meal) }
+}
+
+export function mergeSavedMeals(existing: SavedMeal[]): SavedMeal[] {
+  const list = (existing.length ? existing : []).map(normalizeSavedMeal)
+  const ids = new Set(list.map((m) => m.id))
+  const names = new Set(list.map((m) => m.name.trim()))
+  const next = [...list]
+  for (const preset of DEFAULT_SAVED_MEALS) {
+    if (ids.has(preset.id) || names.has(preset.name.trim())) continue
+    next.push(preset)
+    ids.add(preset.id)
+    names.add(preset.name.trim())
+  }
+  return next.length > 0 ? next : DEFAULT_SAVED_MEALS
+}
+
+export function savedMealsEqual(a: SavedMeal[], b: SavedMeal[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  return a.every((m, i) => {
+    const n = b[i]
+    return (
+      n != null &&
+      m.id === n.id &&
+      m.kind === n.kind &&
+      m.name === n.name &&
+      m.calories === n.calories &&
+      m.protein === n.protein &&
+      m.carbs === n.carbs &&
+      m.fats === n.fats &&
+      m.notes === n.notes
+    )
+  })
+}
 
 const PRESET_MEAL_KEYS = ['user_preset_meals', 'tn.savedMeals.v2'] as const
 
@@ -154,7 +215,9 @@ export function loadPresetMeals(): SavedMeal[] {
       const raw = localStorage.getItem(key)
       if (raw == null) continue
       const parsed = JSON.parse(raw) as SavedMeal[]
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return mergeSavedMeals(parsed)
+      }
     }
   } catch {
     /* fall through */

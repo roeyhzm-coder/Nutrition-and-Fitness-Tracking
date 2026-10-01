@@ -495,6 +495,11 @@ export function parseImportJson(raw: string): {
       protein: Number(m.protein ?? 0),
       carbs: Number(m.carbs ?? 0),
       fats: Number(m.fats ?? 0),
+      notes:
+        typeof m.notes === 'string' && m.notes.trim()
+          ? m.notes.trim()
+          : undefined,
+      kind: m.kind === 'item' ? ('item' as const) : ('meal' as const),
     }))
 
   const asRecipes = (

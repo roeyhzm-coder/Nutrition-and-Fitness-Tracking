@@ -48,13 +48,17 @@ function toForm(meal: SavedMeal): MacroForm {
   }
 }
 
-function toMacros(form: MacroForm): Omit<SavedMeal, 'id'> {
+function toMacros(
+  form: MacroForm,
+  kind: SavedMeal['kind'] = 'item',
+): Omit<SavedMeal, 'id'> {
   return {
     name: form.name.trim(),
     calories: parseInteger(form.calories) ?? 0,
     protein: parseDecimal(form.protein) ?? 0,
     carbs: parseDecimal(form.carbs) ?? 0,
     fats: parseDecimal(form.fats) ?? 0,
+    kind,
   }
 }
 
@@ -131,7 +135,11 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
   }
 
   function saveEditor() {
-    const payload = toMacros(editorForm)
+    const existing =
+      editorTarget && editorTarget !== 'new'
+        ? savedMeals.find((m) => m.id === editorTarget)
+        : undefined
+    const payload = toMacros(editorForm, existing?.kind ?? 'item')
     if (!payload.name) return
     if (editorTarget === 'new') addSavedMeal(payload)
     else if (editorTarget) updateSavedMeal(editorTarget, payload)
@@ -144,11 +152,14 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
   }
 
   function saveManualAsPreset() {
-    const payload = toMacros(form)
+    const payload = toMacros(form, 'item')
     if (!payload.name) return
     const existing = savedMeals.find((m) => m.name.trim() === payload.name)
-    if (existing) updateSavedMeal(existing.id, payload)
-    else addSavedMeal(payload)
+    if (existing) {
+      updateSavedMeal(existing.id, { ...payload, kind: existing.kind ?? 'item' })
+    } else {
+      addSavedMeal(payload)
+    }
     flash(existing ? 'התבנית הקיימת עודכנה' : 'נשמר כתבנית קבועה')
   }
 
