@@ -56,6 +56,23 @@ export function defaultsFromExercise(ex: Pick<
   }
 }
 
+function sameOptionalNumber(
+  a: number | null | undefined,
+  b: number | null | undefined,
+): boolean {
+  if (a == null && b == null) return true
+  if (a == null || b == null) return false
+  return a === b
+}
+
+/** True when the workout has no entered/saved set values to keep. */
+export function loggedSetsAreUnset(sets: LoggedSet[]): boolean {
+  if (!sets.length) return true
+  return sets.every(
+    (s) => !s.done && s.weightKg == null && s.reps == null && s.rpe == null,
+  )
+}
+
 /** Build LoggedSet rows from defaults (all unmarked). */
 export function buildSetsFromDefaults(
   defaults: ExerciseDefaultValues,
@@ -68,6 +85,27 @@ export function buildSetsFromDefaults(
     done: false,
     rpe: null,
   }))
+}
+
+/**
+ * Dirty-check for the active-workout form: set count, weight, and reps
+ * against the exercise's saved defaults. RPE / done are ignored.
+ */
+export function setsMatchDefaults(
+  sets: LoggedSet[],
+  defaults: ExerciseDefaultValues,
+): boolean {
+  const expected = buildSetsFromDefaults(defaults)
+  if (sets.length !== expected.length) return false
+  return sets.every(
+    (s, i) =>
+      sameOptionalNumber(s.weightKg, expected[i]!.weightKg) &&
+      sameOptionalNumber(s.reps, expected[i]!.reps),
+  )
+}
+
+export function setsValuesKey(sets: LoggedSet[]): string {
+  return sets.map((s) => `${s.weightKg ?? ''}:${s.reps ?? ''}`).join('|')
 }
 
 /**

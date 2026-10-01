@@ -13,6 +13,7 @@ import {
   defaultsFromExercise,
   defaultsFromLoggedSets,
   exercisePatchFromDefaults,
+  loggedSetsAreUnset,
   parseDefaultReps,
   type ExerciseDefaultValues,
 } from '../lib/exerciseDefaults'
@@ -46,8 +47,6 @@ type WorkoutSessionValue = {
   addSet: (exIndex: number) => void
   /** Removes a set; always keeps at least one set. */
   removeSet: (exIndex: number, setIndex: number) => void
-  /** Restore sets from the exercise's saved defaults. */
-  loadDefaults: (exIndex: number) => boolean
   /** Persist current set values as the exercise's permanent defaults. */
   saveAsDefaults: (exIndex: number) => boolean
   finishWorkout: () => WorkoutLog | null
@@ -128,6 +127,19 @@ function resolveDefaults(
   })
 }
 
+function applyDefaultsIfUnset(
+  logged: LoggedExercise,
+  programEx?: Exercise,
+): LoggedExercise {
+  if (!loggedSetsAreUnset(logged.sets)) return logged
+  const defaults = resolveDefaults(logged, programEx)
+  return {
+    ...logged,
+    ...loggedTargetsFromDefaults(defaults),
+    sets: buildSetsFromDefaults(defaults),
+  }
+}
+
 export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
   const {
     activeProgram,
@@ -144,6 +156,8 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     [],
   )
   const [trackerOpen, setTrackerOpen] = useState(false)
+  const activeWorkoutId = activeWorkout?.id
+  const programDays = activeProgram?.days
 
   useEffect(() => {
     let cancelled = false
@@ -159,6 +173,21 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       cancelled = true
     }
   }, [setWorkoutLogs])
+
+  useEffect(() => {
+    if (!activeWorkoutId) return
+    setActiveWorkout((prev) => {
+      if (!prev || prev.id !== activeWorkoutId) return prev
+      let changed = false
+      const exercises = prev.exercises.map((logged) => {
+        const programEx = findProgramExercise(programDays, prev.dayId, logged.exerciseId)
+        const next = applyDefaultsIfUnset(logged, programEx)
+        if (next !== logged) changed = true
+        return next
+      })
+      return changed ? { ...prev, exercises } : prev
+    })
+  }, [activeWorkoutId, programDays, setActiveWorkout])
 
   const startWorkout = useCallback(
     (day: WorkoutDay) => {
@@ -271,34 +300,6 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     [setActiveWorkout],
   )
 
-  const loadDefaults = useCallback(
-    (exIndex: number) => {
-      const workout = activeWorkout
-      if (!workout) return false
-      const logged = workout.exercises[exIndex]
-      if (!logged) return false
-
-      const programEx = findProgramExercise(
-        activeProgram?.days,
-        workout.dayId,
-        logged.exerciseId,
-      )
-      const defaults = resolveDefaults(logged, programEx)
-
-      setActiveWorkout((prev) =>
-        prev
-          ? updateLoggedExercise(prev, exIndex, (current) => ({
-              ...current,
-              ...loggedTargetsFromDefaults(defaults),
-              sets: buildSetsFromDefaults(defaults),
-            }))
-          : prev,
-      )
-      return true
-    },
-    [activeProgram?.days, activeWorkout, setActiveWorkout],
-  )
-
   const saveAsDefaults = useCallback(
     (exIndex: number) => {
       const workout = activeWorkout
@@ -405,7 +406,6 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       setExerciseDone,
       addSet,
       removeSet,
-      loadDefaults,
       saveAsDefaults,
       finishWorkout,
       cancelWorkout,
@@ -420,7 +420,6 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       setExerciseDone,
       addSet,
       removeSet,
-      loadDefaults,
       saveAsDefaults,
       finishWorkout,
       cancelWorkout,

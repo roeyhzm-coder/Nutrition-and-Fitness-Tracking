@@ -5,13 +5,17 @@ import {
   Dumbbell,
   Minus,
   Plus,
-  RotateCcw,
   Save,
   Timer,
   Trash2,
   X,
 } from 'lucide-react'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
+import {
+  defaultsFromExercise,
+  setsMatchDefaults,
+  setsValuesKey,
+} from '../../lib/exerciseDefaults'
 import {
   displayDecimal,
   parseDecimal,
@@ -101,16 +105,41 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
     setExerciseDone,
     addSet,
     removeSet,
-    loadDefaults,
     saveAsDefaults,
   } = useWorkoutSession()
   const [defaultsToast, setDefaultsToast] = useState<string | null>(null)
+  const toastTimer = useRef<number | null>(null)
+  const [savedValuesKey, setSavedValuesKey] = useState<string | null>(null)
   const allDone = exercise.sets.length > 0 && exercise.sets.every((s) => s.done)
   const canRemoveSet = exercise.sets.length > 1
+  const defaults = defaultsFromExercise({
+    sets: exercise.targetSets,
+    reps: exercise.targetReps,
+    weight: exercise.targetWeight,
+    defaultWeightKg: exercise.defaultWeightKg,
+    defaultReps: exercise.defaultReps,
+  })
+  const currentValuesKey = setsValuesKey(exercise.sets)
+  const showSaveDefaults =
+    !setsMatchDefaults(exercise.sets, defaults) &&
+    currentValuesKey !== savedValuesKey
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
+    }
+  }, [])
 
   function flash(message: string) {
+    if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
     setDefaultsToast(message)
-    window.setTimeout(() => setDefaultsToast(null), 2200)
+    toastTimer.current = window.setTimeout(() => setDefaultsToast(null), 2200)
+  }
+
+  function handleSaveDefaults() {
+    if (!saveAsDefaults(index)) return
+    setSavedValuesKey(currentValuesKey)
+    flash('ברירת המחדל נשמרה')
   }
 
   return (
@@ -250,28 +279,17 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
           <Minus className="size-3" strokeWidth={2} />
           הסר סט אחרון
         </button>
-        <button
-          type="button"
-          title="שמור את הערכים הנוכחיים כברירת מחדל קבועה לתרגיל"
-          onClick={() => {
-            if (saveAsDefaults(index)) flash('ברירת המחדל נשמרה')
-          }}
-          className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
-        >
-          <Save className="size-3" strokeWidth={2} />
-          שמור כברירת מחדל
-        </button>
-        <button
-          type="button"
-          title="שחזר משקל, חזרות ומספר סטים מברירת המחדל של התרגיל"
-          onClick={() => {
-            if (loadDefaults(index)) flash('ברירת המחדל נטענה')
-          }}
-          className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline"
-        >
-          <RotateCcw className="size-3" strokeWidth={2} />
-          טען ברירת מחדל
-        </button>
+        {showSaveDefaults ? (
+          <button
+            type="button"
+            title="שמור את הערכים הנוכחיים כברירת מחדל קבועה לתרגיל"
+            onClick={handleSaveDefaults}
+            className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
+          >
+            <Save className="size-3" strokeWidth={2} />
+            שמור כברירת מחדל
+          </button>
+        ) : null}
       </div>
     </li>
   )
