@@ -102,8 +102,8 @@ export function SavedMeals() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<SavedMeal | null>(null)
   const [form, setForm] = useState<PresetForm>(EMPTY_FORM)
-  const [itemsOpen, setItemsOpen] = useState(true)
-  const [mealsOpen, setMealsOpen] = useState(true)
+  const [itemsOpen, setItemsOpen] = useState(false)
+  const [mealsOpen, setMealsOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | null>(null)
 
