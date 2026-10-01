@@ -12,11 +12,12 @@ jobs:
         run: |
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "apikey: ${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
             "${{ secrets.VITE_SUPABASE_URL }}/rest/v1/routines?select=id&limit=1")
           
           echo "Supabase response status: $HTTP_STATUS"
           if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 400 ]; then
-            echo "Supabase is active and healthy!"
+            echo "Success: Supabase is active and healthy!"
             exit 0
           else
             echo "Failed with HTTP status $HTTP_STATUS"
