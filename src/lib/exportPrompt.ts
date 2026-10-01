@@ -18,17 +18,22 @@ import type {
   WeightEntry,
   WorkoutDay,
   WorkoutLog,
+  WorkoutProgram,
+  WorkoutTemplate,
 } from './types'
 import {
   ACTIVITY_LEVEL_LABELS,
   calcBmi,
   calcProcessDay,
   PHASE_LABELS,
+  ROUTINE_TIME_LABELS,
   SEX_LABELS,
   WEEKDAY_SHORT,
   WORK_STYLE_LABELS,
 } from './types'
 import { relativeWeekNumber } from './weeklyConsistency'
+import { formatEntitiesForPrompt } from './dynamicExport'
+import { workoutPerformedOn } from './caloriesBurned'
 import {
   buildBlockStrengthRows,
   formatBlockStrengthMarkdown,
@@ -188,6 +193,62 @@ function weeklyWeightRate(sorted: WeightEntry[]): number | null {
   return ((latest.weightKg - prev.weightKg) / days) * 7
 }
 
+function formatWorkoutLogsDump(logs: WorkoutLog[]): string {
+  if (!logs.length) return '- אין לוגים של אימונים'
+  return logs
+    .map((log) => {
+      const date = workoutPerformedOn(log)
+      const kcal = Number(log.estimatedCalories)
+      const kcalText =
+        Number.isFinite(kcal) && kcal > 0 ? `${kcal} קק״ל` : 'ללא קלוריות'
+      const exercises = (log.exercises ?? [])
+        .map((ex) => {
+          const sets = (ex.sets ?? [])
+            .filter((s) => s.done !== false)
+            .map((s) => `${s.weightKg ?? 0}ק״ג×${s.reps ?? 0}`)
+            .join(', ')
+          return sets ? `${ex.name} [${sets}]` : ex.name
+        })
+        .join('; ')
+      return `- ${date} · ${log.workoutName} · ${kcalText} · התחיל ${log.startedAt} · הסתיים ${log.completedAt}${log.programName ? ` · תוכנית: ${log.programName}` : ''}${exercises ? `\n  תרגילים: ${exercises}` : ''}`
+    })
+    .join('\n')
+}
+
+function formatRoutinesDump(routines: Routine[]): string {
+  if (!routines.length) return '- אין שגרות'
+  return routines
+    .map((r) => {
+      const window =
+        r.timeframe === 'period' && r.endsOn
+          ? `${r.startsOn} עד ${r.endsOn} (${r.durationDays ?? '?'} ימים)`
+          : 'לתמיד'
+      const archived = r.archivedAt ? ` · בארכיון מ-${r.archivedAt}` : ''
+      const dates = r.completedDates.length
+        ? ` · תאריכי ביצוע: ${r.completedDates.join(', ')}`
+        : ''
+      return `- ${r.title}: יעד ${r.weeklyTargetDays}/שבוע · ${r.targetMinutes} דק׳ · ${ROUTINE_TIME_LABELS[r.timeOfDay]} · ${window} · בוצעו ${r.completedDates.length} ימים${dates}${archived}`
+    })
+    .join('\n')
+}
+
+function formatFocusTracksDump(tracks: FocusTrack[]): string {
+  if (!tracks.length) return '- אין מסלולי מיקוד'
+  return tracks
+    .map((t) => {
+      const window =
+        t.timeframe === 'period' && t.endsOn
+          ? `${t.startsOn} עד ${t.endsOn} (${t.durationMonths ?? '?'} חודשים)`
+          : 'לתמיד'
+      const archived = t.archivedAt ? ` · בארכיון מ-${t.archivedAt}` : ''
+      const dates = t.completedDates.length
+        ? ` · תאריכי ביצוע: ${t.completedDates.join(', ')}`
+        : ''
+      return `- ${t.name}: יעד ${t.weeklyTargetDays}/שבוע · ${t.estimatedCalories} קק״ל · ${window} · בוצעו ${t.completedDates.length} ימים${dates}${archived}`
+    })
+    .join('\n')
+}
+
 export function buildAiExportPrompt(input: {
   setLogs: SetLog[]
   weightLogs: WeightEntry[]
@@ -203,6 +264,8 @@ export function buildAiExportPrompt(input: {
   lifestyleLogs: LifestyleLogs
   phaseHistory: PhaseHistoryEntry[]
   workoutLogs?: WorkoutLog[]
+  workoutTemplates?: WorkoutTemplate[]
+  workoutPrograms?: WorkoutProgram[]
   activeProgramId?: string
   activeProgramName?: string
   routines?: Routine[]
@@ -324,32 +387,31 @@ export function buildAiExportPrompt(input: {
     activeProgramName,
   )
 
-  const routinesSection = (input.routines ?? [])
-    .filter((r) => !r.archivedAt)
-    .map((r) => {
-      const window =
-        r.timeframe === 'period' && r.endsOn
-          ? `${r.startsOn} עד ${r.endsOn} (${r.durationDays ?? '?'} ימים)`
-          : 'לתמיד'
-      return `- ${r.title}: יעד ${r.weeklyTargetDays}/שבוע · ${r.targetMinutes} דק׳ · ${window} · בוצעו ${r.completedDates.length} ימים`
-    })
-    .join('\n')
+  const routinesSection = formatRoutinesDump(input.routines ?? [])
 
-  const tracksSection = (input.focusTracks ?? [])
-    .filter((t) => !t.archivedAt)
-    .map((t) => {
-      const window =
-        t.timeframe === 'period' && t.endsOn
-          ? `${t.startsOn} עד ${t.endsOn} (${t.durationMonths ?? '?'} חודשים)`
-          : 'לתמיד'
-      return `- ${t.name}: יעד ${t.weeklyTargetDays}/שבוע · ${t.estimatedCalories} קק״ל · ${window} · בוצעו ${t.completedDates.length} ימים`
-    })
-    .join('\n')
+  const tracksSection = formatFocusTracksDump(input.focusTracks ?? [])
+
+  const workoutLogsSection = formatWorkoutLogsDump(input.workoutLogs ?? [])
 
   const calorieBurns = (input.workoutLogs ?? []).reduce((sum, log) => {
     const n = Number(log.estimatedCalories)
     return sum + (Number.isFinite(n) && n > 0 ? n : 0)
   }, 0)
+
+  const dynamicDump = formatEntitiesForPrompt({
+    workoutLogs: input.workoutLogs,
+    workoutTemplates: input.workoutTemplates,
+    workoutPrograms: input.workoutPrograms,
+    routines: input.routines,
+    focusTracks: input.focusTracks,
+    activityLogs: input.activityLogs,
+    setLogs: input.setLogs,
+    foodLogs: input.foodLogs,
+    weightLogs: input.weightLogs,
+    habits: input.habits,
+    habitChecks: input.habitChecks,
+    lifestyleLogs: input.lifestyleLogs,
+  })
 
   return `אנא נתח את הנתונים שלי לאימונים ותזונה ותן המלצות ממוקדות בעברית:
 
@@ -384,10 +446,13 @@ ${historySection}
 - קלוריות שנשרפו באימוני כוח (מוערך, כל הרשומות): ${fmtNum(calorieBurns)} קק״ל
 
 ## שגרות והרגלים
-${routinesSection || '- אין שגרות מוגדרות'}
+${routinesSection}
 
 ## מסלולי מיקוד
-${tracksSection || '- אין מסלולי מיקוד פעילים'}
+${tracksSection}
+
+## לוגים של אימונים (תאריך ביצוע, קלוריות ותרגילים)
+${workoutLogsSection}
 
 ${strengthSection}
 
@@ -402,6 +467,11 @@ ${strengthSection}
 - ימים עם רישום מזון מלא: ${loggedDays.length}/7
 
 ${RECALIBRATION_DIRECTIVE}
+
+## ייצוא דינמי מלא של כל הישויות (מקור זהה ל-JSON/CSV)
+כל מפתח, שדה ורשומה נסרקים אוטומטית מנתוני האפליקציה — כולל מסלולי מיקוד עתידיים (שפגאט, שחייה או כל מסלול חדש), לוגים עם performedOn וקלוריות, שגרות (כולל ארכיון ותאריכי ביצוע), תבניות ותוכניות.
+
+${dynamicDump}
 
 ${SYSTEM_CONTEXT_BLOCK}`
 }

@@ -188,14 +188,40 @@ function csvEscape(value: string | number | boolean | null): string {
   return text
 }
 
-export function buildExportJson(input: DynamicExportInput): string {
-  const generatedAt = input.generatedAt ?? new Date().toISOString()
+export function formatEntitiesForPrompt(input: DynamicExportInput): string {
   const entities = collectExportEntities(input)
-  return JSON.stringify({ generatedAt, entities }, null, 2)
+  const sections = Object.entries(entities).map(([name, rows]) => {
+    if (!rows.length) return `### ${name}\nאין רשומות`
+    const lines = rows.map((row, index) => {
+      const fields = Object.entries(row)
+        .map(([key, value]) => `${key}=${stringifyPromptValue(value)}`)
+        .join(' | ')
+      return `${index + 1}. ${fields}`
+    })
+    return `### ${name} (${rows.length})\n${lines.join('\n')}`
+  })
+  return sections.join('\n\n')
+}
+
+function stringifyPromptValue(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
 }
 
 export function buildExportCsv(input: DynamicExportInput): string {
   return rowsToCsv(entitiesToFlatRows(collectExportEntities(input)))
+}
+
+export function buildExportJson(input: DynamicExportInput): string {
+  const generatedAt = input.generatedAt ?? new Date().toISOString()
+  const entities = collectExportEntities(input)
+  return JSON.stringify({ generatedAt, entities }, null, 2)
 }
 
 export function downloadTextFile(

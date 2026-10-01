@@ -20,7 +20,6 @@ import { dayPlanLabel } from '../lib/weekPlan'
 import { DayPlanSelect, StartWorkoutButton } from '../components/workouts/WeeklyPlanParts'
 import { WorkoutHistoryCard } from '../components/workouts/WorkoutHistoryCard'
 import { WorkoutCompletedBadge } from '../components/workouts/WorkoutCompletedBadge'
-import { FlexibleWorkoutStart } from '../components/workouts/FlexibleWorkoutStart'
 import { WeeklyPlanEditor } from '../components/workouts/WeeklyPlanEditor'
 import { FocusTracksCard } from '../components/workouts/FocusTracksCard'
 import type { ExerciseForm } from '../lib/exerciseForm'
@@ -173,6 +172,7 @@ export function WorkoutsPage() {
           <ProgramManager />
           <FocusTracksCard />
           <ActivityLogCard />
+          <WeeklyPlanEditor />
         </div>
       </>
     )
@@ -204,8 +204,6 @@ export function WorkoutsPage() {
       <div className="space-y-5 px-4 py-5">
         <WorkoutCompletedBadge />
         <FocusTracksCard />
-        <FlexibleWorkoutStart />
-        <WeeklyPlanEditor />
         <WorkoutLibrary
           currentDayId={day.id}
           currentDayExercises={allExercises}
@@ -371,6 +369,7 @@ export function WorkoutsPage() {
 
         <WorkoutHistoryCard limit={10} />
         <ActivityLogCard />
+        <WeeklyPlanEditor />
       </div>
 
       <Modal
