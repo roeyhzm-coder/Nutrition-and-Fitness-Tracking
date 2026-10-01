@@ -6,7 +6,12 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Button } from '../components/ui/Button'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { useAppData } from '../context/AppDataContext'
-import { completedInWeek, currentWeekDates } from '../lib/routines'
+import {
+  completedInWeek,
+  currentWeekDates,
+  extendRoutinePeriod,
+  resolveRoutineTimeframe,
+} from '../lib/routines'
 import type { Routine } from '../lib/types'
 
 export function RoutinesPage() {
@@ -21,17 +26,25 @@ export function RoutinesPage() {
   const [editing, setEditing] = useState<Routine | null>(null)
 
   const weekDates = useMemo(() => currentWeekDates(), [])
+  const activeRoutines = useMemo(
+    () => routines.filter((routine) => !routine.archivedAt),
+    [routines],
+  )
+  const archivedRoutines = useMemo(
+    () => routines.filter((routine) => Boolean(routine.archivedAt)),
+    [routines],
+  )
   const summary = useMemo(() => {
-    const targetDays = routines.reduce((sum, r) => sum + r.weeklyTargetDays, 0)
-    const doneDays = routines.reduce(
+    const targetDays = activeRoutines.reduce((sum, r) => sum + r.weeklyTargetDays, 0)
+    const doneDays = activeRoutines.reduce(
       (sum, r) => sum + completedInWeek(r, weekDates),
       0,
     )
-    const onTrack = routines.filter(
+    const onTrack = activeRoutines.filter(
       (r) => completedInWeek(r, weekDates) >= r.weeklyTargetDays,
     ).length
     return { targetDays, doneDays, onTrack }
-  }, [routines, weekDates])
+  }, [activeRoutines, weekDates])
 
   function openCreate() {
     setEditing(null)
@@ -39,10 +52,17 @@ export function RoutinesPage() {
   }
 
   function handleSave(draft: RoutineDraft) {
+    const patch = {
+      title: draft.title,
+      targetMinutes: draft.targetMinutes,
+      weeklyTargetDays: draft.weeklyTargetDays,
+      timeOfDay: draft.timeOfDay,
+      ...resolveRoutineTimeframe(draft),
+    }
     if (editing) {
-      updateRoutine(editing.id, draft)
+      updateRoutine(editing.id, patch)
     } else {
-      addRoutine(draft)
+      addRoutine({ ...patch, archivedAt: null })
     }
     setFormOpen(false)
     setEditing(null)
@@ -68,14 +88,14 @@ export function RoutinesPage() {
       <div className="space-y-5 px-4 py-5">
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/80">
           <p className="text-xs font-medium text-muted">סיכום שבועי</p>
-          {routines.length === 0 ? (
+          {activeRoutines.length === 0 ? (
             <p className="mt-2 text-sm text-muted">
               עדיין אין שגרות. הוסף הרגל ראשון כדי להתחיל לעקוב.
             </p>
           ) : (
             <>
               <p className="mt-1 font-display text-lg font-bold text-text">
-                {summary.onTrack}/{routines.length} שגרות ביעד · {summary.doneDays}/
+                {summary.onTrack}/{activeRoutines.length} שגרות ביעד · {summary.doneDays}/
                 {summary.targetDays} ימי יעד
               </p>
               <div className="mt-3">
@@ -90,7 +110,7 @@ export function RoutinesPage() {
           )}
         </section>
 
-        {routines.length === 0 ? (
+        {activeRoutines.length === 0 && archivedRoutines.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-5 py-10 text-center">
             <p className="font-semibold text-text">אין שגרות עדיין</p>
             <p className="mt-1 text-sm text-muted">
@@ -101,9 +121,11 @@ export function RoutinesPage() {
               הוסף שגרה חדשה +
             </Button>
           </div>
-        ) : (
+        ) : null}
+
+        {activeRoutines.length > 0 ? (
           <ul className="space-y-4">
-            {routines.map((routine) => (
+            {activeRoutines.map((routine) => (
               <li key={routine.id}>
                 <RoutineCard
                   routine={routine}
@@ -117,11 +139,53 @@ export function RoutinesPage() {
                       deleteRoutine(routine.id)
                     }
                   }}
+                  onArchive={() =>
+                    updateRoutine(routine.id, {
+                      archivedAt: new Date().toISOString(),
+                    })
+                  }
+                  onExtend={() =>
+                    updateRoutine(routine.id, extendRoutinePeriod(routine))
+                  }
                 />
               </li>
             ))}
           </ul>
-        )}
+        ) : null}
+
+        {archivedRoutines.length > 0 ? (
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold text-muted">ארכיון שגרות</h2>
+            <ul className="space-y-3">
+              {archivedRoutines.map((routine) => (
+                <li key={routine.id}>
+                  <RoutineCard
+                    routine={routine}
+                    onToggleDate={(date) => toggleRoutineDate(routine.id, date)}
+                    onEdit={() => {
+                      setEditing(routine)
+                      setFormOpen(true)
+                    }}
+                    onDelete={() => {
+                      if (window.confirm(`למחוק את השגרה "${routine.title}"?`)) {
+                        deleteRoutine(routine.id)
+                      }
+                    }}
+                    onArchive={() =>
+                      updateRoutine(routine.id, {
+                        archivedAt: new Date().toISOString(),
+                      })
+                    }
+                    onExtend={() =>
+                      updateRoutine(routine.id, extendRoutinePeriod(routine))
+                    }
+                    onRestore={() => updateRoutine(routine.id, { archivedAt: null })}
+                  />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
       </div>
 
       <RoutineFormModal

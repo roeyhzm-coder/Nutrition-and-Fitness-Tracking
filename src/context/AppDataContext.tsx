@@ -1179,6 +1179,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         timeOfDay: input.timeOfDay,
         completedDates: [],
         createdAt: new Date().toISOString(),
+        timeframe: input.timeframe ?? 'forever',
+        startsOn: input.startsOn,
+        endsOn: input.endsOn ?? null,
+        durationDays: input.durationDays ?? null,
+        archivedAt: input.archivedAt ?? null,
       }
       const normalized = normalizeRoutine(created) ?? created
       setRoutines((prev) => sortRoutines([...prev, normalized]))
@@ -1243,6 +1248,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
+    setRoutines((local) =>
+      sortRoutines(
+        local
+          .map((row) => normalizeRoutine(row))
+          .filter((row): row is Routine => Boolean(row)),
+      ),
+    )
     void pullRoutines().then((remote) => {
       if (cancelled || !remote) return
       setRoutines((local) => {

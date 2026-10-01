@@ -97,6 +97,19 @@ export type CustomHabit = {
 
 export type RoutineTimeOfDay = 'morning' | 'afternoon' | 'evening' | 'anytime'
 
+export type RoutineTimeframe = 'forever' | 'period'
+
+export const ROUTINE_TIMEFRAMES: RoutineTimeframe[] = ['forever', 'period']
+
+export const ROUTINE_TIMEFRAME_LABELS: Record<RoutineTimeframe, string> = {
+  forever: 'לתמיד (ללא הגבלת זמן)',
+  period: 'לתקופה מוגדרת',
+}
+
+export function isRoutineTimeframe(value: unknown): value is RoutineTimeframe {
+  return value === 'forever' || value === 'period'
+}
+
 export const ROUTINE_TIMES: RoutineTimeOfDay[] = [
   'morning',
   'afternoon',
@@ -126,6 +139,16 @@ export type Routine = {
   timeOfDay: RoutineTimeOfDay
   completedDates: string[]
   createdAt: string
+  /** Forever (no end) vs a defined target window. Defaults to forever. */
+  timeframe: RoutineTimeframe
+  /** Inclusive window start (YYYY-MM-DD). */
+  startsOn: string
+  /** Inclusive window end (YYYY-MM-DD); null when forever. */
+  endsOn: string | null
+  /** Target length in days; null when forever. */
+  durationDays: number | null
+  /** ISO timestamp when the user archived a completed/expired routine. */
+  archivedAt: string | null
 }
 
 export type SavedMeal = {

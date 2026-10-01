@@ -1,10 +1,12 @@
-import { Check, Pencil, Trash2 } from 'lucide-react'
+import { Archive, Check, CheckCircle2, Pencil, RotateCcw, TimerReset, Trash2 } from 'lucide-react'
 import {
   completedInWeek,
+  routinePeriodStatus,
   weekDayCells,
 } from '../../lib/routines'
 import type { Routine } from '../../lib/types'
-import { ROUTINE_TIME_LABELS, todayKey } from '../../lib/types'
+import { parseLocalDateKey, ROUTINE_TIME_LABELS, todayKey } from '../../lib/types'
+import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { ProgressBar } from '../ui/ProgressBar'
 
@@ -13,6 +15,47 @@ type RoutineCardProps = {
   onToggleDate: (date: string) => void
   onEdit: () => void
   onDelete: () => void
+  onArchive: () => void
+  onExtend: () => void
+  onRestore?: () => void
+}
+
+function formatDateHe(dateKey: string) {
+  return parseLocalDateKey(dateKey).toLocaleDateString('he-IL', {
+    day: 'numeric',
+    month: 'numeric',
+  })
+}
+
+function TimeframeTag({ routine }: { routine: Routine }) {
+  const status = routinePeriodStatus(routine)
+  if (status.kind === 'forever') {
+    return (
+      <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-text">
+        הרגל קבוע
+      </span>
+    )
+  }
+  if (status.kind === 'upcoming') {
+    return (
+      <span className="rounded-lg bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+        מתחיל ב-{formatDateHe(status.startsOn)} · {status.durationDays} ימים
+      </span>
+    )
+  }
+  if (status.kind === 'completed') {
+    return (
+      <span className="rounded-lg bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+        היעד הושלם · {status.durationDays} ימים
+      </span>
+    )
+  }
+  return (
+    <span className="rounded-lg bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700">
+      יום {status.dayNumber} מתוך {status.durationDays}
+      {status.remainingDays > 0 ? ` · נותרו עוד ${status.remainingDays} ימים` : ''}
+    </span>
+  )
 }
 
 export function RoutineCard({
@@ -20,6 +63,9 @@ export function RoutineCard({
   onToggleDate,
   onEdit,
   onDelete,
+  onArchive,
+  onExtend,
+  onRestore,
 }: RoutineCardProps) {
   const today = todayKey()
   const days = weekDayCells()
@@ -27,6 +73,37 @@ export function RoutineCard({
   const target = routine.weeklyTargetDays
   const pct = target <= 0 ? 0 : Math.min(100, Math.round((doneThisWeek / target) * 100))
   const todayDone = routine.completedDates.includes(today)
+  const period = routinePeriodStatus(routine)
+  const archived = Boolean(routine.archivedAt)
+  const extendDays = Math.max(1, routine.durationDays ?? 30)
+
+  if (archived) {
+    return (
+      <article className="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <h3 className="font-display text-base font-bold text-muted">
+              {routine.title}
+            </h3>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <span className="rounded-lg bg-white px-2 py-0.5 text-[11px] font-medium text-muted ring-1 ring-slate-200">
+                בארכיון
+              </span>
+              <TimeframeTag routine={routine} />
+            </div>
+          </div>
+          {onRestore ? (
+            <IconButton label="שחזר מהארכיון" tone="accent" onClick={onRestore}>
+              <RotateCcw className="size-3.5" strokeWidth={1.75} />
+            </IconButton>
+          ) : null}
+          <IconButton label="מחק שגרה" tone="danger" onClick={onDelete}>
+            <Trash2 className="size-3.5" strokeWidth={1.75} />
+          </IconButton>
+        </div>
+      </article>
+    )
+  }
 
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/80">
@@ -45,6 +122,7 @@ export function RoutineCard({
             <span className="rounded-lg bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
               {routine.weeklyTargetDays} ימים בשבוע
             </span>
+            <TimeframeTag routine={routine} />
           </div>
         </div>
         <IconButton label="ערוך שגרה" tone="accent" onClick={onEdit}>
@@ -54,6 +132,32 @@ export function RoutineCard({
           <Trash2 className="size-3.5" strokeWidth={1.75} />
         </IconButton>
       </div>
+
+      {period.kind === 'completed' ? (
+        <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <p className="flex items-center gap-2 text-sm font-bold text-emerald-800">
+            <CheckCircle2 className="size-4 shrink-0" strokeWidth={2.25} />
+            היעד הושלם בהצלחה
+          </p>
+          <p className="mt-1 text-xs text-emerald-800/80">
+            תקופת {period.durationDays} הימים הסתיימה ב-{formatDateHe(period.endsOn)}.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              variant="accent"
+              className="px-3 text-xs"
+              onClick={onExtend}
+            >
+              <TimerReset className="size-3.5" strokeWidth={2} />
+              הארך ב-{extendDays} ימים
+            </Button>
+            <Button variant="surface" className="px-3 text-xs" onClick={onArchive}>
+              <Archive className="size-3.5" strokeWidth={2} />
+              העבר לארכיון
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <button
         type="button"
