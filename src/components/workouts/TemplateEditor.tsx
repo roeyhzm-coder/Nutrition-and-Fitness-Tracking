@@ -234,7 +234,7 @@ export function TemplateEditor({
                   className="w-full"
                   onClick={() => setApplyOpen(true)}
                 >
-                  החל אימון זה על יום…
+                  החלף אימון ביום…
                 </Button>
                 {onDelete ? (
                   <Button
@@ -275,7 +275,7 @@ export function TemplateEditor({
 
       <Modal
         open={applyOpen}
-        title="החל אימון זה על יום…"
+        title="החלף אימון ביום…"
         onClose={() => setApplyOpen(false)}
       >
         <ul className="space-y-2">
@@ -303,8 +303,7 @@ export function TemplateEditor({
                   יום {d.dayNumber} — {d.title}
                 </p>
                 <p className="text-xs text-muted">
-                  {(d.sessions?.length ?? 0) + (d.exercises?.length ? 1 : 0)}{' '}
-                  בלוקים · יום {d.dayNumber}
+                  מחליף את האימון הנוכחי ביום {d.title}
                 </p>
               </button>
             </li>

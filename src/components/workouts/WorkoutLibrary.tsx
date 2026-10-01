@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { ChevronDown, Library, Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { ChevronDown, Library, Pencil, Plus } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import type { Exercise, WorkoutTemplate } from '../../lib/types'
 import { Button } from '../ui/Button'
@@ -10,11 +10,13 @@ import { TemplateEditor } from './TemplateEditor'
 type WorkoutLibraryProps = {
   currentDayId: string
   currentDayExercises: Exercise[]
+  expandSignal?: number
 }
 
 export function WorkoutLibrary({
   currentDayId,
   currentDayExercises,
+  expandSignal = 0,
 }: WorkoutLibraryProps) {
   const {
     workoutDays,
@@ -27,12 +29,24 @@ export function WorkoutLibrary({
   } = useAppData()
 
   const [expanded, setExpanded] = useState(false)
+  const [highlight, setHighlight] = useState(false)
   const [listOpen, setListOpen] = useState(false)
   const [editorOpen, setEditorOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [activeTemplate, setActiveTemplate] = useState<WorkoutTemplate | null>(
     null,
   )
+  const [toast, setToast] = useState<string | null>(null)
+
+  const currentDay = workoutDays.find((d) => d.id === currentDayId)
+
+  useEffect(() => {
+    if (!expandSignal) return
+    setExpanded(true)
+    setHighlight(true)
+    const handle = window.setTimeout(() => setHighlight(false), 1800)
+    return () => window.clearTimeout(handle)
+  }, [expandSignal])
 
   function openCreate() {
     setCreating(true)
@@ -48,9 +62,54 @@ export function WorkoutLibrary({
     setListOpen(false)
   }
 
+  function replaceOnCurrentDay(t: WorkoutTemplate) {
+    assignTemplateToDay(currentDayId, t.id)
+    const dayLabel = currentDay?.title ?? ''
+    setToast(`הוחלף ל«${t.name}» ביום ${dayLabel}`)
+    window.setTimeout(() => setToast(null), 2200)
+  }
+
+  function templateRow(t: WorkoutTemplate) {
+    return (
+      <li
+        key={t.id}
+        className="flex items-stretch overflow-hidden rounded-2xl bg-slate-50"
+      >
+        <button
+          type="button"
+          className="min-h-11 min-w-0 flex-1 px-4 py-3 text-right text-sm transition hover:bg-slate-100"
+          onClick={() => replaceOnCurrentDay(t)}
+        >
+          <p className="truncate font-medium text-text">{t.name}</p>
+          <p className="text-xs text-muted">
+            {t.exercises.length} תרגילים
+            {t.estimatedCalories ? ` · ${t.estimatedCalories} קק״ל` : ''}
+            {' · '}
+            לחץ להחלפת היום
+          </p>
+        </button>
+        <IconButton
+          label={`ערוך ${t.name}`}
+          tone="accent"
+          onClick={() => openEdit(t)}
+        >
+          <Pencil className="size-3.5" strokeWidth={1.75} />
+        </IconButton>
+      </li>
+    )
+  }
+
   return (
     <>
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-200/80">
+      <section
+        id="workout-library"
+        className={[
+          'rounded-2xl border bg-white shadow-sm shadow-slate-200/80 transition',
+          highlight
+            ? 'border-blue-400 ring-2 ring-blue-500/30'
+            : 'border-slate-200',
+        ].join(' ')}
+      >
         <button
           type="button"
           className="flex w-full min-h-14 items-center justify-between gap-3 px-5 py-4 text-right"
@@ -83,9 +142,16 @@ export function WorkoutLibrary({
           <div className="overflow-hidden">
             <div className="space-y-3 border-t border-slate-200 p-5">
               <p className="text-xs text-muted">
-                ספרייה מובנית (משיכה, דחיפה, משולב) — ערוך, מחק, או הוסף תבניות
-                והצמד כמה אימונים לאותו יום.
+                לחיצה על תבנית מחליפה את האימון ביום הנבחר. עיפרון לעריכה.
               </p>
+              {toast ? (
+                <p
+                  role="status"
+                  className="rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800"
+                >
+                  {toast}
+                </p>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button
                   variant="surface"
@@ -111,21 +177,7 @@ export function WorkoutLibrary({
               </div>
               {workoutTemplates.length > 0 ? (
                 <ul className="space-y-2">
-                  {workoutTemplates.map((t) => (
-                    <li key={t.id}>
-                      <button
-                        type="button"
-                        className="w-full min-h-11 rounded-2xl bg-slate-50 px-4 py-3 text-right text-sm transition hover:bg-slate-100"
-                        onClick={() => openEdit(t)}
-                      >
-                        <p className="truncate font-medium text-text">{t.name}</p>
-                        <p className="text-xs text-muted">
-                          {t.exercises.length} תרגילים
-                          {t.estimatedCalories ? ` · ${t.estimatedCalories} קק״ל` : ''}
-                        </p>
-                      </button>
-                    </li>
-                  ))}
+                  {workoutTemplates.map(templateRow)}
                 </ul>
               ) : (
                 <p className="text-sm text-muted">אין תבניות עדיין.</p>
@@ -153,20 +205,7 @@ export function WorkoutLibrary({
         {workoutTemplates.length === 0 ? (
           <p className="text-sm text-muted">אין תבניות. צור תבנית חדשה.</p>
         ) : (
-          <ul className="space-y-2">
-            {workoutTemplates.map((t) => (
-              <li key={t.id}>
-                <button
-                  type="button"
-                  className="w-full min-h-14 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-right transition hover:border-blue-300"
-                  onClick={() => openEdit(t)}
-                >
-                  <p className="font-semibold text-text">{t.name}</p>
-                  <p className="text-xs text-muted">{t.exercises.length} תרגילים</p>
-                </button>
-              </li>
-            ))}
-          </ul>
+          <ul className="space-y-2">{workoutTemplates.map(templateRow)}</ul>
         )}
       </Modal>
 

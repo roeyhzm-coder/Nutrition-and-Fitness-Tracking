@@ -396,6 +396,19 @@ type DayKind = keyof typeof FOCUS_BY_KIND | 'rest'
 /** Weekly schedule from the PDF, Sunday → Saturday. */
 const OFFICIAL_WEEK: DayKind[] = ['pull', 'push', 'pull', 'push', 'rest', 'combo', 'rest']
 
+export function officialBlockForProgram(programId: string): 1 | 2 {
+  return programId === 'program-block-2' ? 2 : 1
+}
+
+/** Fresh official weekday from the built-in weekly schedule. */
+export function officialDayFor(
+  dayNumber: number,
+  block: 1 | 2 = 1,
+): WorkoutDay {
+  const days = weekDays(block)
+  return days.find((d) => d.dayNumber === dayNumber) ?? days[0]
+}
+
 function weekDays(block: 1 | 2): WorkoutDay[] {
   return OFFICIAL_WEEK.map((kind, i) => {
     const dayNumber = i + 1

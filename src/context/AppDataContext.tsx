@@ -53,6 +53,8 @@ import {
   applyOfficialPlan,
   backfillProgramMedia,
   isStalePlan,
+  officialBlockForProgram,
+  officialDayFor,
 } from '../data/workouts'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { pullAppState, pushAppState } from '../lib/appStateSync'
@@ -178,12 +180,13 @@ type AppDataContextValue = {
     patch: Partial<Pick<WorkoutTemplate, 'name' | 'exercises' | 'estimatedCalories'>>,
   ) => void
   deleteWorkoutTemplate: (id: string) => void
-  /** Attach (append) a library template as a new session on the day. */
+  /** Replace the day's workout with a library template. */
   assignTemplateToDay: (
     dayId: string,
     templateId: string,
     exercisesOverride?: Exercise[],
   ) => void
+  /** Append a library template as an extra session on the day. */
   attachTemplateToDay: (
     dayId: string,
     templateId: string,
@@ -192,6 +195,8 @@ type AppDataContextValue = {
   saveDayAsTemplate: (dayId: string, name: string) => void
   /** Set a weekday to a library workout, rest, or empty. */
   setDayPlan: (dayId: string, plan: DayPlan) => void
+  /** Restore this weekday to the original official weekly plan. */
+  resetDayToOfficialPlan: (dayId: string) => void
   savedMeals: SavedMeal[]
   addSavedMeal: (meal: Omit<SavedMeal, 'id'>) => void
   updateSavedMeal: (id: string, patch: Partial<SavedMeal>) => void
@@ -671,9 +676,43 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         updateActiveProgramDays(prev, activeProgram.id, (days) =>
           days.map((d) => {
             if (d.id !== dayId) return d
+            return {
+              ...normalizeWorkoutDay(d),
+              isRest: false,
+              focus: sessionName,
+              exercises: [],
+              sessions: [
+                {
+                  id: uid(),
+                  name: sessionName,
+                  sourceTemplateId: templateId,
+                  estimatedCalories: template?.estimatedCalories ?? null,
+                  exercises: source.map((ex) => ({ ...ex, id: uid() })),
+                },
+              ],
+            }
+          }),
+        ),
+      )
+    },
+    [activeProgram, workoutTemplates, setWorkoutPrograms],
+  )
+
+  const attachTemplateToDay = useCallback(
+    (dayId: string, templateId: string, exercisesOverride?: Exercise[]) => {
+      if (!activeProgram) return
+      const template = workoutTemplates.find((t) => t.id === templateId)
+      const source = exercisesOverride ?? template?.exercises
+      if (!source) return
+      const sessionName = template?.name ?? 'אימון'
+      setWorkoutPrograms((prev) =>
+        updateActiveProgramDays(prev, activeProgram.id, (days) =>
+          days.map((d) => {
+            if (d.id !== dayId) return d
             const day = normalizeWorkoutDay(d)
             return {
               ...day,
+              isRest: false,
               sessions: [
                 ...day.sessions,
                 {
@@ -691,8 +730,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     [activeProgram, workoutTemplates, setWorkoutPrograms],
   )
-
-  const attachTemplateToDay = assignTemplateToDay
 
   const setDayPlan = useCallback(
     (dayId: string, plan: DayPlan) => {
@@ -731,6 +768,32 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       )
     },
     [activeProgram, workoutTemplates, setWorkoutPrograms],
+  )
+
+  const resetDayToOfficialPlan = useCallback(
+    (dayId: string) => {
+      if (!activeProgram) return
+      const current = activeProgram.days.find((d) => d.id === dayId)
+      if (!current) return
+      const official = officialDayFor(
+        current.dayNumber,
+        officialBlockForProgram(activeProgram.id),
+      )
+      setWorkoutPrograms((prev) =>
+        updateActiveProgramDays(prev, activeProgram.id, (days) =>
+          days.map((d) => {
+            if (d.id !== dayId) return d
+            return {
+              ...official,
+              id: d.id,
+              dayNumber: d.dayNumber,
+              title: d.title,
+            }
+          }),
+        ),
+      )
+    },
+    [activeProgram, setWorkoutPrograms],
   )
 
   const saveDayAsTemplate = useCallback(
@@ -1518,6 +1581,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       attachTemplateToDay,
       saveDayAsTemplate,
       setDayPlan,
+      resetDayToOfficialPlan,
       savedMeals,
       addSavedMeal,
       updateSavedMeal,
@@ -1604,6 +1668,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       attachTemplateToDay,
       saveDayAsTemplate,
       setDayPlan,
+      resetDayToOfficialPlan,
       savedMeals,
       addSavedMeal,
       updateSavedMeal,
