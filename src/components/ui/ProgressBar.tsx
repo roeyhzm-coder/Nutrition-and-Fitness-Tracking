@@ -1,7 +1,7 @@
 type ProgressBarProps = {
   value: number
   max: number
-  color?: 'primary' | 'accent' | 'warn' | 'violet'
+  color?: 'primary' | 'accent' | 'warn' | 'violet' | 'green'
 }
 
 const colors = {
@@ -9,6 +9,7 @@ const colors = {
   accent: 'bg-cyan-600',
   warn: 'bg-orange-500',
   violet: 'bg-violet-500',
+  green: 'bg-emerald-500',
 }
 
 export function ProgressBar({

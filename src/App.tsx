@@ -6,6 +6,7 @@ import { DashboardPage } from './pages/DashboardPage'
 import { WorkoutsPage } from './pages/WorkoutsPage'
 import { NutritionPage } from './pages/NutritionPage'
 import { ProfilePage } from './pages/ProfilePage'
+import { RoutinesPage } from './pages/RoutinesPage'
 
 export default function App() {
   return (
@@ -17,8 +18,9 @@ export default function App() {
               <Route index element={<DashboardPage />} />
               <Route path="workouts" element={<WorkoutsPage />} />
               <Route path="nutrition" element={<NutritionPage />} />
+              <Route path="routines" element={<RoutinesPage />} />
               <Route path="profile" element={<ProfilePage />} />
-              <Route path="habits" element={<Navigate to="/profile" replace />} />
+              <Route path="habits" element={<Navigate to="/routines" replace />} />
               <Route path="export" element={<Navigate to="/profile" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>

@@ -30,6 +30,15 @@ import {
   sortHistory,
   summarizePhase,
 } from '../lib/phaseHistory'
+import {
+  deleteRemoteRoutine,
+  mergeRoutines,
+  normalizeRoutine,
+  pullRoutines,
+  pushRoutines,
+  sortRoutines,
+  toggleCompletedDate,
+} from '../lib/routines'
 import { DEFAULT_RECIPES, DEFAULT_FOOD_CATEGORIES } from '../data/recipes'
 import {
   OFFICIAL_PLAN_VERSION,
@@ -59,6 +68,7 @@ import type {
   PhaseHistoryEntry,
   PhaseMacroPresets,
   Recipe,
+  Routine,
   SavedMeal,
   SetLog,
   UserProfile,
@@ -107,6 +117,16 @@ type AppDataContextValue = {
   foodLogs: FoodLogEntry[]
   habitChecks: HabitChecks
   habits: CustomHabit[]
+  routines: Routine[]
+  addRoutine: (
+    input: Omit<Routine, 'id' | 'createdAt' | 'completedDates'>,
+  ) => Routine
+  updateRoutine: (
+    id: string,
+    patch: Partial<Omit<Routine, 'id' | 'createdAt' | 'completedDates'>>,
+  ) => void
+  deleteRoutine: (id: string) => void
+  toggleRoutineDate: (id: string, date: string) => void
   foodCategories: FoodCategory[]
   workoutPrograms: WorkoutProgram[]
   activeProgramId: string
@@ -376,6 +396,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     {},
   )
   const [habits, setHabits] = useLocalStorage<CustomHabit[]>('tn.habits', [])
+  const [routines, setRoutines] = useLocalStorage<Routine[]>('tn.routines.v1', [])
   const [foodCategories, setFoodCategories] = useLocalStorage<FoodCategory[]>(
     'tn.foodCategories.v1',
     DEFAULT_FOOD_CATEGORIES,
@@ -872,6 +893,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (remote.lifestyleLogs && Object.keys(remote.lifestyleLogs).length) {
         setLifestyleLogs(remote.lifestyleLogs)
       }
+      if (remote.routines) {
+        setRoutines((local) => mergeRoutines(local, remote.routines ?? []).merged)
+      }
       if (needsPlanSeed()) {
         skipNextPush.current = false
         setPhaseState(DEFAULT_PHASE)
@@ -903,6 +927,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setActivityLogs,
     setLifestyleLogs,
     setWeightLogs,
+    setRoutines,
   ])
 
   useEffect(() => {
@@ -929,6 +954,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         profile,
         activityLogs,
         lifestyleLogs,
+        routines,
       }).then((ok) => setStateSyncStatus(ok ? 'synced' : 'error'))
     }, 800)
 
@@ -947,6 +973,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     profile,
     activityLogs,
     lifestyleLogs,
+    routines,
   ])
 
   const addSetLog = useCallback(
@@ -1139,6 +1166,96 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [setHabitChecks],
   )
 
+  const addRoutine = useCallback(
+    (input: Omit<Routine, 'id' | 'createdAt' | 'completedDates'>) => {
+      const created: Routine = {
+        id: uid(),
+        title: input.title.trim(),
+        targetMinutes: Math.max(1, Math.round(input.targetMinutes) || 30),
+        weeklyTargetDays: Math.min(
+          7,
+          Math.max(1, Math.round(input.weeklyTargetDays) || 4),
+        ),
+        timeOfDay: input.timeOfDay,
+        completedDates: [],
+        createdAt: new Date().toISOString(),
+      }
+      const normalized = normalizeRoutine(created) ?? created
+      setRoutines((prev) => sortRoutines([...prev, normalized]))
+      void pushRoutines([normalized])
+      return normalized
+    },
+    [setRoutines],
+  )
+
+  const updateRoutine = useCallback(
+    (
+      id: string,
+      patch: Partial<Omit<Routine, 'id' | 'createdAt' | 'completedDates'>>,
+    ) => {
+      let updated: Routine | null = null
+      setRoutines((prev) =>
+        sortRoutines(
+          prev.map((row) => {
+            if (row.id !== id) return row
+            const next =
+              normalizeRoutine({ ...row, ...patch }) ?? {
+                ...row,
+                ...patch,
+                title: patch.title?.trim() || row.title,
+              }
+            updated = next
+            return next
+          }),
+        ),
+      )
+      if (updated) void pushRoutines([updated])
+    },
+    [setRoutines],
+  )
+
+  const deleteRoutine = useCallback(
+    (id: string) => {
+      setRoutines((prev) => prev.filter((row) => row.id !== id))
+      void deleteRemoteRoutine(id)
+    },
+    [setRoutines],
+  )
+
+  const toggleRoutineDate = useCallback(
+    (id: string, date: string) => {
+      let updated: Routine | null = null
+      setRoutines((prev) =>
+        prev.map((row) => {
+          if (row.id !== id) return row
+          const next = {
+            ...row,
+            completedDates: toggleCompletedDate(row.completedDates, date),
+          }
+          updated = next
+          return next
+        }),
+      )
+      if (updated) void pushRoutines([updated])
+    },
+    [setRoutines],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    void pullRoutines().then((remote) => {
+      if (cancelled || !remote) return
+      setRoutines((local) => {
+        const { merged, toPush } = mergeRoutines(local, remote)
+        if (toPush.length) void pushRoutines(toPush)
+        return merged
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [setRoutines])
+
   useEffect(() => {
     let cancelled = false
     void pullPhaseHistory().then((remote) => {
@@ -1256,6 +1373,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       foodLogs,
       habitChecks,
       habits,
+      routines,
+      addRoutine,
+      updateRoutine,
+      deleteRoutine,
+      toggleRoutineDate,
       foodCategories,
       workoutPrograms,
       activeProgramId: activeProgram?.id ?? activeProgramId,
@@ -1332,6 +1454,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       foodLogs,
       habitChecks,
       habits,
+      routines,
+      addRoutine,
+      updateRoutine,
+      deleteRoutine,
+      toggleRoutineDate,
       foodCategories,
       workoutPrograms,
       activeProgramId,

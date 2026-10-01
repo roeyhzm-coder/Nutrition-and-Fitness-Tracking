@@ -7,6 +7,7 @@ import type {
   LifestyleLogs,
   Phase,
   PhaseMacroPresets,
+  Routine,
   SavedMeal,
   UserProfile,
   WorkoutProgram,
@@ -43,6 +44,8 @@ export type SyncedAppState = {
   profile?: UserProfile
   activityLogs?: ActivityLog[]
   lifestyleLogs?: LifestyleLogs
+  /** Undefined when the remote table lacks the routines column. */
+  routines?: Routine[]
   updatedAt: string
 }
 
@@ -52,6 +55,7 @@ const TEMPLATE_COLUMNS = `${BASE_COLUMNS}, workout_templates`
 const FULL_COLUMNS = `${TEMPLATE_COLUMNS}, consistency_day_marks, food_categories`
 const EXTENDED_COLUMNS = `${FULL_COLUMNS}, saved_meals, user_profile, activity_logs, lifestyle_logs`
 const FOOD_LOG_COLUMNS = `${EXTENDED_COLUMNS}, food_logs`
+const ROUTINES_COLUMNS = `${FOOD_LOG_COLUMNS}, routines`
 
 export async function pullAppState(): Promise<SyncedAppState | null> {
   if (!isSupabaseConfigured || !supabase) return null
@@ -61,8 +65,10 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
   let hasExtended = false
   let hasFoodLogs = false
   let hasTemplates = false
+  let hasRoutines = false
 
   for (const columns of [
+    ROUTINES_COLUMNS,
     FOOD_LOG_COLUMNS,
     EXTENDED_COLUMNS,
     FULL_COLUMNS,
@@ -77,7 +83,8 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
     if (res.error) continue
     if (!res.data) return null
     data = res.data as unknown as Record<string, unknown>
-    hasFoodLogs = columns === FOOD_LOG_COLUMNS
+    hasRoutines = columns === ROUTINES_COLUMNS
+    hasFoodLogs = hasRoutines || columns === FOOD_LOG_COLUMNS
     hasExtended = hasFoodLogs || columns === EXTENDED_COLUMNS
     hasTemplates = columns !== BASE_COLUMNS
     break
@@ -123,6 +130,9 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
     ...(hasFoodLogs
       ? { foodLogs: (data.food_logs as FoodLogEntry[] | null) ?? undefined }
       : {}),
+    ...(hasRoutines
+      ? { routines: (data.routines as Routine[] | null) ?? undefined }
+      : {}),
     updatedAt: data.updated_at as string,
   }
 }
@@ -164,8 +174,13 @@ export async function pushAppState(
     ...extendedPayload,
     food_logs: state.foodLogs ?? [],
   }
+  const routinesPayload = {
+    ...foodLogPayload,
+    routines: state.routines ?? [],
+  }
 
   const payloads = [
+    routinesPayload,
     foodLogPayload,
     extendedPayload,
     fullPayload,

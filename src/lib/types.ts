@@ -95,6 +95,39 @@ export type CustomHabit = {
   label: string
 }
 
+export type RoutineTimeOfDay = 'morning' | 'afternoon' | 'evening' | 'anytime'
+
+export const ROUTINE_TIMES: RoutineTimeOfDay[] = [
+  'morning',
+  'afternoon',
+  'evening',
+  'anytime',
+]
+
+export const ROUTINE_TIME_LABELS: Record<RoutineTimeOfDay, string> = {
+  morning: 'בוקר',
+  afternoon: 'צהריים',
+  evening: 'ערב',
+  anytime: 'ללא שעה',
+}
+
+export function isRoutineTime(value: unknown): value is RoutineTimeOfDay {
+  return (
+    typeof value === 'string' &&
+    (ROUTINE_TIMES as readonly string[]).includes(value)
+  )
+}
+
+export type Routine = {
+  id: string
+  title: string
+  targetMinutes: number
+  weeklyTargetDays: number
+  timeOfDay: RoutineTimeOfDay
+  completedDates: string[]
+  createdAt: string
+}
+
 export type SavedMeal = {
   id: string
   name: string
