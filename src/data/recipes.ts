@@ -1,4 +1,5 @@
 import type { FoodCategory, MealType, Recipe } from '../lib/types'
+import { RECIPE_BOOK_RECIPES } from './recipeBookRecipes'
 
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   breakfast: 'ארוחת בוקר',
@@ -128,4 +129,38 @@ export const DEFAULT_RECIPES: Recipe[] = [
     steps: ['לערבב ולהגיש'],
     servingGrams: 200,
   },
+  ...RECIPE_BOOK_RECIPES,
 ]
+
+export function mergeRecipes(existing: Recipe[]): Recipe[] {
+  const byId = new Map<string, Recipe>()
+  const names = new Set<string>()
+  for (const recipe of existing) {
+    if (byId.has(recipe.id)) continue
+    byId.set(recipe.id, recipe)
+    names.add(recipe.name.trim())
+  }
+  for (const recipe of DEFAULT_RECIPES) {
+    if (byId.has(recipe.id) || names.has(recipe.name.trim())) continue
+    byId.set(recipe.id, recipe)
+    names.add(recipe.name.trim())
+  }
+  return byId.size > 0 ? [...byId.values()] : DEFAULT_RECIPES
+}
+
+export function recipesEqual(a: Recipe[], b: Recipe[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  return a.every((r, i) => {
+    const n = b[i]
+    return (
+      n != null &&
+      r.id === n.id &&
+      r.name === n.name &&
+      r.calories === n.calories &&
+      r.proteinG === n.proteinG &&
+      r.carbsG === n.carbsG &&
+      r.fatsG === n.fatsG
+    )
+  })
+}

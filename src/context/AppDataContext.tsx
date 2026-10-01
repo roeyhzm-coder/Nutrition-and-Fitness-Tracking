@@ -47,7 +47,7 @@ import {
   normalizeFocusTrack,
   sortFocusTracks,
 } from '../lib/focusTracks'
-import { DEFAULT_RECIPES, DEFAULT_FOOD_CATEGORIES } from '../data/recipes'
+import { DEFAULT_RECIPES, DEFAULT_FOOD_CATEGORIES, mergeRecipes, recipesEqual } from '../data/recipes'
 import {
   OFFICIAL_PLAN_VERSION,
   applyOfficialPlan,
@@ -444,6 +444,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     'tn.recipes.v3',
     DEFAULT_RECIPES,
   )
+
+  useEffect(() => {
+    setRecipes((prev) => {
+      const next = mergeRecipes(prev)
+      return recipesEqual(prev, next) ? prev : next
+    })
+  }, [setRecipes])
   const [profileRaw, setProfileRaw] = useLocalStorage<UserProfile>(
     'tn.profile.v1',
     DEFAULT_PROFILE,
@@ -905,7 +912,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setRecipesSyncError(null)
     try {
       const remote = await fetchRecipesFromSupabase()
-      if (remote.length > 0) setRecipes(remote)
+      if (remote.length > 0) {
+        setRecipes((prev) => mergeRecipes([...remote, ...prev]))
+      }
       const fromRecipes = extractRecipeCategories(remote)
       if (fromRecipes.length > 0) {
         setFoodCategories((prev) => {

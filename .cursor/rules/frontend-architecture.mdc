@@ -1,0 +1,38 @@
+---
+description: Compact UI, full CRUD, zero-friction autocomplete, and build hygiene
+alwaysApply: true
+globs: src/**/*.{tsx,ts,jsx,js}
+---
+
+# Frontend architecture
+
+## UI density
+- List rows stay compact: target height **44px–56px**. Do not grow rows with extra buttons or stacked metadata.
+- Secondary details (notes, macros, ingredients) go in a truncated subtitle, accordion, or modal — never a tall static card.
+- Mobile views should keep several actionable rows above the fold.
+
+## Mandatory CRUD
+Every rendered entity (saved item, meal, ingredient, log row) includes:
+1. Instant **edit**
+2. **Quick-adjust** (portion pills / stepper / quantity modal)
+3. **Delete** (confirm or undo)
+
+Read-only lists are forbidden unless explicitly requested.
+
+## Zero-friction inputs
+- Prefer autocomplete against the pantry/recipe catalog over blank forms.
+- Selecting a catalog item fills name, standard serving, and macros; the user may still tweak values.
+- Numeric fields keep decimal typing (no cursor jump). Include pills **0.5 / 1 / 1.5 / 2** (or gram equivalents).
+
+```tsx
+// ❌ BAD — empty form as the only path
+<input placeholder="שם המזון" />
+
+// ✅ GOOD — catalog search first, manual as a toggle
+<ModeTabs value={mode} options={[{ id: 'catalog', label: 'בחירה מהמאגר' }, { id: 'manual', label: 'הזנה ידנית' }]} />
+<CatalogPicker items={catalog} onSelect={applyItem} />
+```
+
+## Build hygiene
+- Run `npm run build` after UI/data changes; fix TypeScript/JSX errors before finishing.
+- Do not invent remote image URLs; use local assets or Lucide fallbacks.

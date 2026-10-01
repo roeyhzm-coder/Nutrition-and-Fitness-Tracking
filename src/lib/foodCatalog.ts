@@ -174,10 +174,10 @@ export function buildFoodCatalog(
 export function filterCatalog(
   items: CatalogFood[],
   query: string,
-  limit = 8,
+  limit = 12,
 ): CatalogFood[] {
   const q = normalizeSearch(query)
-  if (!q) return []
+  if (!q) return items.slice(0, limit)
   const scored: { item: CatalogFood; score: number }[] = []
   for (const item of items) {
     const name = normalizeSearch(item.name)

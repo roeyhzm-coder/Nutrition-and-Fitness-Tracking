@@ -11,6 +11,7 @@ import { formatNiceNumber, parsePositiveDecimal } from '../../lib/numericInput'
 import { uid } from '../../lib/types'
 import { NumericInput } from '../ui/NumericInput'
 import { CatalogPicker } from './CatalogPicker'
+import { PortionPills } from './PortionPills'
 
 type MealIngredientBuilderProps = {
   catalog: CatalogFood[]
@@ -112,6 +113,14 @@ export function MealIngredientBuilder({
                     ))}
                   </div>
                 </div>
+                <PortionPills
+                  value={parsePositiveDecimal(line.amount)}
+                  unit={line.unit}
+                  servingGrams={line.servingGrams}
+                  onChange={(amount) =>
+                    updateLine(line.id, { amount: formatNiceNumber(amount) })
+                  }
+                />
               </>
             ) : (
               <div className="flex items-start gap-2">

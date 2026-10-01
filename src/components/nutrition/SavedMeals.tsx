@@ -12,6 +12,7 @@ import { useAppData } from '../../context/AppDataContext'
 import { savedPresetKind } from '../../data/defaults'
 import {
   buildFoodCatalog,
+  catalogDisplayName,
   catalogMacroPreview,
   emptyIngredientLine,
   formatIngredientNotes,
@@ -20,7 +21,7 @@ import {
   type CatalogFood,
   type MealIngredientLine,
 } from '../../lib/foodCatalog'
-import { formatNiceNumber, parseDecimal, parsePositiveDecimal } from '../../lib/numericInput'
+import { formatNiceNumber, parseDecimal, parsePositiveDecimal, roundTo } from '../../lib/numericInput'
 import { uid, type SavedMeal, type SavedPresetKind } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
@@ -28,6 +29,7 @@ import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
 import { CatalogPicker } from './CatalogPicker'
 import { MealIngredientBuilder } from './MealIngredientBuilder'
+import { PortionPills } from './PortionPills'
 import { QuickPortionModal } from './QuickPortionModal'
 
 const EMPTY_FORM = {
@@ -174,6 +176,42 @@ function MacroFields({
   )
 }
 
+function CompactPresetRow({
+  item,
+  onLog,
+  onEdit,
+  onDelete,
+}: {
+  item: SavedMeal
+  onLog: () => void
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  const subtitle = [
+    item.notes?.trim(),
+    `${formatNiceNumber(item.calories, 0)} קק״ל · ח ${formatNiceNumber(item.protein)}`,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  return (
+    <li className="flex min-h-11 items-center gap-0.5 rounded-xl border border-slate-200 bg-white px-2 py-1">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-semibold text-text">{item.name}</p>
+        <p className="truncate text-[10px] text-muted">{subtitle}</p>
+      </div>
+      <MiniIcon label={`הוסף ${item.name} להיום`} tone="accent" onClick={onLog}>
+        <Plus className="size-3.5" strokeWidth={2.25} />
+      </MiniIcon>
+      <MiniIcon label={`ערוך ${item.name}`} onClick={onEdit}>
+        <Pencil className="size-3.5" strokeWidth={1.75} />
+      </MiniIcon>
+      <MiniIcon label={`מחק ${item.name}`} tone="danger" onClick={onDelete}>
+        <Trash2 className="size-3.5" strokeWidth={1.75} />
+      </MiniIcon>
+    </li>
+  )
+}
+
 export function SavedMeals() {
   const {
     savedMeals,
@@ -260,16 +298,18 @@ export function SavedMeals() {
     toastTimer.current = window.setTimeout(() => setToast(null), 2200)
   }
 
-  function applyCatalogItem(item: CatalogFood) {
+  function applyCatalogItem(item: CatalogFood, servings = 1) {
+    const grams = roundTo(item.servingGrams * servings, 2)
+    const macros = macrosFromPer100g(item.per100g, grams)
     setPicked(item)
     setForm((prev) => ({
       ...prev,
-      name: item.brand ? `${item.name} ${item.brand}` : item.name,
-      calories: String(item.calories),
-      protein: String(item.protein),
-      carbs: String(item.carbs),
-      fats: String(item.fats),
-      servingGrams: String(item.servingGrams),
+      name: catalogDisplayName(item),
+      calories: String(macros.calories),
+      protein: String(macros.protein),
+      carbs: String(macros.carbs),
+      fats: String(macros.fats),
+      servingGrams: formatNiceNumber(grams),
       notes: prev.notes,
       kind: 'item',
     }))
@@ -399,40 +439,13 @@ export function SavedMeals() {
             ) : (
               <ul className="space-y-1">
                 {items.map((item) => (
-                  <li
+                  <CompactPresetRow
                     key={item.id}
-                    className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-white px-2 py-1"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-semibold text-text">
-                        {item.name}
-                      </p>
-                      <p className="truncate text-[10px] text-muted">
-                        {formatNiceNumber(item.calories, 0)} קק״ל · ח{' '}
-                        {formatNiceNumber(item.protein)}
-                      </p>
-                    </div>
-                    <MiniIcon
-                      label={`הוסף ${item.name} להיום`}
-                      tone="accent"
-                    onClick={() => handleLog(item)}
-                    >
-                      <Plus className="size-3.5" strokeWidth={2.25} />
-                    </MiniIcon>
-                    <MiniIcon
-                      label={`ערוך ${item.name}`}
-                      onClick={() => openEdit(item)}
-                    >
-                      <Pencil className="size-3.5" strokeWidth={1.75} />
-                    </MiniIcon>
-                    <MiniIcon
-                      label={`מחק ${item.name}`}
-                      tone="danger"
-                      onClick={() => handleDelete(item)}
-                    >
-                      <Trash2 className="size-3.5" strokeWidth={1.75} />
-                    </MiniIcon>
-                  </li>
+                    item={item}
+                    onLog={() => handleLog(item)}
+                    onEdit={() => openEdit(item)}
+                    onDelete={() => handleDelete(item)}
+                  />
                 ))}
               </ul>
             )}
@@ -462,60 +475,24 @@ export function SavedMeals() {
             ) : (
               <ul className="space-y-1">
                 {meals.map((meal) => (
-                  <li
+                  <CompactPresetRow
                     key={meal.id}
-                    className="rounded-xl border border-slate-200 bg-white px-2 py-1.5"
-                  >
-                    <div className="flex items-start gap-0.5">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-text">
-                          {meal.name}
-                        </p>
-                        {meal.notes?.trim() ? (
-                          <p className="truncate text-[10px] text-muted">
-                            {meal.notes}
-                          </p>
-                        ) : null}
-                        <p className="text-[10px] font-medium text-text">
-                          {formatNiceNumber(meal.calories, 0)} קק״ל · ח{' '}
-                          {formatNiceNumber(meal.protein)}
-                        </p>
-                      </div>
-                      <MiniIcon
-                        label={`ערוך ${meal.name}`}
-                        onClick={() => openEdit(meal)}
-                      >
-                        <Pencil className="size-3.5" strokeWidth={1.75} />
-                      </MiniIcon>
-                      <MiniIcon
-                        label={`מחק ${meal.name}`}
-                        tone="danger"
-                        onClick={() => handleDelete(meal)}
-                      >
-                        <Trash2 className="size-3.5" strokeWidth={1.75} />
-                      </MiniIcon>
-                    </div>
-                    <button
-                      type="button"
-                      aria-label={`הוסף ${meal.name} ליומן`}
-                      className="mt-1 inline-flex min-h-8 items-center gap-1 rounded-lg bg-cyan-600 px-2 text-[11px] font-semibold text-white hover:bg-cyan-500"
-                      onClick={() => handleLog(meal)}
-                    >
-                      <Plus className="size-3" strokeWidth={2.25} />
-                      הוסף ליומן
-                    </button>
-                  </li>
+                    item={meal}
+                    onLog={() => handleLog(meal)}
+                    onEdit={() => openEdit(meal)}
+                    onDelete={() => handleDelete(meal)}
+                  />
                 ))}
               </ul>
             )}
             <button
               type="button"
-              aria-label="ארוחה או מתכון חדש"
+              aria-label="ארוחה חדשה"
               className="inline-flex min-h-8 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-cyan-700 hover:bg-cyan-50"
               onClick={() => openCreate('meal')}
             >
               <Plus className="size-3.5" strokeWidth={2} />
-              ארוחה / מתכון חדש
+              ארוחה חדשה
             </button>
           </CompactFold>
         </div>
@@ -690,6 +667,22 @@ export function SavedMeals() {
                 }}
               />
             </label>
+          ) : null}
+
+          {!isMealForm && picked ? (
+            <PortionPills
+              value={
+                parsePositiveDecimal(form.servingGrams) != null &&
+                picked.servingGrams > 0
+                  ? roundTo(
+                      (parsePositiveDecimal(form.servingGrams) ?? 0) /
+                        picked.servingGrams,
+                      2,
+                    )
+                  : 1
+              }
+              onChange={(servings) => applyCatalogItem(picked, servings)}
+            />
           ) : null}
 
           {!isMealForm || entryMode === 'manual' ? (

@@ -22,14 +22,16 @@ export function CatalogPicker({
 }: CatalogPickerProps) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
+  const [active, setActive] = useState(0)
 
   const matches = useMemo(() => filterCatalog(items, query), [items, query])
-  const showList = open && query.trim().length > 0
+  const showList = open
 
   function pick(item: CatalogFood) {
     onSelect(item)
     setQuery('')
     setOpen(false)
+    setActive(0)
   }
 
   return (
@@ -50,6 +52,8 @@ export function CatalogPicker({
         spellCheck={false}
         placeholder={placeholder}
         aria-label={placeholder}
+        aria-expanded={showList}
+        aria-autocomplete="list"
         onFocus={() => setOpen(true)}
         onBlur={() => {
           window.setTimeout(() => setOpen(false), 120)
@@ -57,11 +61,23 @@ export function CatalogPicker({
         onChange={(e) => {
           setQuery(e.target.value)
           setOpen(true)
+          setActive(0)
         }}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && matches[0]) {
+          if (e.key === 'ArrowDown') {
             e.preventDefault()
-            pick(matches[0])
+            setOpen(true)
+            setActive((i) => Math.min(i + 1, Math.max(matches.length - 1, 0)))
+            return
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setActive((i) => Math.max(i - 1, 0))
+            return
+          }
+          if (e.key === 'Enter' && matches[active]) {
+            e.preventDefault()
+            pick(matches[active])
           }
         }}
         className="field ps-10"
@@ -69,23 +85,27 @@ export function CatalogPicker({
       {showList ? (
         <ul
           role="listbox"
-          className="mt-1 max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg shadow-slate-200/80"
+          className="mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg shadow-slate-200/80"
         >
           {matches.length === 0 ? (
             <li className="px-3 py-2 text-xs text-muted">לא נמצאו פריטים במאגר</li>
           ) : (
-            matches.map((item) => (
-              <li key={item.id} role="option">
+            matches.map((item, index) => (
+              <li key={item.id} role="option" aria-selected={index === active}>
                 <button
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
+                  onMouseEnter={() => setActive(index)}
                   onClick={() => pick(item)}
-                  className="flex w-full flex-col items-stretch gap-0.5 px-3 py-2 text-right hover:bg-slate-50"
+                  className={[
+                    'flex min-h-11 w-full flex-col items-stretch justify-center gap-0.5 px-3 py-1.5 text-right',
+                    index === active ? 'bg-cyan-50' : 'hover:bg-slate-50',
+                  ].join(' ')}
                 >
-                  <span className="text-sm font-semibold text-text">
+                  <span className="truncate text-sm font-semibold text-text">
                     {catalogDisplayName(item)}
                   </span>
-                  <span className="text-[11px] text-muted">
+                  <span className="truncate text-[11px] text-muted">
                     {catalogMacroPreview(item)}
                     {' · '}
                     {item.servingLabel} {item.servingGrams}ג׳
