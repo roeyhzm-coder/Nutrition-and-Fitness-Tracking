@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes } from 'react'
+import { useRef, type InputHTMLAttributes } from 'react'
 import {
   acceptNumericInput,
   safeInputValue,
@@ -22,15 +22,37 @@ export function NumericInput({
   ...rest
 }: NumericInputProps) {
   const integer = decimals <= 0
+  const composing = useRef(false)
+
+  function commit(raw: string) {
+    const next = acceptNumericInput(raw, decimals)
+    if (next != null) onChange(next)
+  }
+
   return (
     <input
       type="text"
       inputMode={integer ? 'numeric' : 'decimal'}
-      step={integer ? 1 : 0.01}
+      step={integer ? 1 : 'any'}
+      lang="en"
+      dir="ltr"
+      autoComplete="off"
+      autoCorrect="off"
+      spellCheck={false}
       value={safeInputValue(value)}
+      onCompositionStart={() => {
+        composing.current = true
+      }}
+      onCompositionEnd={(e) => {
+        composing.current = false
+        commit(e.currentTarget.value)
+      }}
       onChange={(e) => {
-        const next = acceptNumericInput(e.target.value, decimals)
-        if (next != null) onChange(next)
+        if (composing.current) {
+          onChange(e.target.value)
+          return
+        }
+        commit(e.target.value)
       }}
       className={className}
       {...rest}

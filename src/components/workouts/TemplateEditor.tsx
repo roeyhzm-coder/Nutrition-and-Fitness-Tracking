@@ -135,7 +135,6 @@ export function TemplateEditor({
           <label className="block text-xs text-muted">
             קלוריות מוערכות לאימון
             <NumericInput
-              decimals={0}
               min={0}
               value={estimatedCalories}
               onChange={setEstimatedCalories}

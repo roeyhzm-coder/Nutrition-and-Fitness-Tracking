@@ -168,6 +168,8 @@ export type SavedMeal = {
   notes?: string
   /** Individual staple vs a complete meal/recipe. Older records may omit this. */
   kind?: SavedPresetKind
+  /** Grams represented by the stored macros (one unit / serving). */
+  servingGrams?: number
 }
 
 export type Sex = 'male' | 'female'

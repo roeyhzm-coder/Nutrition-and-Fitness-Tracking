@@ -41,7 +41,6 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
         <label className="block text-xs text-muted">
           חזרות מספריות (למילוי)
           <NumericInput
-            decimals={0}
             value={form.defaultReps}
             onChange={(defaultReps) => setForm((p) => ({ ...p, defaultReps }))}
             placeholder="8"

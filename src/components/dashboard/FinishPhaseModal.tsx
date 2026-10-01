@@ -119,7 +119,7 @@ export function FinishPhaseModal({ open, onClose }: FinishPhaseModalProps) {
             targetWeightKg: parseOptional(form.targetWeightKg),
             targetBodyFatPct: parseOptional(form.targetBodyFatPct),
             macros: {
-              calories: parseInteger(form.calories) ?? 0,
+              calories: parseDecimal(form.calories) ?? 0,
               protein: parseDecimal(form.protein) ?? 0,
               carbs: parseDecimal(form.carbs) ?? 0,
               fats: parseDecimal(form.fats) ?? 0,
@@ -247,7 +247,7 @@ export function FinishPhaseModal({ open, onClose }: FinishPhaseModalProps) {
               <label key={key} className="block text-xs text-muted">
                 {label}
                 <NumericInput
-                  decimals={key === 'calories' ? 0 : 2}
+                  decimals={2}
                   value={form[key]}
                   onChange={(next) => setForm((p) => ({ ...p, [key]: next }))}
                   className={inputClass}

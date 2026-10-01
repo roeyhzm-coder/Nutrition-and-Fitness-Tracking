@@ -32,3 +32,14 @@ export function resolveAmountGrams(
   if (unit === 'grams') return amount
   return amount * gramsPerServing(name, brand)
 }
+
+export const DEFAULT_SAVED_SERVING_GRAMS = 100
+export const PORTION_PRESETS = [0.5, 1, 1.5, 2] as const
+
+export function savedItemServingGrams(item: {
+  servingGrams?: number | null
+}): number {
+  if (item.servingGrams != null && item.servingGrams > 0) return item.servingGrams
+  return DEFAULT_SAVED_SERVING_GRAMS
+}
+

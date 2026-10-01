@@ -136,7 +136,7 @@ function EditFoodModal({
             <label key={key} className="block text-xs text-muted">
               {label}
               <NumericInput
-                decimals={key === 'calories' ? 0 : 2}
+                decimals={2}
                 value={form[key]}
                 onChange={(next) => {
                   if (acceptNumericInput(next, key === 'calories' ? 0 : 2) != null) {

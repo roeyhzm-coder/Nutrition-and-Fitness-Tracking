@@ -3,7 +3,6 @@ import { Plus, Star } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import {
   parseDecimal,
-  parseInteger,
   parsePositiveDecimal,
 } from '../../lib/numericInput'
 import {
@@ -166,7 +165,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
       unit === 'serving'
         ? `${amount} ${servingHint(product.name, product.brand)} · ${round1(grams)} גרם`
         : `${round1(grams)} גרם`
-    addSavedMeal({ name, ...macros, notes, kind: 'item' })
+    addSavedMeal({ name, ...macros, notes, kind: 'item', servingGrams: grams })
     showToast('נשמר לקבועים שלי')
   }
 
@@ -177,15 +176,16 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
   function submitCustom() {
     const name = custom.name.trim()
     if (!name) return
+    const grams = parsePositiveDecimal(custom.grams) ?? 1
     const payload: Omit<SavedMeal, 'id'> = {
       name,
-      calories: parseInteger(custom.calories) ?? 0,
+      calories: parseDecimal(custom.calories) ?? 0,
       protein: parseDecimal(custom.protein) ?? 0,
       carbs: parseDecimal(custom.carbs) ?? 0,
       fats: parseDecimal(custom.fats) ?? 0,
       kind: 'item',
+      servingGrams: grams,
     }
-    const grams = parsePositiveDecimal(custom.grams) ?? 1
     onAdd({ ...payload, grams, source: 'manual' })
     if (saveCustom && !isFavorite(name)) {
       addSavedMeal(payload)
@@ -257,7 +257,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
                   </p>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <NumericInput
-                      decimals={unit === 'grams' ? 0 : 2}
+                      decimals={2}
                       value={amountOf(p.code, unit)}
                       onChange={(next) => setAmount(p.code, unit, next)}
                       className="field w-20 px-2 text-xs"
@@ -335,11 +335,11 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
           <div className="grid grid-cols-2 gap-2">
             {(
               [
-                ['calories', 'קלוריות', 0],
+                ['calories', 'קלוריות', 2],
                 ['protein', 'חלבון', 2],
                 ['carbs', 'פחמימות', 2],
                 ['fats', 'שומנים', 2],
-                ['grams', 'גרם (אופציונלי)', 0],
+                ['grams', 'גרם (אופציונלי)', 2],
               ] as const
             ).map(([key, label, decimals]) => (
               <label key={key} className="block text-xs text-muted">

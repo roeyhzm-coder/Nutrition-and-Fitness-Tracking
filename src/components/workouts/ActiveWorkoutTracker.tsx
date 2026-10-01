@@ -18,8 +18,10 @@ import {
 } from '../../lib/exerciseDefaults'
 import {
   displayDecimal,
+  isIncompleteNumericDraft,
   parseDecimal,
   parseInteger,
+  syncNumericDraft,
 } from '../../lib/numericInput'
 import type { LoggedExercise } from '../../lib/types'
 import { localDateKey } from '../../lib/types'
@@ -52,16 +54,18 @@ function DraftNumberInput({
   onCommit,
   decimals = 2,
   placeholder,
+  className = inputClass,
 }: {
   value: number | null
   onCommit: (next: number | null) => void
   decimals?: number
   placeholder?: string
+  className?: string
 }) {
-  const [draft, setDraft] = useState(() => displayDecimal(value))
+  const [draft, setDraft] = useState(() => displayDecimal(value, decimals))
   useEffect(() => {
-    setDraft(displayDecimal(value))
-  }, [value])
+    setDraft((prev) => syncNumericDraft(prev, value, decimals))
+  }, [value, decimals])
 
   return (
     <NumericInput
@@ -73,11 +77,12 @@ function DraftNumberInput({
           onCommit(null)
           return
         }
+        if (isIncompleteNumericDraft(raw)) return
         const parsed = decimals <= 0 ? parseInteger(raw) : parseDecimal(raw)
         if (parsed != null) onCommit(parsed)
       }}
       placeholder={placeholder}
-      className={inputClass}
+      className={className}
     />
   )
 }
@@ -222,7 +227,6 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
               placeholder="0"
             />
             <DraftNumberInput
-              decimals={0}
               value={set.reps}
               onCommit={(reps) => updateSet(index, setIndex, { reps })}
               placeholder={
@@ -436,23 +440,11 @@ function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
             </label>
             <label className="block text-[11px] text-muted">
               קלוריות מוערכות
-              <NumericInput
-                decimals={0}
-                min={0}
-                value={
-                  workout.estimatedCalories != null
-                    ? String(workout.estimatedCalories)
-                    : ''
+              <DraftNumberInput
+                value={workout.estimatedCalories ?? null}
+                onCommit={(n) =>
+                  setEstimatedCalories(n == null ? null : Math.max(0, n))
                 }
-                onChange={(raw) => {
-                  if (!raw) {
-                    setEstimatedCalories(null)
-                    return
-                  }
-                  const n = Number(raw)
-                  if (!Number.isFinite(n)) return
-                  setEstimatedCalories(Math.max(0, Math.round(n)))
-                }}
                 placeholder="0"
                 className="field mt-1"
               />

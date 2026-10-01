@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { Check, Pencil, Plus, Settings2, Trash2, X } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
-import { parseDecimal, parseInteger } from '../../lib/numericInput'
+import { parseDecimal } from '../../lib/numericInput'
 import type { SavedMeal } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
+import { QuickPortionModal } from '../nutrition/QuickPortionModal'
 
 type AddFoodModalProps = {
   open: boolean
@@ -30,10 +31,10 @@ const EMPTY_FORM: MacroForm = {
 }
 
 const MACRO_FIELDS = [
-  ['calories', 'קלוריות', 'numeric'],
-  ['protein', 'חלבון', 'decimal'],
-  ['carbs', 'פחמימות', 'decimal'],
-  ['fats', 'שומנים', 'decimal'],
+  ['calories', 'קלוריות'],
+  ['protein', 'חלבון'],
+  ['carbs', 'פחמימות'],
+  ['fats', 'שומנים'],
 ] as const
 
 const inputClass = 'field'
@@ -54,7 +55,7 @@ function toMacros(
 ): Omit<SavedMeal, 'id'> {
   return {
     name: form.name.trim(),
-    calories: parseInteger(form.calories) ?? 0,
+    calories: parseDecimal(form.calories) ?? 0,
     protein: parseDecimal(form.protein) ?? 0,
     carbs: parseDecimal(form.carbs) ?? 0,
     fats: parseDecimal(form.fats) ?? 0,
@@ -81,11 +82,11 @@ function MacroFields({
         required
       />
       <div className="grid grid-cols-2 gap-2">
-        {MACRO_FIELDS.map(([key, label, mode]) => (
+        {MACRO_FIELDS.map(([key, label]) => (
           <label key={key} className="block text-xs text-muted">
             {label}
             <NumericInput
-              decimals={mode === 'numeric' ? 0 : 2}
+              decimals={2}
               value={form[key]}
               onChange={(next) => onChange({ [key]: next })}
               placeholder="0"
@@ -102,7 +103,6 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
   const {
     addFood,
     savedMeals,
-    logSavedMeal,
     addSavedMeal,
     updateSavedMeal,
     deleteSavedMeal,
@@ -114,6 +114,7 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
   const [editorTarget, setEditorTarget] = useState<string | null>(null)
   const [editorForm, setEditorForm] = useState<MacroForm>(EMPTY_FORM)
   const [notice, setNotice] = useState<string | null>(null)
+  const [portionItem, setPortionItem] = useState<SavedMeal | null>(null)
 
   function flash(message: string) {
     setNotice(message)
@@ -126,6 +127,7 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
     setManage(false)
     setEditorTarget(null)
     setNotice(null)
+    setPortionItem(null)
     onClose()
   }
 
@@ -164,6 +166,7 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
   }
 
   return (
+    <>
     <Modal open={open} title="הוספת מזון / ארוחה" onClose={close} wide>
       <div className="space-y-4">
         <section>
@@ -289,10 +292,7 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
                     aria-label={`הוסף ${m.name} ישירות ליומן`}
                     title="הוסף ישירות ליומן"
                     className="flex min-w-11 items-center justify-center border-s border-slate-200 px-3 text-blue-600 transition hover:bg-blue-600 hover:text-white"
-                    onClick={() => {
-                      logSavedMeal(m.id)
-                      close()
-                    }}
+                    onClick={() => setPortionItem(m)}
                   >
                     <Plus className="size-4" strokeWidth={2} />
                   </button>
@@ -302,7 +302,7 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
           )}
           {!manage && savedMeals.length > 0 ? (
             <p className="mt-2 text-[10px] text-muted">
-              לחיצה על שם ממלאת את השדות · לחיצה על + מוסיפה ישירות ליומן
+              לחיצה על שם ממלאת את השדות · לחיצה על + בוחרת כמות
             </p>
           ) : null}
           {notice ? (
@@ -353,5 +353,14 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
         </form>
       </div>
     </Modal>
+    <QuickPortionModal
+      item={portionItem}
+      onClose={() => setPortionItem(null)}
+      onAdd={(entry) => {
+        addFood(entry)
+        close()
+      }}
+    />
+    </>
   )
 }

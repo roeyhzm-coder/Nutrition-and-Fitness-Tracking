@@ -67,7 +67,7 @@ export function GoalsEditorCard() {
         onSubmit={(e) => {
           e.preventDefault()
           setMacroTargets({
-            calories: parseInteger(form.calories) ?? 0,
+            calories: parseDecimal(form.calories) ?? 0,
             protein: parseDecimal(form.protein) ?? 0,
             carbs: parseDecimal(form.carbs) ?? 0,
             fats: parseDecimal(form.fats) ?? 0,
@@ -79,7 +79,7 @@ export function GoalsEditorCard() {
         }}
       >
         <div className="grid grid-cols-2 gap-2">
-          {field('calories', 'קלוריות יומיות', 0)}
+          {field('calories', 'קלוריות יומיות', 2)}
           {field('protein', 'חלבון (ג׳)', 2)}
           {field('carbs', 'פחמימות (ג׳)', 2)}
           {field('fats', 'שומן (ג׳)', 2)}

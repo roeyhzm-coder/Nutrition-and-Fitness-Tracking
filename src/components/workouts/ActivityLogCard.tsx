@@ -116,7 +116,6 @@ export function ActivityLogCard() {
         </div>
         <div className="grid grid-cols-3 gap-2">
           <NumericInput
-            decimals={0}
             value={duration}
             onChange={setDuration}
             placeholder="דקות"

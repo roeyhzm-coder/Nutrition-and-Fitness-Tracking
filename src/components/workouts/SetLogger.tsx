@@ -1,7 +1,7 @@
 import type { Exercise } from '../../lib/types'
 import type { SetLog } from '../../lib/types'
 import { useState } from 'react'
-import { parseDecimal, parseInteger } from '../../lib/numericInput'
+import { parseDecimal } from '../../lib/numericInput'
 import { Button } from '../ui/Button'
 import { NumericInput } from '../ui/NumericInput'
 
@@ -21,7 +21,7 @@ export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
       onSubmit={(e) => {
         e.preventDefault()
         const w = parseDecimal(weightKg)
-        const r = parseInteger(reps)
+        const r = parseDecimal(reps)
         const pe = parseDecimal(rpe) ?? 7
         if (w == null || r == null || r <= 0) return
         onLog({
@@ -51,7 +51,6 @@ export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
         <label className="block text-xs text-muted">
           חזרות
           <NumericInput
-            decimals={0}
             value={reps}
             onChange={setReps}
             required

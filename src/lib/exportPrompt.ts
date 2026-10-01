@@ -500,6 +500,10 @@ export function parseImportJson(raw: string): {
           ? m.notes.trim()
           : undefined,
       kind: m.kind === 'item' ? ('item' as const) : ('meal' as const),
+      servingGrams:
+        m.servingGrams != null && Number.isFinite(Number(m.servingGrams))
+          ? Number(m.servingGrams)
+          : undefined,
     }))
 
   const asRecipes = (

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, Pencil, Plus, Trash2 } from 'lucide-react'
+import { ChevronDown, Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import { savedPresetKind } from '../../data/defaults'
-import { parseDecimal, parseInteger } from '../../lib/numericInput'
+import { formatNiceNumber, parseDecimal } from '../../lib/numericInput'
 import type { SavedMeal, SavedPresetKind } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
+import { QuickPortionModal } from './QuickPortionModal'
 
 const EMPTY_FORM = {
   name: '',
@@ -97,24 +98,47 @@ export function SavedMeals() {
     addSavedMeal,
     updateSavedMeal,
     deleteSavedMeal,
-    logSavedMeal,
+    addFood,
   } = useAppData()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<SavedMeal | null>(null)
+  const [portionItem, setPortionItem] = useState<SavedMeal | null>(null)
   const [form, setForm] = useState<PresetForm>(EMPTY_FORM)
   const [itemsOpen, setItemsOpen] = useState(false)
   const [mealsOpen, setMealsOpen] = useState(false)
+  const [query, setQuery] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | null>(null)
 
+  const q = query.trim()
   const items = useMemo(
-    () => savedMeals.filter((m) => savedPresetKind(m) === 'item'),
-    [savedMeals],
+    () =>
+      savedMeals.filter((m) => {
+        if (savedPresetKind(m) !== 'item') return false
+        if (!q) return true
+        return (
+          m.name.includes(q) || (m.notes != null && m.notes.includes(q))
+        )
+      }),
+    [savedMeals, q],
   )
   const meals = useMemo(
-    () => savedMeals.filter((m) => savedPresetKind(m) === 'meal'),
-    [savedMeals],
+    () =>
+      savedMeals.filter((m) => {
+        if (savedPresetKind(m) !== 'meal') return false
+        if (!q) return true
+        return (
+          m.name.includes(q) || (m.notes != null && m.notes.includes(q))
+        )
+      }),
+    [savedMeals, q],
   )
+
+  useEffect(() => {
+    if (!q) return
+    setItemsOpen(true)
+    setMealsOpen(true)
+  }, [q])
 
   useEffect(() => {
     return () => {
@@ -148,10 +172,8 @@ export function SavedMeals() {
     setOpen(true)
   }
 
-  function handleLog(mealId: string) {
-    if (logSavedMeal(mealId)) {
-      showToast('נוסף בהצלחה ליומן המזון')
-    }
+  function handleLog(meal: SavedMeal) {
+    setPortionItem(meal)
   }
 
   function handleDelete(meal: SavedMeal) {
@@ -164,7 +186,7 @@ export function SavedMeals() {
   function submitForm() {
     const payload = {
       name: form.name.trim(),
-      calories: parseInteger(form.calories) ?? 0,
+      calories: parseDecimal(form.calories) ?? 0,
       protein: parseDecimal(form.protein) ?? 0,
       carbs: parseDecimal(form.carbs) ?? 0,
       fats: parseDecimal(form.fats) ?? 0,
@@ -191,6 +213,20 @@ export function SavedMeals() {
           </p>
         ) : null}
 
+        <label className="relative mb-2 block">
+          <Search
+            className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="חיפוש מהיר בקבועים…"
+            className="field ps-10"
+            aria-label="חיפוש בקבועים שלי"
+          />
+        </label>
         <div className="space-y-2">
           <CompactFold
             title="פריטים בודדים"
@@ -200,7 +236,9 @@ export function SavedMeals() {
           >
             {items.length === 0 ? (
               <p className="px-1 text-xs text-muted">
-                אין פריטים בודדים עדיין. שמור מלחם, גבינה או חיפוש המזון.
+                {q
+                  ? 'אין פריטים שתואמים לחיפוש.'
+                  : 'אין פריטים בודדים עדיין. שמור מלחם, גבינה או חיפוש המזון.'}
               </p>
             ) : (
               <ul className="space-y-1">
@@ -214,13 +252,14 @@ export function SavedMeals() {
                         {item.name}
                       </p>
                       <p className="truncate text-[10px] text-muted">
-                        {item.calories} קק״ל · ח {item.protein}
+                        {formatNiceNumber(item.calories, 0)} קק״ל · ח{' '}
+                        {formatNiceNumber(item.protein)}
                       </p>
                     </div>
                     <MiniIcon
                       label={`הוסף ${item.name} להיום`}
                       tone="accent"
-                      onClick={() => handleLog(item.id)}
+                    onClick={() => handleLog(item)}
                     >
                       <Plus className="size-3.5" strokeWidth={2.25} />
                     </MiniIcon>
@@ -260,7 +299,9 @@ export function SavedMeals() {
           >
             {meals.length === 0 ? (
               <p className="px-1 text-xs text-muted">
-                אין ארוחות קבועות עדיין. הוסף ארוחה מלאה לשימוש חוזר.
+                {q
+                  ? 'אין ארוחות שתואמות לחיפוש.'
+                  : 'אין ארוחות קבועות עדיין. הוסף ארוחה מלאה לשימוש חוזר.'}
               </p>
             ) : (
               <ul className="space-y-1">
@@ -280,7 +321,8 @@ export function SavedMeals() {
                           </p>
                         ) : null}
                         <p className="text-[10px] font-medium text-text">
-                          {meal.calories} קק״ל · ח {meal.protein}
+                          {formatNiceNumber(meal.calories, 0)} קק״ל · ח{' '}
+                          {formatNiceNumber(meal.protein)}
                         </p>
                       </div>
                       <MiniIcon
@@ -301,7 +343,7 @@ export function SavedMeals() {
                       type="button"
                       aria-label={`הוסף ${meal.name} ליומן`}
                       className="mt-1 inline-flex min-h-8 items-center gap-1 rounded-lg bg-cyan-600 px-2 text-[11px] font-semibold text-white hover:bg-cyan-500"
-                      onClick={() => handleLog(meal.id)}
+                      onClick={() => handleLog(meal)}
                     >
                       <Plus className="size-3" strokeWidth={2.25} />
                       הוסף ליומן
@@ -405,7 +447,7 @@ export function SavedMeals() {
               <label key={key} className="block text-xs text-muted">
                 {label}
                 <NumericInput
-                  decimals={key === 'calories' ? 0 : 2}
+                  decimals={2}
                   value={form[key]}
                   onChange={(next) => setForm((p) => ({ ...p, [key]: next }))}
                 />
@@ -428,6 +470,15 @@ export function SavedMeals() {
           ) : null}
         </form>
       </Modal>
+
+      <QuickPortionModal
+        item={portionItem}
+        onClose={() => setPortionItem(null)}
+        onAdd={(entry) => {
+          addFood(entry)
+          showToast('נוסף בהצלחה ליומן המזון')
+        }}
+      />
     </>
   )
 }

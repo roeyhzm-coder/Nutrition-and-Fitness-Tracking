@@ -26,7 +26,7 @@ type TextKey = 'avoidFoods' | 'allergies' | 'supplements' | 'injuries'
 
 const NUMERIC_FIELDS: ReadonlyArray<[NumericKey, string, number]> = [
   ['age', 'גיל', 0],
-  ['heightCm', 'גובה (ס״מ)', 0],
+  ['heightCm', 'גובה (ס״מ)', 2],
   ['startWeightKg', 'משקל התחלתי (ק״ג)', 2],
   ['targetWeightKg', 'משקל יעד (ק״ג)', 2],
   ['estimatedBodyFatPct', 'אחוז שומן מוערך', 2],

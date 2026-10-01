@@ -138,7 +138,7 @@ function RecipeFoodCard({
         <label className="flex items-center gap-2 text-xs text-muted">
           <span className="font-medium">גרם</span>
           <NumericInput
-            decimals={0}
+            decimals={2}
             value={gramsDraft}
             onChange={setGramsDraft}
             className="field w-24 px-2 text-sm"

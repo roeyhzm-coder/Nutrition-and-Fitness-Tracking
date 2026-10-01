@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { displayDecimal, parseDecimal, parseInteger } from '../../lib/numericInput'
+import { displayDecimal, parseDecimal } from '../../lib/numericInput'
 import type { MacroTargets } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Modal } from '../ui/Modal'
@@ -57,7 +57,7 @@ export function EditTargetsModal({
         onSubmit={(e) => {
           e.preventDefault()
           onSave({
-            calories: parseInteger(form.calories) ?? 0,
+            calories: parseDecimal(form.calories) ?? 0,
             protein: parseDecimal(form.protein) ?? 0,
             carbs: parseDecimal(form.carbs) ?? 0,
             fats: parseDecimal(form.fats) ?? 0,
@@ -66,7 +66,7 @@ export function EditTargetsModal({
         }}
       >
         <div className="grid grid-cols-2 gap-2">
-          {field('calories', 'קלוריות', 0)}
+          {field('calories', 'קלוריות', 2)}
           {field('protein', 'חלבון (ג׳)', 2)}
           {field('carbs', 'פחמימות (ג׳)', 2)}
           {field('fats', 'שומנים (ג׳)', 2)}
