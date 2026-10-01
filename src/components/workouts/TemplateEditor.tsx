@@ -8,6 +8,7 @@ import {
   exerciseToForm,
   formToExercise,
 } from '../../lib/exerciseForm'
+import { NumericInput } from '../ui/NumericInput'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
@@ -28,6 +29,7 @@ type TemplateEditorProps = {
     id?: string
     name: string
     exercises: Exercise[]
+    estimatedCalories?: number | null
   }) => void
   onDelete?: (id: string) => void
   onApplyToDay: (
@@ -57,6 +59,7 @@ export function TemplateEditor({
   onApplyToDay,
 }: TemplateEditorProps) {
   const [name, setName] = useState('')
+  const [estimatedCalories, setEstimatedCalories] = useState('')
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [editingEx, setEditingEx] = useState<Exercise | null>(null)
   const [exForm, setExForm] = useState<ExerciseForm>(EMPTY_EXERCISE_FORM)
@@ -66,11 +69,15 @@ export function TemplateEditor({
     if (!open) return
     if (template) {
       setName(template.name)
+      setEstimatedCalories(
+        template.estimatedCalories != null ? String(template.estimatedCalories) : '',
+      )
       setExercises(structuredClone(template.exercises))
       return
     }
     if (isCreating) {
       setName('')
+      setEstimatedCalories('')
       setExercises(
         seedExercises.length
           ? structuredClone(seedExercises).map((e) => ({ ...e, id: uid() }))
@@ -123,6 +130,17 @@ export function TemplateEditor({
               className="mt-1 field"
               placeholder="למשל דחיפה עליון"
               required
+            />
+          </label>
+          <label className="block text-xs text-muted">
+            קלוריות מוערכות לאימון
+            <NumericInput
+              decimals={0}
+              min={0}
+              value={estimatedCalories}
+              onChange={setEstimatedCalories}
+              placeholder="למשל 350"
+              className="mt-1 field"
             />
           </label>
 
@@ -201,6 +219,9 @@ export function TemplateEditor({
                   id: template?.id,
                   name: name.trim(),
                   exercises,
+                  estimatedCalories: estimatedCalories.trim()
+                    ? Math.max(0, Math.round(Number(estimatedCalories)) || 0)
+                    : null,
                 })
               }}
             >
@@ -269,6 +290,9 @@ export function TemplateEditor({
                     id: template.id,
                     name: name.trim() || template.name,
                     exercises,
+                    estimatedCalories: estimatedCalories.trim()
+                      ? Math.max(0, Math.round(Number(estimatedCalories)) || 0)
+                      : null,
                   })
                   onApplyToDay(template.id, d.id, exercises)
                   setApplyOpen(false)

@@ -40,8 +40,12 @@ type WorkoutSessionValue = {
   trackerOpen: boolean
   openTracker: () => void
   minimizeTracker: () => void
-  /** Starts a workout for the day, or reopens the one already in progress. */
+  /** Starts a scheduled day, or reopens the workout already in progress. */
   startWorkout: (day: WorkoutDay) => void
+  /** Start any workout (template / other day's plan) regardless of today's slot. */
+  startFlexibleWorkout: (source: FlexibleWorkoutSource) => void
+  setPerformedOn: (date: string) => void
+  setEstimatedCalories: (calories: number | null) => void
   updateSet: (exIndex: number, setIndex: number, patch: Partial<LoggedSet>) => void
   setExerciseDone: (exIndex: number, done: boolean) => void
   addSet: (exIndex: number) => void
@@ -53,6 +57,14 @@ type WorkoutSessionValue = {
   cancelWorkout: () => void
   workoutLogs: WorkoutLog[]
   deleteWorkoutLog: (id: string) => void
+}
+
+export type FlexibleWorkoutSource = {
+  name: string
+  exercises: Exercise[]
+  dayId?: string
+  dayNumber?: number
+  estimatedCalories?: number | null
 }
 
 const WorkoutSessionContext = createContext<WorkoutSessionValue | null>(null)
@@ -189,24 +201,28 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     })
   }, [activeWorkoutId, programDays, setActiveWorkout])
 
-  const startWorkout = useCallback(
-    (day: WorkoutDay) => {
+  const startFlexibleWorkout = useCallback(
+    (source: FlexibleWorkoutSource) => {
       setTrackerOpen(true)
       if (activeWorkout) return
-      const exercises = dayAllExercises(day)
-      if (!exercises.length || !activeProgram) return
-      const name = workoutLabel(day)
-
+      if (!source.exercises.length || !activeProgram) return
+      const today = localDateKey()
+      const calories =
+        source.estimatedCalories != null && Number.isFinite(source.estimatedCalories)
+          ? Math.max(0, Math.round(source.estimatedCalories))
+          : null
       setActiveWorkout({
         id: uid(),
         programId: activeProgram.id,
         programName: activeProgram.name,
         blockNumber: deriveBlockNumber(activeProgram.id, activeProgram.name),
-        dayId: day.id,
-        dayNumber: day.dayNumber,
-        workoutName: name,
+        dayId: source.dayId || activeProgram.days[0]?.id || '',
+        dayNumber: source.dayNumber || 1,
+        workoutName: source.name,
         startedAt: new Date().toISOString(),
-        exercises: exercises.map((ex) => {
+        performedOn: today,
+        estimatedCalories: calories,
+        exercises: source.exercises.map((ex) => {
           const defaults = defaultsFromExercise(ex)
           return {
             exerciseId: ex.id,
@@ -224,6 +240,38 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       })
     },
     [activeWorkout, activeProgram, setActiveWorkout],
+  )
+
+  const startWorkout = useCallback(
+    (day: WorkoutDay) => {
+      startFlexibleWorkout({
+        name: workoutLabel(day),
+        exercises: dayAllExercises(day),
+        dayId: day.id,
+        dayNumber: day.dayNumber,
+        estimatedCalories: day.sessions.reduce(
+          (sum, session) => sum + (session.estimatedCalories ?? 0),
+          0,
+        ) || null,
+      })
+    },
+    [startFlexibleWorkout],
+  )
+
+  const setPerformedOn = useCallback(
+    (date: string) => {
+      setActiveWorkout((prev) => (prev ? { ...prev, performedOn: date } : prev))
+    },
+    [setActiveWorkout],
+  )
+
+  const setEstimatedCalories = useCallback(
+    (calories: number | null) => {
+      setActiveWorkout((prev) =>
+        prev ? { ...prev, estimatedCalories: calories } : prev,
+      )
+    },
+    [setActiveWorkout],
   )
 
   const updateSet = useCallback(
@@ -344,12 +392,15 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       .filter((ex) => ex.sets.length > 0)
     if (!exercises.length) return null
 
+    const performedOn = activeWorkout.performedOn || localDateKey()
     const log: WorkoutLog = {
       ...activeWorkout,
       blockNumber:
         activeWorkout.blockNumber ??
         deriveBlockNumber(activeWorkout.programId, activeWorkout.programName),
       completedAt,
+      performedOn,
+      estimatedCalories: activeWorkout.estimatedCalories ?? null,
       exercises,
     }
     setWorkoutLogs((prev) => [...prev, log])
@@ -366,7 +417,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
         })
       }
     }
-    setConsistencyDayMark(localDateKey(new Date(completedAt)), {
+    setConsistencyDayMark(performedOn, {
       done: true,
       workoutId: activeWorkout.dayId,
       workoutName: activeWorkout.workoutName,
@@ -402,6 +453,9 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       openTracker: () => setTrackerOpen(true),
       minimizeTracker: () => setTrackerOpen(false),
       startWorkout,
+      startFlexibleWorkout,
+      setPerformedOn,
+      setEstimatedCalories,
       updateSet,
       setExerciseDone,
       addSet,
@@ -416,6 +470,9 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       activeWorkout,
       trackerOpen,
       startWorkout,
+      startFlexibleWorkout,
+      setPerformedOn,
+      setEstimatedCalories,
       updateSet,
       setExerciseDone,
       addSet,

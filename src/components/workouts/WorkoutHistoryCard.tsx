@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { ChevronDown, Trash2 } from 'lucide-react'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import type { WorkoutLog } from '../../lib/types'
+import { parseLocalDateKey } from '../../lib/types'
+import { workoutPerformedOn } from '../../lib/caloriesBurned'
 import { Card } from '../ui/Card'
 import { IconButton } from '../ui/IconButton'
 
@@ -29,6 +31,7 @@ function volumeKg(log: WorkoutLog) {
 function LogItem({ log }: { log: WorkoutLog }) {
   const { deleteWorkoutLog } = useWorkoutSession()
   const [open, setOpen] = useState(false)
+  const performed = parseLocalDateKey(workoutPerformedOn(log))
   const completed = new Date(log.completedAt)
   const setCount = log.exercises.reduce((n, e) => n + e.sets.length, 0)
   const volume = volumeKg(log)
@@ -44,12 +47,15 @@ function LogItem({ log }: { log: WorkoutLog }) {
         >
           <p className="font-semibold text-text">{log.workoutName}</p>
           <p className="mt-0.5 text-xs text-muted">
-            {dateFormat.format(completed)} · {timeFormat.format(completed)} ·{' '}
+            {dateFormat.format(performed)} · {timeFormat.format(completed)} ·{' '}
             {durationMin(log)} דק׳
           </p>
           <p className="mt-0.5 text-xs text-muted">
             {log.exercises.length} תרגילים · {setCount} סטים
-            {volume > 0 ? ` · נפח ${Math.round(volume)} ק״ג` : ''} · {log.programName}
+            {volume > 0 ? ` · נפח ${Math.round(volume)} ק״ג` : ''}
+            {log.estimatedCalories ? ` · ${log.estimatedCalories} קק״ל` : ''}
+            {' · '}
+            {log.programName}
             {log.blockNumber != null ? ` · בלוק ${log.blockNumber}` : ''}
           </p>
         </button>

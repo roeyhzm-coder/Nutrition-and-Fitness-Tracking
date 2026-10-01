@@ -37,6 +37,12 @@ alter table public.client_app_state
   add column if not exists food_logs jsonb not null default '[]'::jsonb;
 
 alter table public.client_app_state
+  add column if not exists routines jsonb not null default '[]'::jsonb;
+
+alter table public.client_app_state
+  add column if not exists focus_tracks jsonb not null default '[]'::jsonb;
+
+alter table public.client_app_state
   drop constraint if exists client_app_state_phase_check;
 
 alter table public.client_app_state

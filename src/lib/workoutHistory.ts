@@ -71,6 +71,11 @@ export function normalizeWorkoutLog(
     workoutName: log.workoutName ?? '',
     startedAt: log.startedAt ?? log.completedAt ?? new Date().toISOString(),
     completedAt: log.completedAt ?? log.startedAt ?? new Date().toISOString(),
+    performedOn:
+      typeof log.performedOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(log.performedOn)
+        ? log.performedOn
+        : undefined,
+    estimatedCalories: asNumber(log.estimatedCalories),
     exercises,
   }
 }
@@ -106,11 +111,13 @@ type WorkoutLogRow = {
   started_at: string
   completed_at: string
   exercises: LoggedExercise[]
+  performed_on?: string | null
+  estimated_calories?: number | null
 }
 
-function toRow(log: WorkoutLog, deviceId: string): WorkoutLogRow {
+function toRow(log: WorkoutLog, deviceId: string, withExtras = true) {
   const normalized = normalizeWorkoutLog(log)
-  return {
+  const base = {
     id: normalized.id,
     device_id: deviceId,
     program_id: normalized.programId,
@@ -122,6 +129,12 @@ function toRow(log: WorkoutLog, deviceId: string): WorkoutLogRow {
     started_at: normalized.startedAt,
     completed_at: normalized.completedAt,
     exercises: normalized.exercises,
+  }
+  if (!withExtras) return base
+  return {
+    ...base,
+    performed_on: normalized.performedOn ?? null,
+    estimated_calories: normalized.estimatedCalories ?? null,
   }
 }
 
@@ -136,6 +149,8 @@ function fromRow(row: WorkoutLogRow): WorkoutLog {
     workoutName: row.workout_name,
     startedAt: row.started_at,
     completedAt: row.completed_at,
+    performedOn: row.performed_on ?? undefined,
+    estimatedCalories: row.estimated_calories,
     exercises: row.exercises,
   })
 }
@@ -169,10 +184,17 @@ export async function pushWorkoutLogs(logs: WorkoutLog[]): Promise<boolean> {
   const { error } = await supabase
     .from('workout_logs')
     .upsert(
-      logs.map((log) => toRow(log, deviceId)),
+      logs.map((log) => toRow(log, deviceId, true)),
       { onConflict: 'id' },
     )
-  return !error
+  if (!error) return true
+  const retry = await supabase
+    .from('workout_logs')
+    .upsert(
+      logs.map((log) => toRow(log, deviceId, false)),
+      { onConflict: 'id' },
+    )
+  return !retry.error
 }
 
 export async function deleteRemoteWorkoutLog(id: string): Promise<boolean> {

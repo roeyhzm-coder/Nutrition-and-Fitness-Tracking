@@ -284,6 +284,7 @@ export type DaySession = {
   id: string
   name: string
   sourceTemplateId?: string | null
+  estimatedCalories?: number | null
   exercises: Exercise[]
 }
 
@@ -378,6 +379,10 @@ export type WorkoutLog = {
   workoutName: string
   startedAt: string
   completedAt: string
+  /** Calendar day the session is attributed to (YYYY-MM-DD). */
+  performedOn?: string
+  /** Estimated calories burned for this session. */
+  estimatedCalories?: number | null
   exercises: LoggedExercise[]
 }
 
@@ -388,6 +393,23 @@ export type WorkoutTemplate = {
   name: string
   exercises: Exercise[]
   updatedAt: string
+  estimatedCalories?: number | null
+}
+
+export type FocusTrackTimeframe = 'forever' | 'period'
+
+export type FocusTrack = {
+  id: string
+  name: string
+  weeklyTargetDays: number
+  estimatedCalories: number
+  timeframe: FocusTrackTimeframe
+  durationMonths: number | null
+  startsOn: string
+  endsOn: string | null
+  completedDates: string[]
+  archivedAt: string | null
+  createdAt: string
 }
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snacks'

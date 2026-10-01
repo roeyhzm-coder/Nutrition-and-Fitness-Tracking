@@ -3,6 +3,7 @@ import { useAppData } from '../../context/AppDataContext'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import type { WorkoutDay } from '../../lib/types'
 import { dayAllExercises } from '../../lib/types'
+import { estimatedCaloriesForDay } from '../../lib/weekPlan'
 import { Button } from '../ui/Button'
 
 const CUSTOM = '__custom'
@@ -70,8 +71,10 @@ export function StartWorkoutButton({
   day: WorkoutDay
   className?: string
 }) {
-  const { activeWorkout, startWorkout } = useWorkoutSession()
-  const hasExercises = dayAllExercises(day).length > 0
+  const { workoutTemplates } = useAppData()
+  const { activeWorkout, startFlexibleWorkout } = useWorkoutSession()
+  const exercises = dayAllExercises(day)
+  const hasExercises = exercises.length > 0
   const isThisDay = activeWorkout?.dayId === day.id
   const otherActive = !!activeWorkout && !isThisDay
 
@@ -80,11 +83,19 @@ export function StartWorkoutButton({
     <Button
       variant="accent"
       className={className}
-      onClick={() => startWorkout(day)}
+      onClick={() =>
+        startFlexibleWorkout({
+          name: day.sessions.map((s) => s.name).join(' + ') || day.focus || day.title,
+          exercises,
+          dayId: day.id,
+          dayNumber: day.dayNumber,
+          estimatedCalories: estimatedCaloriesForDay(day, workoutTemplates),
+        })
+      }
       title={otherActive ? 'יש אימון פעיל אחר — הוא ייפתח' : undefined}
     >
       <Play className="size-3.5" strokeWidth={2} />
-      {isThisDay ? 'המשך אימון' : otherActive ? 'לאימון הפעיל' : 'התחל אימון'}
+      {isThisDay ? 'המשך אימון' : otherActive ? 'לאימון הפעיל' : 'התחל עכשיו'}
     </Button>
   )
 }

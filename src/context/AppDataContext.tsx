@@ -39,6 +39,13 @@ import {
   sortRoutines,
   toggleCompletedDate,
 } from '../lib/routines'
+import {
+  mergeDefaultFocusTracks,
+  mergeFocusTracks,
+  newFocusTrack,
+  normalizeFocusTrack,
+  sortFocusTracks,
+} from '../lib/focusTracks'
 import { DEFAULT_RECIPES, DEFAULT_FOOD_CATEGORIES } from '../data/recipes'
 import {
   OFFICIAL_PLAN_VERSION,
@@ -57,6 +64,7 @@ import type {
   ActivityLog,
   CustomHabit,
   Exercise,
+  FocusTrack,
   FoodCategory,
   FoodLogEntry,
   GoalSettings,
@@ -127,6 +135,15 @@ type AppDataContextValue = {
   ) => void
   deleteRoutine: (id: string) => void
   toggleRoutineDate: (id: string, date: string) => void
+  focusTracks: FocusTrack[]
+  addFocusTrack: (
+    input: Omit<FocusTrack, 'id' | 'createdAt' | 'completedDates' | 'archivedAt'> & {
+      archivedAt?: string | null
+    },
+  ) => FocusTrack
+  updateFocusTrack: (id: string, patch: Partial<Omit<FocusTrack, 'id' | 'createdAt'>>) => void
+  deleteFocusTrack: (id: string) => void
+  toggleFocusTrackDate: (id: string, date: string) => void
   foodCategories: FoodCategory[]
   workoutPrograms: WorkoutProgram[]
   activeProgramId: string
@@ -157,7 +174,7 @@ type AppDataContextValue = {
   ) => string
   updateWorkoutTemplate: (
     id: string,
-    patch: Partial<Pick<WorkoutTemplate, 'name' | 'exercises'>>,
+    patch: Partial<Pick<WorkoutTemplate, 'name' | 'exercises' | 'estimatedCalories'>>,
   ) => void
   deleteWorkoutTemplate: (id: string) => void
   /** Attach (append) a library template as a new session on the day. */
@@ -397,6 +414,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   )
   const [habits, setHabits] = useLocalStorage<CustomHabit[]>('tn.habits', [])
   const [routines, setRoutines] = useLocalStorage<Routine[]>('tn.routines.v1', [])
+  const [focusTracks, setFocusTracks] = useLocalStorage<FocusTrack[]>(
+    'tn.focusTracks.v1',
+    [],
+  )
   const [foodCategories, setFoodCategories] = useLocalStorage<FoodCategory[]>(
     'tn.foodCategories.v1',
     DEFAULT_FOOD_CATEGORIES,
@@ -615,7 +636,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const updateWorkoutTemplate = useCallback(
     (
       id: string,
-      patch: Partial<Pick<WorkoutTemplate, 'name' | 'exercises'>>,
+      patch: Partial<Pick<WorkoutTemplate, 'name' | 'exercises' | 'estimatedCalories'>>,
     ) => {
       setWorkoutTemplates((prev) =>
         prev.map((t) =>
@@ -655,6 +676,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
                   id: uid(),
                   name: sessionName,
                   sourceTemplateId: templateId,
+                  estimatedCalories: template?.estimatedCalories ?? null,
                   exercises: source.map((ex) => ({ ...ex, id: uid() })),
                 },
               ],
@@ -695,6 +717,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
                   id: uid(),
                   name: template.name,
                   sourceTemplateId: template.id,
+                  estimatedCalories: template.estimatedCalories ?? null,
                   exercises: template.exercises.map((ex) => ({ ...ex, id: uid() })),
                 },
               ],
@@ -896,6 +919,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (remote.routines) {
         setRoutines((local) => mergeRoutines(local, remote.routines ?? []).merged)
       }
+      if (remote.focusTracks) {
+        setFocusTracks((local) => mergeFocusTracks(local, remote.focusTracks ?? []))
+      }
       if (needsPlanSeed()) {
         skipNextPush.current = false
         setPhaseState(DEFAULT_PHASE)
@@ -928,6 +954,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     setLifestyleLogs,
     setWeightLogs,
     setRoutines,
+    setFocusTracks,
   ])
 
   useEffect(() => {
@@ -955,6 +982,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         activityLogs,
         lifestyleLogs,
         routines,
+        focusTracks,
       }).then((ok) => setStateSyncStatus(ok ? 'synced' : 'error'))
     }, 800)
 
@@ -974,6 +1002,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     activityLogs,
     lifestyleLogs,
     routines,
+    focusTracks,
   ])
 
   const addSetLog = useCallback(
@@ -1247,6 +1276,62 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   )
 
   useEffect(() => {
+    setFocusTracks((prev) => mergeDefaultFocusTracks(prev))
+  }, [setFocusTracks])
+
+  const addFocusTrack = useCallback(
+    (
+      input: Omit<FocusTrack, 'id' | 'createdAt' | 'completedDates' | 'archivedAt'> & {
+        archivedAt?: string | null
+      },
+    ) => {
+      const created = newFocusTrack(input)
+      setFocusTracks((prev) => sortFocusTracks([...prev, created]))
+      return created
+    },
+    [setFocusTracks],
+  )
+
+  const updateFocusTrack = useCallback(
+    (id: string, patch: Partial<Omit<FocusTrack, 'id' | 'createdAt'>>) => {
+      setFocusTracks((prev) =>
+        sortFocusTracks(
+          prev.map((row) => {
+            if (row.id !== id) return row
+            return (
+              normalizeFocusTrack({ ...row, ...patch }) ?? { ...row, ...patch }
+            )
+          }),
+        ),
+      )
+    },
+    [setFocusTracks],
+  )
+
+  const deleteFocusTrack = useCallback(
+    (id: string) => {
+      setFocusTracks((prev) => prev.filter((row) => row.id !== id))
+    },
+    [setFocusTracks],
+  )
+
+  const toggleFocusTrackDate = useCallback(
+    (id: string, date: string) => {
+      setFocusTracks((prev) =>
+        prev.map((row) =>
+          row.id === id
+            ? {
+                ...row,
+                completedDates: toggleCompletedDate(row.completedDates, date),
+              }
+            : row,
+        ),
+      )
+    },
+    [setFocusTracks],
+  )
+
+  useEffect(() => {
     let cancelled = false
     setRoutines((local) =>
       sortRoutines(
@@ -1390,6 +1475,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateRoutine,
       deleteRoutine,
       toggleRoutineDate,
+      focusTracks,
+      addFocusTrack,
+      updateFocusTrack,
+      deleteFocusTrack,
+      toggleFocusTrackDate,
       foodCategories,
       workoutPrograms,
       activeProgramId: activeProgram?.id ?? activeProgramId,
@@ -1471,6 +1561,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateRoutine,
       deleteRoutine,
       toggleRoutineDate,
+      focusTracks,
+      addFocusTrack,
+      updateFocusTrack,
+      deleteFocusTrack,
+      toggleFocusTrackDate,
       foodCategories,
       workoutPrograms,
       activeProgramId,

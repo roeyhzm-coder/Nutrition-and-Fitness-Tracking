@@ -7,6 +7,7 @@ import type {
   LifestyleLogs,
   Phase,
   PhaseMacroPresets,
+  FocusTrack,
   Routine,
   SavedMeal,
   UserProfile,
@@ -46,6 +47,8 @@ export type SyncedAppState = {
   lifestyleLogs?: LifestyleLogs
   /** Undefined when the remote table lacks the routines column. */
   routines?: Routine[]
+  /** Undefined when the remote table lacks the focus_tracks column. */
+  focusTracks?: FocusTrack[]
   updatedAt: string
 }
 
@@ -56,6 +59,7 @@ const FULL_COLUMNS = `${TEMPLATE_COLUMNS}, consistency_day_marks, food_categorie
 const EXTENDED_COLUMNS = `${FULL_COLUMNS}, saved_meals, user_profile, activity_logs, lifestyle_logs`
 const FOOD_LOG_COLUMNS = `${EXTENDED_COLUMNS}, food_logs`
 const ROUTINES_COLUMNS = `${FOOD_LOG_COLUMNS}, routines`
+const FOCUS_TRACKS_COLUMNS = `${ROUTINES_COLUMNS}, focus_tracks`
 
 export async function pullAppState(): Promise<SyncedAppState | null> {
   if (!isSupabaseConfigured || !supabase) return null
@@ -66,8 +70,10 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
   let hasFoodLogs = false
   let hasTemplates = false
   let hasRoutines = false
+  let hasFocusTracks = false
 
   for (const columns of [
+    FOCUS_TRACKS_COLUMNS,
     ROUTINES_COLUMNS,
     FOOD_LOG_COLUMNS,
     EXTENDED_COLUMNS,
@@ -83,7 +89,8 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
     if (res.error) continue
     if (!res.data) return null
     data = res.data as unknown as Record<string, unknown>
-    hasRoutines = columns === ROUTINES_COLUMNS
+    hasFocusTracks = columns === FOCUS_TRACKS_COLUMNS
+    hasRoutines = hasFocusTracks || columns === ROUTINES_COLUMNS
     hasFoodLogs = hasRoutines || columns === FOOD_LOG_COLUMNS
     hasExtended = hasFoodLogs || columns === EXTENDED_COLUMNS
     hasTemplates = columns !== BASE_COLUMNS
@@ -133,6 +140,9 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
     ...(hasRoutines
       ? { routines: (data.routines as Routine[] | null) ?? undefined }
       : {}),
+    ...(hasFocusTracks
+      ? { focusTracks: (data.focus_tracks as FocusTrack[] | null) ?? undefined }
+      : {}),
     updatedAt: data.updated_at as string,
   }
 }
@@ -178,8 +188,13 @@ export async function pushAppState(
     ...foodLogPayload,
     routines: state.routines ?? [],
   }
+  const focusTracksPayload = {
+    ...routinesPayload,
+    focus_tracks: state.focusTracks ?? [],
+  }
 
   const payloads = [
+    focusTracksPayload,
     routinesPayload,
     foodLogPayload,
     extendedPayload,

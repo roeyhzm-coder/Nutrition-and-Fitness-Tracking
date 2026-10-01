@@ -22,7 +22,7 @@ import {
   parseInteger,
 } from '../../lib/numericInput'
 import type { LoggedExercise } from '../../lib/types'
-import { WEEKDAYS } from '../../lib/types'
+import { localDateKey } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { IconButton } from '../ui/IconButton'
 import { NumericInput } from '../ui/NumericInput'
@@ -368,21 +368,20 @@ type TrackerPanelProps = {
 }
 
 function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
-  const { activeWorkout } = useWorkoutSession()
+  const { activeWorkout, setPerformedOn, setEstimatedCalories } = useWorkoutSession()
   const workout = activeWorkout!
   const elapsed = useElapsed(workout.startedAt)
   const allSets = workout.exercises.flatMap((e) => e.sets)
   const doneSets = allSets.filter((s) => s.done).length
+  const performedOn = workout.performedOn || localDateKey()
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-50" dir="rtl">
-      <div className="mx-auto max-w-3xl pb-28">
+      <div className="mx-auto max-w-3xl pb-48">
         <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur-md">
           <div className="flex items-center gap-2">
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-muted">
-                {workout.programName} · יום {WEEKDAYS[workout.dayNumber - 1]}
-              </p>
+              <p className="text-xs text-muted">{workout.programName}</p>
               <h1 className="truncate font-display text-lg font-bold text-text">
                 {workout.workoutName}
               </h1>
@@ -422,7 +421,43 @@ function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
       </div>
 
       <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur-md">
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto max-w-3xl space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block text-[11px] text-muted">
+              עבור איזה יום האימון הזה מבוצע / הושלם?
+              <input
+                type="date"
+                value={performedOn}
+                onChange={(e) => {
+                  if (e.target.value) setPerformedOn(e.target.value)
+                }}
+                className="field mt-1"
+              />
+            </label>
+            <label className="block text-[11px] text-muted">
+              קלוריות מוערכות
+              <NumericInput
+                decimals={0}
+                min={0}
+                value={
+                  workout.estimatedCalories != null
+                    ? String(workout.estimatedCalories)
+                    : ''
+                }
+                onChange={(raw) => {
+                  if (!raw) {
+                    setEstimatedCalories(null)
+                    return
+                  }
+                  const n = Number(raw)
+                  if (!Number.isFinite(n)) return
+                  setEstimatedCalories(Math.max(0, Math.round(n)))
+                }}
+                placeholder="0"
+                className="field mt-1"
+              />
+            </label>
+          </div>
           <Button
             variant="accent"
             className="w-full py-3"

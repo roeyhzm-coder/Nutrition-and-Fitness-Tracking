@@ -1,5 +1,6 @@
 import { useAppData } from '../../context/AppDataContext'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
+import { workoutPerformedOn } from '../../lib/caloriesBurned'
 import { localDateKey } from '../../lib/types'
 import { parseDayMark } from '../../lib/weeklyConsistency'
 
@@ -9,7 +10,7 @@ export function WorkoutCompletedBadge({ className = '' }: { className?: string }
   const { workoutLogs } = useWorkoutSession()
   const today = localDateKey()
   const doneFromLogs = workoutLogs.some(
-    (l) => localDateKey(new Date(l.completedAt)) === today,
+    (l) => workoutPerformedOn(l) === today,
   )
   const todayMark = parseDayMark(consistencyDayMarks[today])
   const isDone = todayMark != null ? todayMark.done : doneFromLogs

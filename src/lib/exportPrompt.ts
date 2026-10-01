@@ -1,6 +1,7 @@
 import type {
   ActivityLog,
   CustomHabit,
+  FocusTrack,
   FoodLogEntry,
   GoalSettings,
   HabitChecks,
@@ -10,6 +11,7 @@ import type {
   Phase,
   PhaseHistoryEntry,
   Recipe,
+  Routine,
   SavedMeal,
   SetLog,
   UserProfile,
@@ -203,6 +205,8 @@ export function buildAiExportPrompt(input: {
   workoutLogs?: WorkoutLog[]
   activeProgramId?: string
   activeProgramName?: string
+  routines?: Routine[]
+  focusTracks?: FocusTrack[]
 }): string {
   const phaseStart = input.goal.startDate
   const { profile, goal, macroTargets } = input
@@ -320,6 +324,33 @@ export function buildAiExportPrompt(input: {
     activeProgramName,
   )
 
+  const routinesSection = (input.routines ?? [])
+    .filter((r) => !r.archivedAt)
+    .map((r) => {
+      const window =
+        r.timeframe === 'period' && r.endsOn
+          ? `${r.startsOn} עד ${r.endsOn} (${r.durationDays ?? '?'} ימים)`
+          : 'לתמיד'
+      return `- ${r.title}: יעד ${r.weeklyTargetDays}/שבוע · ${r.targetMinutes} דק׳ · ${window} · בוצעו ${r.completedDates.length} ימים`
+    })
+    .join('\n')
+
+  const tracksSection = (input.focusTracks ?? [])
+    .filter((t) => !t.archivedAt)
+    .map((t) => {
+      const window =
+        t.timeframe === 'period' && t.endsOn
+          ? `${t.startsOn} עד ${t.endsOn} (${t.durationMonths ?? '?'} חודשים)`
+          : 'לתמיד'
+      return `- ${t.name}: יעד ${t.weeklyTargetDays}/שבוע · ${t.estimatedCalories} קק״ל · ${window} · בוצעו ${t.completedDates.length} ימים`
+    })
+    .join('\n')
+
+  const calorieBurns = (input.workoutLogs ?? []).reduce((sum, log) => {
+    const n = Number(log.estimatedCalories)
+    return sum + (Number.isFinite(n) && n > 0 ? n : 0)
+  }, 0)
+
   return `אנא נתח את הנתונים שלי לאימונים ותזונה ותן המלצות ממוקדות בעברית:
 
 ## מדדי גוף ובסיס (Biometrics)
@@ -350,6 +381,13 @@ ${historySection}
 - סה״כ סטים מתועדים השבוע: ${weekSets.length}
 - חלוקת תוכנית: ${formatSplitSummary(input.workoutDays)}
 - פילוח פעילויות: ${activitiesSummary}
+- קלוריות שנשרפו באימוני כוח (מוערך, כל הרשומות): ${fmtNum(calorieBurns)} קק״ל
+
+## שגרות והרגלים
+${routinesSection || '- אין שגרות מוגדרות'}
+
+## מסלולי מיקוד
+${tracksSection || '- אין מסלולי מיקוד פעילים'}
 
 ${strengthSection}
 

@@ -121,6 +121,7 @@ export function WorkoutLibrary({
                         <p className="truncate font-medium text-text">{t.name}</p>
                         <p className="text-xs text-muted">
                           {t.exercises.length} תרגילים
+                          {t.estimatedCalories ? ` · ${t.estimatedCalories} קק״ל` : ''}
                         </p>
                       </button>
                     </li>
@@ -180,20 +181,27 @@ export function WorkoutLibrary({
           setActiveTemplate(null)
           setCreating(false)
         }}
-        onSave={({ id, name, exercises }) => {
+        onSave={({ id, name, exercises, estimatedCalories }) => {
           if (id) {
-            updateWorkoutTemplate(id, { name, exercises })
+            updateWorkoutTemplate(id, { name, exercises, estimatedCalories })
             setActiveTemplate((prev) =>
               prev && prev.id === id
-                ? { ...prev, name, exercises, updatedAt: new Date().toISOString() }
+                ? {
+                    ...prev,
+                    name,
+                    exercises,
+                    estimatedCalories,
+                    updatedAt: new Date().toISOString(),
+                  }
                 : prev,
             )
           } else {
-            const newId = addWorkoutTemplate({ name, exercises })
+            const newId = addWorkoutTemplate({ name, exercises, estimatedCalories })
             setActiveTemplate({
               id: newId,
               name,
               exercises,
+              estimatedCalories,
               updatedAt: new Date().toISOString(),
             })
             setCreating(false)

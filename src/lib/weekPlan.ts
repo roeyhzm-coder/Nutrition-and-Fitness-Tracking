@@ -46,6 +46,18 @@ export function scheduledWorkoutForDate(
   }
 }
 
+export function estimatedCaloriesForDay(
+  day: WorkoutDay,
+  templates: WorkoutTemplate[],
+): number | null {
+  const sum = day.sessions.reduce((total, session) => {
+    const fromTemplate = templates.find((t) => t.id === session.sourceTemplateId)
+      ?.estimatedCalories
+    return total + (session.estimatedCalories ?? fromTemplate ?? 0)
+  }, 0)
+  return sum > 0 ? sum : null
+}
+
 export function consistencyWorkoutOptions(
   templates: WorkoutTemplate[],
 ): ConsistencyWorkoutOption[] {

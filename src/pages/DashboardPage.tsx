@@ -9,9 +9,12 @@ import { WeeklyConsistencyTracker } from '../components/dashboard/WeeklyConsiste
 import { FinishPhaseModal } from '../components/dashboard/FinishPhaseModal'
 import { PhaseHistoryCard } from '../components/dashboard/PhaseHistoryCard'
 import { TodayWorkoutCard } from '../components/dashboard/TodayWorkoutCard'
+import { FocusTracksStatusRow } from '../components/dashboard/FocusTracksStatusRow'
 import { WorkoutHistoryCard } from '../components/workouts/WorkoutHistoryCard'
 import { useAppData } from '../context/AppDataContext'
-import { PHASE_LABELS, todayKey } from '../lib/types'
+import { useWorkoutSession } from '../context/WorkoutSessionContext'
+import { PHASE_LABELS, localDateKey, todayKey } from '../lib/types'
+import { caloriesBurnedOnDate } from '../lib/caloriesBurned'
 import { useState } from 'react'
 
 export function DashboardPage() {
@@ -23,13 +26,16 @@ export function DashboardPage() {
     setGoal,
     phase,
     stateSyncStatus,
+    focusTracks,
   } = useAppData()
+  const { workoutLogs } = useWorkoutSession()
 
   const [finishOpen, setFinishOpen] = useState(false)
 
   const today = todayKey()
   const todayFood = foodLogs.filter((f) => f.loggedAt.startsWith(today))
   const calories = todayFood.reduce((s, f) => s + f.calories, 0)
+  const burned = caloriesBurnedOnDate(localDateKey(), { workoutLogs, focusTracks })
   const latest = weightLogs.at(-1)
 
   return (
@@ -37,6 +43,8 @@ export function DashboardPage() {
       <PageHeader title="דשבורד" />
 
       <div className="space-y-5 px-4 py-5">
+        <FocusTracksStatusRow />
+
         <Card title={`יעדי קלוריות היום · ${PHASE_LABELS[phase]}`}>
           <div className="mb-3 flex items-end justify-between gap-3">
             <span className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
@@ -55,6 +63,11 @@ export function DashboardPage() {
             max={macroTargets.calories}
             color="warn"
           />
+          {burned > 0 ? (
+            <p className="mt-2 text-xs font-medium text-orange-700">
+              נשרפו היום {burned} קק״ל מאימונים ומסלולי מיקוד
+            </p>
+          ) : null}
           <div className="mt-4 grid grid-cols-3 gap-2">
             <div className="rounded-2xl bg-violet-50 px-3 py-2.5 text-center">
               <p className="text-[11px] text-violet-700">חלבון</p>

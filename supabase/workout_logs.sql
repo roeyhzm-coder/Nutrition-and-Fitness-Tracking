@@ -16,6 +16,10 @@ create table if not exists public.workout_logs (
   created_at timestamptz not null default now()
 );
 
+alter table public.workout_logs
+  add column if not exists performed_on date,
+  add column if not exists estimated_calories integer;
+
 create index if not exists workout_logs_device_completed_idx
   on public.workout_logs (device_id, completed_at);
 
