@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAppData } from '../../context/AppDataContext'
 import { parseImportJson } from '../../lib/exportPrompt'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
 import { Modal } from '../ui/Modal'
 

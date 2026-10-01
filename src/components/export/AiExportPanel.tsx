@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { buildAiExportPrompt } from '../../lib/exportPrompt'
 import { useAppData } from '../../context/AppDataContext'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
 
 export function AiExportPanel() {

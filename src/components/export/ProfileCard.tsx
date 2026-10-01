@@ -12,7 +12,7 @@ import {
   type Sex,
   type UserProfile,
 } from '../../lib/types'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
 import { NumericInput } from '../ui/NumericInput'
 

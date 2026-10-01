@@ -15,7 +15,7 @@ import {
 import type { FoodProduct } from '../../lib/openFoodFacts'
 import { searchOpenFoodFacts } from '../../lib/openFoodFacts'
 import type { FoodLogEntry, SavedMeal } from '../../lib/types'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'

@@ -9,7 +9,7 @@ import {
   formToExercise,
 } from '../../lib/exerciseForm'
 import { NumericInput } from '../ui/NumericInput'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 import {

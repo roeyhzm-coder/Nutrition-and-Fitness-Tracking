@@ -10,7 +10,7 @@ import {
   type FoodAmountUnit,
 } from '../../lib/foodUnits'
 import type { FoodLogEntry, SavedMeal } from '../../lib/types'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
 

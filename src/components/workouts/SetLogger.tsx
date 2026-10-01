@@ -2,7 +2,7 @@ import type { Exercise } from '../../lib/types'
 import type { SetLog } from '../../lib/types'
 import { useState } from 'react'
 import { parseDecimal } from '../../lib/numericInput'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { NumericInput } from '../ui/NumericInput'
 
 type SetLoggerProps = {

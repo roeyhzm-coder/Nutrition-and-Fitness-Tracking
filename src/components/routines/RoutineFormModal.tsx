@@ -13,7 +13,7 @@ import {
   ROUTINE_TIMEFRAMES,
   ROUTINE_TIMES,
 } from '../../lib/types'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
 

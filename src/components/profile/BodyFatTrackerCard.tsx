@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useAppData } from '../../context/AppDataContext'
 import { formatKg, formatPct, parsePositiveDecimal } from '../../lib/numericInput'
 import { todayKey } from '../../lib/types'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
 import { NumericInput } from '../ui/NumericInput'
 

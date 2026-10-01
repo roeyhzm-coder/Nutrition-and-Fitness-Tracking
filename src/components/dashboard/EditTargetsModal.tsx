@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { displayDecimal, parseDecimal } from '../../lib/numericInput'
 import type { MacroTargets } from '../../lib/types'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
 

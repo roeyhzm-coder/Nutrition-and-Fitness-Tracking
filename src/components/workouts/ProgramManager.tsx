@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pencil, Settings2, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 

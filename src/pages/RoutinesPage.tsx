@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react'
 import { RoutineCard } from '../components/routines/RoutineCard'
 import { RoutineFormModal, type RoutineDraft } from '../components/routines/RoutineFormModal'
 import { PageHeader } from '../components/layout/PageHeader'
-import { Button } from '../components/ui/Button'
+import { Button } from '../components/ui/button'
 import { ProgressBar } from '../components/ui/ProgressBar'
 import { useAppData } from '../context/AppDataContext'
 import {

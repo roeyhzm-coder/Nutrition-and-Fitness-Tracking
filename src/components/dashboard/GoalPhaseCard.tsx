@@ -14,7 +14,7 @@ import {
   parseInteger,
 } from '../../lib/numericInput'
 import { relativeWeekNumber } from '../../lib/weeklyConsistency'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'

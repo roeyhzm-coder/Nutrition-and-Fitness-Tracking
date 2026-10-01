@@ -6,7 +6,7 @@ import {
 } from '../../lib/routines'
 import type { Routine } from '../../lib/types'
 import { parseLocalDateKey, ROUTINE_TIME_LABELS, todayKey } from '../../lib/types'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { IconButton } from '../ui/IconButton'
 import { ProgressBar } from '../ui/ProgressBar'
 

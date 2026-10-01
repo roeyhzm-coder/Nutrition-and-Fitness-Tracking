@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { formatKg, formatPct, parseDecimal, parsePositiveDecimal } from '../../lib/numericInput'
 import type { WeightEntry } from '../../lib/types'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
 import { NumericInput } from '../ui/NumericInput'
 

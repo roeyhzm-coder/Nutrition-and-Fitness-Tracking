@@ -9,8 +9,8 @@ import { ImportMealsModal } from '../components/nutrition/ImportMealsModal'
 import { FoodLogList } from '../components/nutrition/FoodLogList'
 import { AddFoodModal } from '../components/dashboard/AddFoodModal'
 import { Card } from '../components/ui/Card'
-import { Accordion } from '../components/ui/Accordion'
-import { Button } from '../components/ui/Button'
+import { AccordionSection } from '../components/ui/accordion'
+import { Button } from '../components/ui/button'
 import { useAppData } from '../context/AppDataContext'
 import { todayKey } from '../lib/types'
 
@@ -70,13 +70,13 @@ export function NutritionPage() {
         <SavedMeals />
         <FoodSearch onAdd={addFood} />
 
-        <Accordion
+        <AccordionSection
           title="מתכונים וייבוא מתקדם"
           subtitle="קטלוג המתכונים המלא וייבוא JSON"
         >
           <RecipeCatalog />
           <ImportMealsModal />
-        </Accordion>
+        </AccordionSection>
       </div>
 
       <AddFoodModal open={foodOpen} onClose={() => setFoodOpen(false)} />

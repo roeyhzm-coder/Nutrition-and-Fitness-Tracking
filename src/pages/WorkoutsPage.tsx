@@ -10,7 +10,7 @@ import {
   ExerciseFormFields,
   ExerciseMedia,
 } from '../components/workouts/ExerciseFields'
-import { Button } from '../components/ui/Button'
+import { Button } from '../components/ui/button'
 import { IconButton } from '../components/ui/IconButton'
 import { Modal } from '../components/ui/Modal'
 import { useAppData } from '../context/AppDataContext'

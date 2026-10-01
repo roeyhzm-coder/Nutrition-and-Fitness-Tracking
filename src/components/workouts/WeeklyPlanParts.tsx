@@ -4,7 +4,7 @@ import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import type { WorkoutDay } from '../../lib/types'
 import { dayAllExercises } from '../../lib/types'
 import { estimatedCaloriesForDay } from '../../lib/weekPlan'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 
 const CUSTOM = '__custom'
 

@@ -23,7 +23,7 @@ import {
 } from '../../lib/foodCatalog'
 import { formatNiceNumber, parseDecimal, parsePositiveDecimal, roundTo } from '../../lib/numericInput'
 import { uid, type SavedMeal, type SavedPresetKind } from '../../lib/types'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'

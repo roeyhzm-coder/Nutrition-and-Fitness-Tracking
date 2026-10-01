@@ -14,7 +14,7 @@ import {
   type DaySlot,
   type WeekConsistency,
 } from '../../lib/weeklyConsistency'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'

@@ -25,7 +25,7 @@ import {
 } from '../../lib/numericInput'
 import type { LoggedExercise } from '../../lib/types'
 import { localDateKey } from '../../lib/types'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { IconButton } from '../ui/IconButton'
 import { NumericInput } from '../ui/NumericInput'
 

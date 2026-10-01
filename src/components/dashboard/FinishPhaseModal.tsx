@@ -8,7 +8,7 @@ import {
 import { summarizePhase } from '../../lib/phaseHistory'
 import type { MacroTargets, Phase } from '../../lib/types'
 import { calcProcessDay, PHASE_LABELS, PHASES } from '../../lib/types'
-import { Button } from '../ui/Button'
+import { Button } from '../ui/button'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
 
