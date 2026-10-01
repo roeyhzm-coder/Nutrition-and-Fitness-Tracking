@@ -1,0 +1,15 @@
+---
+description: Run Supabase schema migrations autonomously via the Management API
+alwaysApply: true
+---
+
+# Supabase autonomous migrations
+
+When adding or changing database columns/tables:
+
+- Run the SQL yourself. Do not ask the user to paste SQL in the Supabase dashboard.
+- Read `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF` from `.env.local` (gitignored).
+- Execute with `node scripts/run-supabase-sql.mjs --file <sql-file>` or inline SQL.
+- Also keep the matching statements in `supabase/*.sql` so the repo stays the source of truth.
+- Never commit `.env.local`, access tokens, or service keys.
+- Never prefix management tokens with `VITE_`.
