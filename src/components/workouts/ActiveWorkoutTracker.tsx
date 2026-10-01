@@ -170,10 +170,11 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
         </button>
       </div>
 
-      <div className="mt-3 grid grid-cols-[1.5rem_1fr_1fr_2.25rem_2.25rem] items-center gap-2 text-[11px] text-muted">
+      <div className="mt-3 grid grid-cols-[1.25rem_minmax(0,1fr)_minmax(0,0.9fr)_3rem_2.25rem_2.25rem] items-center gap-2 text-[11px] text-muted">
         <span>#</span>
         <span className="text-center">משקל (ק״ג)</span>
         <span className="text-center">חזרות</span>
+        <span className="text-center">RPE</span>
         <span className="text-center">בוצע</span>
         <span className="text-center">הסר</span>
       </div>
@@ -181,7 +182,7 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
         {exercise.sets.map((set, setIndex) => (
           <li
             key={setIndex}
-            className="grid grid-cols-[1.5rem_1fr_1fr_2.25rem_2.25rem] items-center gap-2"
+            className="grid grid-cols-[1.25rem_minmax(0,1fr)_minmax(0,0.9fr)_3rem_2.25rem_2.25rem] items-center gap-2"
           >
             <span className="text-sm font-semibold text-muted">{setIndex + 1}</span>
             <DraftNumberInput
@@ -198,6 +199,11 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
               placeholder={
                 exercise.targetReps.length <= 8 ? exercise.targetReps : 'חזרות'
               }
+            />
+            <DraftNumberInput
+              value={set.rpe ?? null}
+              onCommit={(rpe) => updateSet(index, setIndex, { rpe })}
+              placeholder="7"
             />
             <button
               type="button"

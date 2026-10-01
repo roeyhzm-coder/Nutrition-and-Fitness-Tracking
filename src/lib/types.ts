@@ -293,6 +293,8 @@ export type LoggedSet = {
   weightKg: number | null
   reps: number | null
   done: boolean
+  /** Optional RPE 1–10 captured on the set. */
+  rpe?: number | null
 }
 
 export type LoggedExercise = {
@@ -313,6 +315,8 @@ export type WorkoutLog = {
   id: string
   programId: string
   programName: string
+  /** Numeric block (1, 2, …) derived from the program; kept for history. */
+  blockNumber?: number | null
   dayId: string
   dayNumber: number
   workoutName: string

@@ -50,6 +50,7 @@ function LogItem({ log }: { log: WorkoutLog }) {
           <p className="mt-0.5 text-xs text-muted">
             {log.exercises.length} תרגילים · {setCount} סטים
             {volume > 0 ? ` · נפח ${Math.round(volume)} ק״ג` : ''} · {log.programName}
+            {log.blockNumber != null ? ` · בלוק ${log.blockNumber}` : ''}
           </p>
         </button>
         <ChevronDown
@@ -73,7 +74,10 @@ function LogItem({ log }: { log: WorkoutLog }) {
               <p className="font-medium text-text">{ex.name}</p>
               <p className="text-muted">
                 {ex.sets
-                  .map((s) => `${s.weightKg ?? 0} ק״ג × ${s.reps ?? '?'}`)
+                  .map((s) => {
+                    const lift = `${s.weightKg ?? 0} ק״ג × ${s.reps ?? '?'}`
+                    return s.rpe != null && s.rpe > 0 ? `${lift} @ RPE ${s.rpe}` : lift
+                  })
                   .join(' · ')}
               </p>
             </li>

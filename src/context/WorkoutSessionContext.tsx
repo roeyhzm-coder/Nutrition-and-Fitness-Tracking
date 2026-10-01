@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -24,6 +25,13 @@ import type {
   WorkoutLog,
 } from '../lib/types'
 import { dayAllExercises, localDateKey, uid } from '../lib/types'
+import {
+  deleteRemoteWorkoutLog,
+  deriveBlockNumber,
+  mergeWorkoutLogs,
+  pullWorkoutLogs,
+  pushWorkoutLogs,
+} from '../lib/workoutHistory'
 import { useAppData } from './AppDataContext'
 
 type WorkoutSessionValue = {
@@ -137,6 +145,21 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
   )
   const [trackerOpen, setTrackerOpen] = useState(false)
 
+  useEffect(() => {
+    let cancelled = false
+    void pullWorkoutLogs().then((remote) => {
+      if (cancelled || !remote) return
+      setWorkoutLogs((local) => {
+        const { merged, localOnly } = mergeWorkoutLogs(local, remote)
+        if (localOnly.length) void pushWorkoutLogs(localOnly)
+        return merged
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [setWorkoutLogs])
+
   const startWorkout = useCallback(
     (day: WorkoutDay) => {
       setTrackerOpen(true)
@@ -149,6 +172,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
         id: uid(),
         programId: activeProgram.id,
         programName: activeProgram.name,
+        blockNumber: deriveBlockNumber(activeProgram.id, activeProgram.name),
         dayId: day.id,
         dayNumber: day.dayNumber,
         workoutName: name,
@@ -219,6 +243,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
                     ex.sets.at(-1)?.weightKg ?? ex.defaultWeightKg ?? null,
                   reps: ex.sets.at(-1)?.reps ?? ex.defaultReps ?? null,
                   done: false,
+                  rpe: ex.sets.at(-1)?.rpe ?? null,
                 },
               ],
             }))
@@ -304,12 +329,30 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     if (!activeWorkout) return null
     const completedAt = new Date().toISOString()
     const exercises = activeWorkout.exercises
-      .map((ex) => ({ ...ex, sets: ex.sets.filter((s) => s.done) }))
+      .map((ex) => ({
+        ...ex,
+        sets: ex.sets
+          .filter((s) => s.done)
+          .map((s) => ({
+            weightKg: s.weightKg,
+            reps: s.reps,
+            done: true,
+            rpe: s.rpe ?? null,
+          })),
+      }))
       .filter((ex) => ex.sets.length > 0)
     if (!exercises.length) return null
 
-    const log: WorkoutLog = { ...activeWorkout, completedAt, exercises }
+    const log: WorkoutLog = {
+      ...activeWorkout,
+      blockNumber:
+        activeWorkout.blockNumber ??
+        deriveBlockNumber(activeWorkout.programId, activeWorkout.programName),
+      completedAt,
+      exercises,
+    }
     setWorkoutLogs((prev) => [...prev, log])
+    void pushWorkoutLogs([log])
     for (const ex of exercises) {
       for (const set of ex.sets) {
         addSetLog({
@@ -318,7 +361,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
           dayId: activeWorkout.dayId,
           weightKg: set.weightKg ?? 0,
           reps: set.reps ?? 0,
-          rpe: 0,
+          rpe: set.rpe ?? 0,
         })
       }
     }
@@ -344,7 +387,10 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
   }, [setActiveWorkout])
 
   const deleteWorkoutLog = useCallback(
-    (id: string) => setWorkoutLogs((prev) => prev.filter((l) => l.id !== id)),
+    (id: string) => {
+      setWorkoutLogs((prev) => prev.filter((l) => l.id !== id))
+      void deleteRemoteWorkoutLog(id)
+    },
     [setWorkoutLogs],
   )
 

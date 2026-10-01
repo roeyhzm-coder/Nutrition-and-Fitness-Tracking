@@ -66,6 +66,7 @@ export function buildSetsFromDefaults(
     weightKg: defaults.weightKg,
     reps: defaults.reps,
     done: false,
+    rpe: null,
   }))
 }
 

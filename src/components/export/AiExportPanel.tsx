@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { buildAiExportPrompt } from '../../lib/exportPrompt'
 import { useAppData } from '../../context/AppDataContext'
+import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 
@@ -19,7 +20,9 @@ export function AiExportPanel() {
     activityLogs,
     lifestyleLogs,
     phaseHistory,
+    activeProgram,
   } = useAppData()
+  const { workoutLogs } = useWorkoutSession()
   const [copied, setCopied] = useState(false)
 
   const prompt = useMemo(
@@ -38,6 +41,9 @@ export function AiExportPanel() {
         activityLogs,
         lifestyleLogs,
         phaseHistory,
+        workoutLogs,
+        activeProgramId: activeProgram?.id ?? '',
+        activeProgramName: activeProgram?.name ?? '',
       }),
     [
       setLogs,
@@ -53,6 +59,9 @@ export function AiExportPanel() {
       activityLogs,
       lifestyleLogs,
       phaseHistory,
+      workoutLogs,
+      activeProgram?.id,
+      activeProgram?.name,
     ],
   )
 
@@ -70,7 +79,7 @@ export function AiExportPanel() {
     <Card title="ייצוא נתונים">
       <p className="mb-3 text-sm text-muted">
         פרומפט מובנה ללא כפילויות: מדדים, מטרת על, שלד 6 השלבים, שלב פעיל,
-        היסטוריית ביצוע, ממוצעים שבועיים והנחיית כיול דינמי.
+        היסטוריית ביצוע, התקדמות כוח בבלוק, ממוצעים שבועיים והנחיית כיול דינמי.
       </p>
       <Button className="w-full" variant="accent" onClick={copy}>
         {copied ? 'הועתק ✓' : 'העתק ייצוא נתונים'}

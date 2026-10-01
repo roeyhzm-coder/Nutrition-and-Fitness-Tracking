@@ -15,6 +15,7 @@ import type {
   UserProfile,
   WeightEntry,
   WorkoutDay,
+  WorkoutLog,
 } from './types'
 import {
   ACTIVITY_LEVEL_LABELS,
@@ -26,6 +27,10 @@ import {
   WORK_STYLE_LABELS,
 } from './types'
 import { relativeWeekNumber } from './weeklyConsistency'
+import {
+  buildBlockStrengthRows,
+  formatBlockStrengthMarkdown,
+} from './blockStrength'
 
 function average(nums: number[]) {
   if (nums.length === 0) return 0
@@ -195,6 +200,9 @@ export function buildAiExportPrompt(input: {
   activityLogs: ActivityLog[]
   lifestyleLogs: LifestyleLogs
   phaseHistory: PhaseHistoryEntry[]
+  workoutLogs?: WorkoutLog[]
+  activeProgramId?: string
+  activeProgramName?: string
 }): string {
   const phaseStart = input.goal.startDate
   const { profile, goal, macroTargets } = input
@@ -302,6 +310,16 @@ export function buildAiExportPrompt(input: {
         .join('\n')
     : '- אין שלבים קודמים (זהו שלב 1 בתהליך הכולל)'
 
+  const activeProgramName = input.activeProgramName?.trim() || 'בלוק פעיל'
+  const strengthSection = formatBlockStrengthMarkdown(
+    buildBlockStrengthRows(
+      input.workoutLogs ?? [],
+      input.activeProgramId ?? '',
+      input.activeProgramName?.trim() ?? '',
+    ),
+    activeProgramName,
+  )
+
   return `אנא נתח את הנתונים שלי לאימונים ותזונה ותן המלצות ממוקדות בעברית:
 
 ## מדדי גוף ובסיס (Biometrics)
@@ -332,6 +350,8 @@ ${historySection}
 - סה״כ סטים מתועדים השבוע: ${weekSets.length}
 - חלוקת תוכנית: ${formatSplitSummary(input.workoutDays)}
 - פילוח פעילויות: ${activitiesSummary}
+
+${strengthSection}
 
 ## תזונה ובריאות
 - מאכלים שנמנעים מהם: ${fmtText(profile.avoidFoods)}
