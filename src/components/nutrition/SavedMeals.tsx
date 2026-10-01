@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import { parseDecimal, parseInteger } from '../../lib/numericInput'
 import type { SavedMeal } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
-import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
 
@@ -71,14 +70,19 @@ export function SavedMeals() {
 
   return (
     <>
-      <Card title="ארוחות קבועות">
-        <div className="mb-3">
-          <Button variant="accent" className="w-full" onClick={openCreate}>
-            <Plus className="size-3.5" strokeWidth={1.75} />
-            הוסף ארוחה קבועה
+      <Card
+        title="הקבועים שלי"
+        action={
+          <Button
+            variant="surface"
+            className="min-h-9 px-3 py-1.5 text-xs"
+            onClick={openCreate}
+          >
+            <Plus className="size-3.5" strokeWidth={2} />
+            פריט קבוע חדש
           </Button>
-        </div>
-
+        }
+      >
         {toast ? (
           <p
             role="status"
@@ -88,66 +92,49 @@ export function SavedMeals() {
           </p>
         ) : null}
 
-        <p className="mb-3 text-xs text-muted">
-          תבניות קבועות נשמרות באופן קבוע. הוספה ליומן לא משנה את התבנית.
-        </p>
-
         {savedMeals.length === 0 ? (
-          <p className="text-sm text-muted">אין ארוחות קבועות עדיין.</p>
+          <p className="text-sm text-muted">
+            אין פריטים קבועים עדיין. הוסף מאכל או ארוחה לשימוש מהיר.
+          </p>
         ) : (
-          <ul className="space-y-2">
+          <div className="flex flex-wrap gap-2">
             {savedMeals.map((meal) => (
-              <li
+              <div
                 key={meal.id}
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+                className="inline-flex max-w-full items-stretch overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
               >
-                <div className="flex items-start gap-2">
-                  <div className="min-w-0 flex-1 text-right">
-                    <p className="font-semibold text-text">{meal.name}</p>
-                    <p className="mt-1 text-xs text-muted">
-                      {meal.calories} קק״ל · ח {meal.protein} · פ {meal.carbs} ·
-                      ש {meal.fats}
-                    </p>
-                    {meal.notes?.trim() ? (
-                      <p className="mt-1 text-xs text-muted">{meal.notes}</p>
-                    ) : null}
-                  </div>
-                  <IconButton
-                    label="ערוך ארוחה"
-                    tone="accent"
-                    onClick={() => openEdit(meal)}
-                  >
-                    <Pencil className="size-3.5" strokeWidth={1.75} />
-                  </IconButton>
-                  <IconButton
-                    label="מחק ארוחה"
-                    tone="danger"
-                    onClick={() => {
-                      if (window.confirm(`למחוק את התבנית "${meal.name}"?`)) {
-                        deleteSavedMeal(meal.id)
-                      }
-                    }}
-                  >
-                    <Trash2 className="size-3.5" strokeWidth={1.75} />
-                  </IconButton>
-                </div>
-                <Button
-                  className="mt-3 w-full"
-                  variant="accent"
+                <button
+                  type="button"
+                  aria-label={`ערוך ${meal.name}`}
+                  className="min-h-9 max-w-[11.5rem] px-2.5 py-1.5 text-right"
+                  title="עריכת פריט קבוע"
+                  onClick={() => openEdit(meal)}
+                >
+                  <span className="block truncate text-xs font-semibold text-text">
+                    {meal.name}
+                  </span>
+                  <span className="block truncate text-[10px] text-muted">
+                    {meal.calories} קק״ל · ח {meal.protein}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`הוסף ${meal.name} ליומן`}
+                  title="הוסף ליומן בלחיצה אחת"
+                  className="flex size-9 shrink-0 items-center justify-center border-s border-slate-200 text-cyan-700 transition hover:bg-cyan-600 hover:text-white"
                   onClick={() => handleLog(meal.id)}
                 >
-                  <Plus className="size-3.5" strokeWidth={1.75} />
-                  הוסף ליומן היום
-                </Button>
-              </li>
+                  <Plus className="size-3.5" strokeWidth={2.25} />
+                </button>
+              </div>
             ))}
-          </ul>
+          </div>
         )}
       </Card>
 
       <Modal
         open={open}
-        title={editing ? 'עריכת ארוחה קבועה' : 'ארוחה קבועה חדשה'}
+        title={editing ? 'עריכת פריט קבוע' : 'פריט קבוע חדש'}
         onClose={() => setOpen(false)}
       >
         <form
@@ -169,11 +156,11 @@ export function SavedMeals() {
           }}
         >
           <label className="block text-xs text-muted">
-            שם הארוחה
+            שם
             <input
               value={form.name}
               onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-              placeholder="למשל שייק חלבון ושיבולת שועל"
+              placeholder='למשל "2 פרוסות לחם מלא" או "גביע קוטג׳"'
               className="mt-1 field"
               required
             />
@@ -198,7 +185,7 @@ export function SavedMeals() {
             ))}
           </div>
           <label className="block text-xs text-muted">
-            פריטים / הערות (אופציונלי)
+            הערות (אופציונלי)
             <textarea
               value={form.notes}
               onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
@@ -208,8 +195,24 @@ export function SavedMeals() {
             />
           </label>
           <Button type="submit" className="w-full" variant="accent">
-            שמור תבנית
+            שמור פריט
           </Button>
+          {editing ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full text-danger"
+              onClick={() => {
+                if (window.confirm(`למחוק את "${editing.name}"?`)) {
+                  deleteSavedMeal(editing.id)
+                  setOpen(false)
+                }
+              }}
+            >
+              <Trash2 className="size-3.5" strokeWidth={1.75} />
+              מחק פריט קבוע
+            </Button>
+          ) : null}
         </form>
       </Modal>
     </>

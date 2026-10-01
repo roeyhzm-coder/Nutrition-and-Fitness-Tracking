@@ -9,17 +9,13 @@ import { ImportMealsModal } from '../components/nutrition/ImportMealsModal'
 import { FoodLogList } from '../components/nutrition/FoodLogList'
 import { AddFoodModal } from '../components/dashboard/AddFoodModal'
 import { Card } from '../components/ui/Card'
+import { Accordion } from '../components/ui/Accordion'
 import { Button } from '../components/ui/Button'
 import { useAppData } from '../context/AppDataContext'
-import {
-  PHASE_ACTIVE_CLASS,
-  PHASE_LABELS,
-  PHASES,
-  todayKey,
-} from '../lib/types'
+import { todayKey } from '../lib/types'
 
 export function NutritionPage() {
-  const { foodLogs, addFood, macroTargets, phase, setPhase } = useAppData()
+  const { foodLogs, addFood, macroTargets } = useAppData()
   const [foodOpen, setFoodOpen] = useState(false)
   const { hash } = useLocation()
   const today = todayKey()
@@ -35,11 +31,19 @@ export function NutritionPage() {
     .filter((f) => f.loggedAt.startsWith(today))
     .reverse()
 
+  const todayTotals = todayFood.reduce(
+    (acc, f) => ({
+      calories: acc.calories + f.calories,
+      protein: acc.protein + f.protein,
+    }),
+    { calories: 0, protein: 0 },
+  )
+
   return (
     <>
       <PageHeader
         title="תזונה ומתכונים"
-        subtitle={`יעדי ${PHASE_LABELS[phase]} · קטלוג מזון ויומן יומי`}
+        subtitle="יעדי מאקרו, יומן יומי והקבועים שלי"
         action={
           <Button variant="accent" onClick={() => setFoodOpen(true)}>
             הוסף מזון / ארוחה
@@ -48,38 +52,31 @@ export function NutritionPage() {
       />
       <div className="space-y-5 px-4 py-5">
         <MacroTargetsView logs={foodLogs} targets={macroTargets} />
-        <SavedMeals />
+
         <section id="food-log">
-          <Card title="יומן מזון להיום">
+          <Card
+            title="יומן מזון להיום"
+            action={
+              <span className="font-display text-xs font-bold tabular-nums text-muted">
+                {Math.round(todayTotals.calories)} קק״ל · ח{' '}
+                {Math.round(todayTotals.protein * 10) / 10}
+              </span>
+            }
+          >
             <FoodLogList entries={todayFood} />
           </Card>
         </section>
-        <RecipeCatalog />
+
+        <SavedMeals />
         <FoodSearch onAdd={addFood} />
-        <ImportMealsModal />
-        <Card title="שלב תזונה">
-          <div className="mb-3 grid grid-cols-3 gap-1.5 rounded-2xl bg-slate-50 p-1.5">
-            {PHASES.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPhase(p)}
-                className={[
-                  'min-h-11 rounded-xl px-3 py-2 text-sm font-bold transition',
-                  phase === p
-                    ? PHASE_ACTIVE_CLASS[p]
-                    : 'text-muted hover:bg-slate-100 hover:text-text',
-                ].join(' ')}
-              >
-                {PHASE_LABELS[p]}
-              </button>
-            ))}
-          </div>
-          <p className="text-xs text-muted">
-            מעבר בין מסה, חיטוב ותחזוקה מחליף אוטומטית את יעדי המאקרו השמורים
-            לכל שלב. עריכת היעדים נמצאת בלשונית פרופיל ומדדים.
-          </p>
-        </Card>
+
+        <Accordion
+          title="מתכונים וייבוא מתקדם"
+          subtitle="קטלוג המתכונים המלא וייבוא JSON"
+        >
+          <RecipeCatalog />
+          <ImportMealsModal />
+        </Accordion>
       </div>
 
       <AddFoodModal open={foodOpen} onClose={() => setFoodOpen(false)} />

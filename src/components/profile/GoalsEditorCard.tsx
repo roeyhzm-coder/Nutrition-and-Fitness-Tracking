@@ -5,6 +5,7 @@ import { PHASE_LABELS, type MacroTargets } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { NumericInput } from '../ui/NumericInput'
+import { NutritionPhasePicker } from './NutritionPhasePicker'
 
 type Form = Record<keyof MacroTargets, string> & { weeklyWorkoutTarget: string }
 
@@ -57,7 +58,10 @@ export function GoalsEditorCard() {
   }
 
   return (
-    <Card title={`עריכת יעדים · ${PHASE_LABELS[phase]}`}>
+    <Card title={`הגדרת יעדים אישיים · ${PHASE_LABELS[phase]}`}>
+      <div className="mb-4">
+        <NutritionPhasePicker />
+      </div>
       <form
         className="space-y-3"
         onSubmit={(e) => {
