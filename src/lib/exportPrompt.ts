@@ -18,6 +18,7 @@ import type {
   WeightEntry,
   WorkoutDay,
   WorkoutLog,
+  WorkoutProgram,
 } from './types'
 import {
   ACTIVITY_LEVEL_LABELS,
@@ -37,9 +38,16 @@ import {
 } from './weeklyConsistency'
 import { workoutPerformedOn } from './caloriesBurned'
 import {
-  buildBlockStrengthRows,
+  buildStrengthRowsFromLogs,
   formatBlockStrengthMarkdown,
+  formatStrengthDelta,
+  logsForActiveBlock,
 } from './blockStrength'
+import {
+  buildFoodCatalog,
+  normalizeSearch,
+  type CatalogFood,
+} from './foodCatalog'
 
 function average(nums: number[]) {
   if (nums.length === 0) return 0
@@ -289,7 +297,9 @@ function summarizeSets(
 function formatRecentWorkouts(logs: WorkoutLog[]): string {
   const today = startOfDay()
   const recent = [...logs]
-    .filter((log) => isInLastDays(workoutPerformedOn(log), RECENT_WORKOUT_DAYS, today))
+    .filter((log) =>
+      isInLastDays(workoutPerformedOn(log), RECENT_WORKOUT_DAYS, today),
+    )
     .sort((a, b) => workoutPerformedOn(a).localeCompare(workoutPerformedOn(b)))
   if (!recent.length) return ''
   return recent
@@ -306,22 +316,94 @@ function formatRecentWorkouts(logs: WorkoutLog[]): string {
     .join('\n')
 }
 
-function catalogServingGrams(
+function findCatalogMatch(
   name: string,
-  meals: SavedMeal[],
-  recipes: Recipe[],
-): number | null {
-  const key = name.trim().toLocaleLowerCase('he')
-  if (!key) return null
-  const meal = meals.find((item) => item.name.trim().toLocaleLowerCase('he') === key)
-  if (meal?.servingGrams != null && meal.servingGrams > 0) return meal.servingGrams
-  const recipe = recipes.find(
-    (item) => item.name.trim().toLocaleLowerCase('he') === key,
+  catalog: CatalogFood[],
+): CatalogFood | null {
+  const q = normalizeSearch(name)
+  if (!q) return null
+  const exact = catalog.find((item) => normalizeSearch(item.name) === q)
+  if (exact) return exact
+  const alias = catalog.find((item) =>
+    item.aliases.some((aliasName) => normalizeSearch(aliasName) === q),
   )
-  if (recipe?.servingGrams != null && recipe.servingGrams > 0) {
-    return recipe.servingGrams
+  if (alias) return alias
+  return (
+    catalog.find((item) => {
+      const itemName = normalizeSearch(item.name)
+      return itemName.startsWith(q) || q.startsWith(itemName)
+    }) ?? null
+  )
+}
+
+function gramsFromMacros(entry: FoodLogEntry, match: CatalogFood | null) {
+  const per100 = match?.per100g.calories ?? 0
+  if (per100 > 0 && entry.calories > 0) {
+    return Math.round((entry.calories / per100) * 1000) / 10
   }
   return null
+}
+
+export type ResolvedFoodServing = {
+  grams: number | null
+  servings: number | null
+  label: string
+}
+
+/** Resolve serving-based leftovers (grams<=1) to catalog grams / unit label. */
+export function resolveFoodLogServing(
+  entry: FoodLogEntry,
+  meals: SavedMeal[] = [],
+  recipes: Recipe[] = [],
+): ResolvedFoodServing {
+  const catalog = buildFoodCatalog(recipes, meals)
+  const match = findCatalogMatch(entry.name, catalog)
+  const servingGrams = match?.servingGrams && match.servingGrams > 0
+    ? match.servingGrams
+    : null
+  const inferred = gramsFromMacros(entry, match)
+  const unit = match?.servingLabel?.trim() || 'מנה'
+
+  if (entry.grams > 1) {
+    const grams = entry.grams
+    const servings =
+      servingGrams != null ? Math.round((grams / servingGrams) * 100) / 100 : null
+    if (servings != null && servings > 0 && Math.abs(servings - 1) < 0.05) {
+      return { grams, servings: 1, label: `1 ${unit} (${fmtNum(grams, grams % 1 ? 1 : 0)}ג׳)` }
+    }
+    if (servings != null && servings > 0 && servings <= 4) {
+      return {
+        grams,
+        servings,
+        label: `${fmtNum(servings, servings % 1 ? 1 : 0)} ${unit} (${fmtNum(grams, grams % 1 ? 1 : 0)}ג׳)`,
+      }
+    }
+    return {
+      grams,
+      servings,
+      label: `${fmtNum(grams, grams % 1 ? 1 : 0)}ג׳`,
+    }
+  }
+
+  const servings = entry.grams > 0 ? entry.grams : 1
+  const grams =
+    inferred && inferred > 1
+      ? inferred
+      : servingGrams != null
+        ? Math.round(servingGrams * servings * 10) / 10
+        : null
+  if (grams != null && grams > 1) {
+    return {
+      grams,
+      servings,
+      label: `${fmtNum(servings, servings % 1 ? 1 : 0)} ${unit} (${fmtNum(grams, grams % 1 ? 1 : 0)}ג׳)`,
+    }
+  }
+  return {
+    grams: null,
+    servings,
+    label: `${fmtNum(servings, servings % 1 ? 1 : 0)} ${unit}`,
+  }
 }
 
 /** Prefer logged grams; resolve 1-serving leftovers from the catalog. */
@@ -330,11 +412,8 @@ export function resolveFoodLogGrams(
   meals: SavedMeal[] = [],
   recipes: Recipe[] = [],
 ): number {
-  if (entry.grams > 1) return entry.grams
-  const catalogGrams = catalogServingGrams(entry.name, meals, recipes)
-  if (catalogGrams != null) {
-    return Math.round(catalogGrams * Math.max(entry.grams, 0) * 10) / 10
-  }
+  const resolved = resolveFoodLogServing(entry, meals, recipes)
+  if (resolved.grams != null && resolved.grams > 1) return resolved.grams
   return entry.grams
 }
 
@@ -350,9 +429,9 @@ function formatFoodLogs(
   if (!recent.length) return ''
   return recent
     .map((log) => {
-      const grams = resolveFoodLogGrams(log, meals, recipes)
+      const serving = resolveFoodLogServing(log, meals, recipes)
       const date = log.loggedAt.slice(0, 10)
-      return `- ${date} · ${log.name} · ${fmtNum(grams, grams % 1 ? 1 : 0)}ג׳ · ${fmtNum(log.calories)} קק״ל · ח ${fmtNum(log.protein, 1)} · פ ${fmtNum(log.carbs, 1)} · ש ${fmtNum(log.fats, 1)}`
+      return `- ${date} · ${log.name} · ${serving.label} · ${fmtNum(log.calories)} קק״ל · ח ${fmtNum(log.protein, 1)} · פ ${fmtNum(log.carbs, 1)} · ש ${fmtNum(log.fats, 1)}`
     })
     .join('\n')
 }
@@ -392,9 +471,17 @@ type DailyMacros = {
   fats: number
 }
 
+function isValidFoodEntry(entry: FoodLogEntry) {
+  return (
+    entry.name.trim().length > 0 &&
+    (entry.calories > 0 || entry.protein > 0 || entry.carbs > 0 || entry.fats > 0)
+  )
+}
+
 function macrosByDay(logs: FoodLogEntry[]): Map<string, DailyMacros> {
   const map = new Map<string, DailyMacros>()
   for (const food of logs) {
+    if (!isValidFoodEntry(food)) continue
     const day = food.loggedAt.slice(0, 10)
     const curr = map.get(day) ?? {
       calories: 0,
@@ -412,7 +499,9 @@ function macrosByDay(logs: FoodLogEntry[]): Map<string, DailyMacros> {
 }
 
 function rollingWeightAverage(logs: WeightEntry[], days: number): number | null {
-  const window = logs.filter((log) => isInLastDays(log.loggedAt, days))
+  const window = logs.filter(
+    (log) => log.weightKg > 0 && isInLastDays(log.loggedAt, days),
+  )
   if (!window.length) return null
   return average(window.map((log) => log.weightKg))
 }
@@ -420,11 +509,14 @@ function rollingWeightAverage(logs: WeightEntry[], days: number): number | null 
 function rollingMacroAverage(
   byDay: Map<string, DailyMacros>,
   days: number,
+  minCalories = 0,
 ): (DailyMacros & { loggedDays: number }) | null {
   const today = startOfDay()
   const values: DailyMacros[] = []
   for (const [date, macros] of byDay) {
-    if (isInLastDays(date, days, today)) values.push(macros)
+    if (!isInLastDays(date, days, today)) continue
+    if (macros.calories < minCalories) continue
+    values.push(macros)
   }
   if (!values.length) return null
   return {
@@ -446,6 +538,123 @@ function formatMacroAverage(
 
 function joinSections(parts: Array<string | ''>) {
   return parts.filter((part) => part.trim().length > 0).join('\n\n')
+}
+
+function blockIdentity(log: WorkoutLog) {
+  return log.programId || log.programName || `block-${log.blockNumber ?? 'x'}`
+}
+
+function isActiveBlockLog(
+  log: WorkoutLog,
+  activeProgramId: string,
+  activeProgramName: string,
+) {
+  if (activeProgramId && log.programId === activeProgramId) return true
+  if (activeProgramName && log.programName === activeProgramName) return true
+  return false
+}
+
+function weightNearDate(sorted: WeightEntry[], dateKey: string): number | null {
+  if (!sorted.length) return null
+  let before: WeightEntry | null = null
+  let after: WeightEntry | null = null
+  for (const entry of sorted) {
+    const key = entry.loggedAt.slice(0, 10)
+    if (key <= dateKey) before = entry
+    if (key >= dateKey && !after) after = entry
+  }
+  return (before ?? after)?.weightKg ?? null
+}
+
+function formatPastBlockSnapshots(
+  logs: WorkoutLog[],
+  activeProgramId: string,
+  activeProgramName: string,
+  programs: WorkoutProgram[],
+  sortedWeights: WeightEntry[],
+  weeklyTarget: number,
+): string {
+  const groups = new Map<string, WorkoutLog[]>()
+  for (const log of logs) {
+    if (isActiveBlockLog(log, activeProgramId, activeProgramName)) continue
+    const key = blockIdentity(log)
+    const curr = groups.get(key) ?? []
+    curr.push(log)
+    groups.set(key, curr)
+  }
+  if (!groups.size) return ''
+
+  const lines = [...groups.entries()]
+    .map(([, group]) => {
+      const ordered = [...group].sort((a, b) =>
+        workoutPerformedOn(a).localeCompare(workoutPerformedOn(b)),
+      )
+      const first = ordered[0]
+      const last = ordered.at(-1)
+      if (!first || !last) return ''
+      const start = workoutPerformedOn(first)
+      const end = workoutPerformedOn(last)
+      const name =
+        first.programName.trim() ||
+        (first.blockNumber != null ? `בלוק ${first.blockNumber}` : 'בלוק קודם')
+      const startW = weightNearDate(sortedWeights, start)
+      const endW = weightNearDate(sortedWeights, end)
+      const program =
+        programs.find((p) => p.id === first.programId) ??
+        programs.find((p) => p.name === first.programName)
+      const scheduledDays = scheduledDayNumbers(program?.days ?? [])
+      const completed = new Set(ordered.map((log) => workoutPerformedOn(log)))
+      const adherence = adherenceForDates(
+        eachDateKey(startOfDay(new Date(start)), startOfDay(new Date(end))),
+        scheduledDays.size ? scheduledDays : new Set(),
+        completed,
+      )
+      const fallbackAdherence = (): Adherence => {
+        const span = Math.max(
+          1,
+          Math.round(
+            (startOfDay(new Date(end)).getTime() -
+              startOfDay(new Date(start)).getTime()) /
+              86400000,
+          ) + 1,
+        )
+        const weeks = Math.max(1, span / 7)
+        const scheduled = Math.max(1, Math.round(weeks * (weeklyTarget || 5)))
+        return {
+          scheduled,
+          completed: completed.size,
+          pct: (completed.size / scheduled) * 100,
+        }
+      }
+      const used = adherence ?? fallbackAdherence()
+      const keyChanges = buildStrengthRowsFromLogs(ordered)
+        .map((row) => ({
+          row,
+          label: formatStrengthDelta(row),
+          score: Math.abs(row.weightDelta) * 10 + Math.abs(row.repsDelta),
+        }))
+        .filter((item): item is typeof item & { label: string } =>
+          Boolean(item.label),
+        )
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3)
+        .map((item) => item.label)
+      const weightPart =
+        startW != null || endW != null
+          ? `משקל ${fmtNum(startW, 2)} -> ${fmtNum(endW, 2)} ק״ג`
+          : ''
+      const details = [
+        weightPart,
+        `התמדה: ${fmtNum(used.pct)}%`,
+        keyChanges.length ? `שינויי מפתח: ${keyChanges.join(', ')}` : '',
+      ].filter(Boolean)
+      return `- ${name} (${start} עד ${end}): ${details.join(' | ')}`
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, 'he'))
+
+  if (!lines.length) return ''
+  return `## היסטוריית בלוקים קודמים\n${lines.join('\n')}`
 }
 
 export function buildAiExportPrompt(input: {
@@ -470,6 +679,7 @@ export function buildAiExportPrompt(input: {
   consistencyDayMarks?: ConsistencyDayMarks
   savedMeals?: SavedMeal[]
   recipes?: Recipe[]
+  workoutPrograms?: WorkoutProgram[]
 }): string {
   const phaseStart = input.goal.startDate
   const { profile, goal, macroTargets } = input
@@ -503,10 +713,11 @@ export function buildAiExportPrompt(input: {
 
   const weeklyRate = weeklyWeightRate(sortedWeights)
   const dayMacros = macrosByDay(input.foodLogs)
+  const minDayCalories = Math.max(200, Math.round((macroTargets.calories || 0) * 0.25))
   const avgWeight7 = rollingWeightAverage(sortedWeights, 7)
   const avgWeight14 = rollingWeightAverage(sortedWeights, 14)
-  const avgMacros7 = rollingMacroAverage(dayMacros, 7)
-  const avgMacros14 = rollingMacroAverage(dayMacros, 14)
+  const avgMacros7 = rollingMacroAverage(dayMacros, 7, minDayCalories)
+  const avgMacros14 = rollingMacroAverage(dayMacros, 14, minDayCalories)
 
   const masterDay = calcProcessDay(goal.masterStartDate, goal.masterTotalDays)
   const phaseDay = calcProcessDay(goal.startDate, goal.totalDays)
@@ -536,21 +747,46 @@ export function buildAiExportPrompt(input: {
       ].join('\n')
     : ''
 
-  const strengthRows = buildBlockStrengthRows(
+  let activeProgramId = input.activeProgramId ?? ''
+  let activeProgramName = input.activeProgramName?.trim() ?? ''
+  let activeLogs = logsForActiveBlock(
     workoutLogs,
-    input.activeProgramId ?? '',
-    input.activeProgramName?.trim() ?? '',
+    activeProgramId,
+    activeProgramName,
   )
+  if (!activeLogs.length && workoutLogs.length) {
+    const latest = [...workoutLogs].sort((a, b) =>
+      b.completedAt.localeCompare(a.completedAt),
+    )[0]
+    if (latest) {
+      activeProgramId = latest.programId
+      activeProgramName = latest.programName.trim()
+      activeLogs = logsForActiveBlock(
+        workoutLogs,
+        activeProgramId,
+        activeProgramName,
+      )
+    }
+  }
+  const strengthRows = buildStrengthRowsFromLogs(activeLogs)
   const strengthSection = strengthRows.length
     ? formatBlockStrengthMarkdown(
         strengthRows,
-        input.activeProgramName?.trim() || 'בלוק פעיל',
+        activeProgramName || 'בלוק פעיל',
       )
     : ''
+  const pastBlocksSection = formatPastBlockSnapshots(
+    workoutLogs,
+    activeProgramId,
+    activeProgramName,
+    input.workoutPrograms ?? [],
+    sortedWeights,
+    goal.weeklyWorkoutTarget || 5,
+  )
 
   const routinesSection = formatRoutinesDump(input.routines ?? [])
   const tracksSection = formatFocusTracksDump(input.focusTracks ?? [])
-  const workoutLogsSection = formatRecentWorkouts(workoutLogs)
+  const workoutLogsSection = formatRecentWorkouts(activeLogs)
   const foodLogsSection = formatFoodLogs(input.foodLogs, savedMeals, recipes)
   const splitSummary = formatSplitSummary(input.workoutDays)
 
@@ -635,6 +871,7 @@ ${PHASE_BLUEPRINT.join('\n')}
 - יעד משקל לשלב: ${fmtNum(goal.targetWeightKg, 2)} ק״ג | יעד שומן: עד ${fmtNum(goal.targetBodyFatPct, 2)}%
 - יעדי מאקרו יומיים: ${fmtNum(macroTargets.calories)} קק״ל | חלבון: ${fmtNum(macroTargets.protein)}ג׳ | שומן: ${fmtNum(macroTargets.fats)}ג׳ | פחמימות: ${fmtNum(macroTargets.carbs)}ג׳`,
     historySection,
+    pastBlocksSection,
     adherenceLines.length || splitSummary !== NA || activitiesSummary !== NA
       ? [
           '## עקביות ואימונים',

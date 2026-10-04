@@ -26,6 +26,7 @@ export function AiExportPanel() {
     consistencyDayMarks,
     savedMeals,
     recipes,
+    workoutPrograms,
   } = useAppData()
   const { workoutLogs } = useWorkoutSession()
   const [copied, setCopied] = useState(false)
@@ -54,6 +55,7 @@ export function AiExportPanel() {
         consistencyDayMarks,
         savedMeals,
         recipes,
+        workoutPrograms,
       }),
     [
       setLogs,
@@ -77,6 +79,7 @@ export function AiExportPanel() {
       consistencyDayMarks,
       savedMeals,
       recipes,
+      workoutPrograms,
     ],
   )
 
