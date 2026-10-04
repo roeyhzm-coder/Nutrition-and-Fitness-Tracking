@@ -471,7 +471,7 @@ function finitePositive(value: unknown, fallback: number): number {
 }
 
 export function normalizeGoal(goal: Partial<GoalSettings> | null | undefined): GoalSettings {
-  const start = goal?.startDate || '2026-09-26'
+  const start = goal?.startDate || '2026-10-01'
   const weekly = Number(goal?.weeklyWorkoutTarget)
   return {
     startDate: start,
@@ -488,7 +488,7 @@ export function normalizeGoal(goal: Partial<GoalSettings> | null | undefined): G
     phaseName: goal?.phaseName?.trim() || 'מסה מבוססת הרגלים',
     phaseNumber: Math.max(1, Math.round(finitePositive(goal?.phaseNumber, 1))),
     totalPhases: Math.max(1, Math.round(finitePositive(goal?.totalPhases, 6))),
-    startWeightKg: goal?.startWeightKg ?? 70,
+    startWeightKg: goal?.startWeightKg ?? 69.5,
   }
 }
 

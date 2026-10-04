@@ -336,6 +336,7 @@ function migratePlanTargets() {
     JSON.stringify(DEFAULT_PHASE_MACROS),
   )
   localStorage.setItem('tn.profile.v1', JSON.stringify(DEFAULT_PROFILE))
+  localStorage.setItem('tn.consistencyDayMarks.v1', JSON.stringify({}))
   const weights = readStored<WeightEntry[]>('tn.weightLogs', [])
   localStorage.setItem(
     'tn.weightLogs',
@@ -979,10 +980,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setActiveProgramIdState(plan.activeProgramId)
       }
       if (remote.workoutTemplates) setWorkoutTemplates(plan.templates)
-      setConsistencyDayMarks((local) => ({
-        ...local,
-        ...(remote.consistencyDayMarks ?? {}),
-      }))
+      if (remote.consistencyDayMarks) {
+        setConsistencyDayMarks(remote.consistencyDayMarks)
+      }
       if (remote.foodCategories?.length) {
         setFoodCategories(remote.foodCategories)
       }
@@ -992,9 +992,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (remote.foodLogs?.length) {
         setFoodLogs((local) => mergeById(local, remote.foodLogs ?? []))
       }
-      if (remote.weightLogs?.length) {
-        setWeightLogs((local) =>
-          mergeById(local, remote.weightLogs ?? []).sort((a, b) =>
+      if (remote.weightLogs) {
+        setWeightLogs(
+          [...remote.weightLogs].sort((a, b) =>
             a.loggedAt.localeCompare(b.loggedAt),
           ),
         )

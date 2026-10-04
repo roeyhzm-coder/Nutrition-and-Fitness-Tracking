@@ -19,7 +19,7 @@ import {
 } from '../lib/types'
 import { DEFAULT_WORKOUT_DAYS, createOfficialPrograms } from './workouts'
 
-export const PLAN_SEED_VERSION = 1
+export const PLAN_SEED_VERSION = 2
 export const PLAN_SEED_KEY = 'tn.targetsSeedVersion'
 
 export const DEFAULT_MACRO_BULK: MacroTargets = {
@@ -57,10 +57,10 @@ export function normalizeMacroPresets(
   return { ...DEFAULT_PHASE_MACROS, ...(presets ?? {}) }
 }
 
-export const DEFAULT_PHASE: Phase = 'maintain'
+export const DEFAULT_PHASE: Phase = 'bulk'
 
 export const DEFAULT_GOAL: GoalSettings = {
-  startDate: '2026-09-26',
+  startDate: '2026-10-01',
   totalDays: 196,
   targetWeightKg: 75.5,
   targetBodyFatPct: 15,
@@ -73,14 +73,14 @@ export const DEFAULT_GOAL: GoalSettings = {
   phaseName: 'מסה מבוססת הרגלים',
   phaseNumber: 1,
   totalPhases: 6,
-  startWeightKg: 70,
+  startWeightKg: 69.5,
 }
 
 export const DEFAULT_PROFILE: UserProfile = {
   age: 26,
   heightCm: 182,
   sex: 'male',
-  startWeightKg: 70,
+  startWeightKg: 69.5,
   estimatedBodyFatPct: 14,
   activityLevel: 'sedentary',
   avgSleepHours: 8,
@@ -92,28 +92,31 @@ export const DEFAULT_PROFILE: UserProfile = {
 }
 
 export const SEED_WEIGHT_ENTRY: WeightEntry = {
-  id: 'seed-weight-phase1-2026-09-26',
-  weightKg: 70,
+  id: 'seed-weight-phase1-2026-10-01',
+  weightKg: 69.5,
   bodyFatPct: 14,
-  loggedAt: '2026-09-26T12:00:00',
+  loggedAt: '2026-10-01T12:00:00',
   note: 'התחלת שלב 1',
 }
 
+const LEGACY_SEED_WEIGHT_IDS = new Set([
+  'seed-weight-phase1-2026-09-26',
+  'seed-weight-phase1-2026-10-01',
+  'seed-weight-current',
+])
+
 export function applySeedWeightLogs(prev: WeightEntry[]): WeightEntry[] {
-  const withoutSeed = prev.filter(
-    (w) =>
-      w.id !== SEED_WEIGHT_ENTRY.id && w.id !== 'seed-weight-current',
-  )
+  const withoutSeed = prev.filter((w) => !LEGACY_SEED_WEIGHT_IDS.has(w.id))
   const next = [...withoutSeed, SEED_WEIGHT_ENTRY].sort((a, b) =>
     a.loggedAt.localeCompare(b.loggedAt),
   )
   const latest = next.at(-1)
-  if (latest && latest.weightKg === 70) return next
+  if (latest && latest.weightKg === 69.5) return next
   return [
     ...next,
     {
       id: 'seed-weight-current',
-      weightKg: 70,
+      weightKg: 69.5,
       bodyFatPct: 14,
       loggedAt: toLoggedAt(todayKey()),
       note: 'משקל עדכני',
