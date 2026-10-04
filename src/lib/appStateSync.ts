@@ -22,8 +22,27 @@ import type { ConsistencyDayMarks } from './weeklyConsistency'
 
 const DEVICE_KEY = 'tn.deviceId'
 
-/** All devices read and write this shared owner row. */
+/** All devices read and write this same owner row. */
 export const SHARED_OWNER_ID = 'primary'
+export const NUTRITION_CLOUD_ACK_KEY = 'tn.nutritionCloudAck.v1'
+
+export function markNutritionCloudAck() {
+  localStorage.setItem(NUTRITION_CLOUD_ACK_KEY, '1')
+}
+
+/** Keep unsynced local rows instead of adopting an empty cloud list. */
+export function shouldKeepLocalList<T>(
+  local: T[],
+  remote: T[] | undefined,
+  dirty: boolean,
+): boolean {
+  if (remote === undefined) return true
+  if (dirty) return true
+  if (remote.length === 0 && local.length > 0) {
+    return localStorage.getItem(NUTRITION_CLOUD_ACK_KEY) !== '1'
+  }
+  return false
+}
 
 export function getDeviceId() {
   let id = localStorage.getItem(DEVICE_KEY)
@@ -258,7 +277,18 @@ async function selectRow(
     query = query.eq(filter.column, filter.value)
   }
   const { data, error } = await query.maybeSingle()
-  if (error || !data) return null
+  if (error) {
+    console.error('[appStateSync] select failed', {
+      table,
+      columns,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+      code: error.code,
+    })
+    return null
+  }
+  if (!data) return null
   return data as unknown as Record<string, unknown>
 }
 
@@ -328,64 +358,77 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
   return pullFromUserProfile()
 }
 
-function buildPayloads(state: Omit<SyncedAppState, 'updatedAt'>, updatedAt: string) {
+function nutritionSnapshot(state: Omit<SyncedAppState, 'updatedAt'>) {
+  return {
+    saved_meals: state.savedMeals ?? [],
+    food_logs: state.foodLogs ?? [],
+    recipes: state.recipes ?? [],
+  }
+}
+
+function buildNutritionPayloads(
+  state: Omit<SyncedAppState, 'updatedAt'>,
+  updatedAt: string,
+) {
   const goal = { ...state.goal, activePhase: state.phase }
-  const base = {
+  const nutrition = nutritionSnapshot(state)
+  const full = {
     owner_id: SHARED_OWNER_ID,
     phase: state.phase as string,
     goal,
     macro_presets: state.macroPresets,
     active_program_id: state.activeProgramId,
     workout_programs: state.workoutPrograms,
-    updated_at: updatedAt,
-  }
-  const templatePayload = {
-    ...base,
     workout_templates: state.workoutTemplates ?? [],
-  }
-  const fullPayload = {
-    ...templatePayload,
     consistency_day_marks: state.consistencyDayMarks,
     food_categories: state.foodCategories,
-  }
-  const extendedPayload = {
-    ...fullPayload,
-    saved_meals: state.savedMeals ?? [],
     user_profile: state.profile ?? null,
     activity_logs: state.activityLogs ?? [],
     lifestyle_logs: state.lifestyleLogs ?? {},
-  }
-  const foodLogPayload = {
-    ...extendedPayload,
-    food_logs: state.foodLogs ?? [],
-  }
-  const routinesPayload = {
-    ...foodLogPayload,
     routines: state.routines ?? [],
-  }
-  const focusTracksPayload = {
-    ...routinesPayload,
     focus_tracks: state.focusTracks ?? [],
-  }
-  const weightPayload = {
-    ...focusTracksPayload,
     weight_logs: state.weightLogs ?? [],
+    updated_at: updatedAt,
+    ...nutrition,
   }
-  const recipesPayload = {
-    ...weightPayload,
-    recipes: state.recipes ?? [],
+  const withoutRecipes = { ...full }
+  delete (withoutRecipes as { recipes?: unknown }).recipes
+  return [full, withoutRecipes]
+}
+
+function logUpsertError(
+  table: string,
+  error: { message: string; details?: string; hint?: string; code?: string },
+  payload: Record<string, unknown>,
+) {
+  console.error('[appStateSync] nutrition upsert failed', {
+    table,
+    message: error.message,
+    details: error.details,
+    hint: error.hint,
+    code: error.code,
+    foodLogs: Array.isArray(payload.food_logs)
+      ? payload.food_logs.length
+      : 'missing',
+    savedMeals: Array.isArray(payload.saved_meals)
+      ? payload.saved_meals.length
+      : 'missing',
+    recipes: Array.isArray(payload.recipes) ? payload.recipes.length : 'missing',
+  })
+}
+
+async function upsertRow(
+  table: 'app_state' | 'client_app_state',
+  payload: Record<string, unknown>,
+  onConflict: string,
+): Promise<boolean> {
+  if (!supabase) return false
+  const { error } = await supabase.from(table).upsert(payload, { onConflict })
+  if (error) {
+    logUpsertError(table, error, payload)
+    return false
   }
-  return [
-    recipesPayload,
-    weightPayload,
-    focusTracksPayload,
-    routinesPayload,
-    foodLogPayload,
-    extendedPayload,
-    fullPayload,
-    templatePayload,
-    base,
-  ]
+  return true
 }
 
 export async function pushAppState(
@@ -394,58 +437,60 @@ export async function pushAppState(
   if (!isSupabaseConfigured || !supabase) return false
 
   const updatedAt = new Date().toISOString()
-  const payloads = buildPayloads(state, updatedAt)
-  const phaseColumns =
-    state.phase === 'maintain' ? [state.phase, 'bulk'] : [state.phase]
+  const payloads = buildNutritionPayloads(state, updatedAt)
+  let wroteNutrition = false
 
-  let wroteShared = false
-
-  for (const phaseColumn of phaseColumns) {
-    for (const payload of payloads) {
-      const { error } = await supabase.from('app_state').upsert(
-        { ...payload, phase: phaseColumn },
-        { onConflict: 'owner_id' },
-      )
-      if (!error) {
-        wroteShared = true
-        break
-      }
+  for (const payload of payloads) {
+    const ok = await upsertRow('app_state', payload, 'owner_id')
+    if (ok) {
+      wroteNutrition = true
+      break
     }
-    if (wroteShared) break
   }
 
-  for (const phaseColumn of phaseColumns) {
-    for (const payload of payloads) {
-      const { error } = await supabase.from('client_app_state').upsert(
-        {
-          ...payload,
-          phase: phaseColumn,
-          device_id: SHARED_OWNER_ID,
-        },
-        { onConflict: 'device_id' },
-      )
-      if (!error) {
-        wroteShared = true
-        break
-      }
+  for (const payload of payloads) {
+    const ok = await upsertRow(
+      'client_app_state',
+      { ...payload, device_id: SHARED_OWNER_ID },
+      'device_id',
+    )
+    if (ok) {
+      wroteNutrition = true
+      break
     }
-    if (wroteShared) break
   }
 
-  const profileRow = {
-    owner_id: SHARED_OWNER_ID,
-    profile: state.profile ?? {},
-    phase: state.phase,
-    goal: { ...state.goal, activePhase: state.phase },
-    macro_presets: state.macroPresets,
-    updated_at: updatedAt,
-  }
   const { error: profileError } = await supabase
     .from('user_profile')
-    .upsert(profileRow, { onConflict: 'owner_id' })
-  if (!profileError) wroteShared = true
+    .upsert(
+      {
+        owner_id: SHARED_OWNER_ID,
+        profile: state.profile ?? {},
+        phase: state.phase,
+        goal: { ...state.goal, activePhase: state.phase },
+        macro_presets: state.macroPresets,
+        updated_at: updatedAt,
+      },
+      { onConflict: 'owner_id' },
+    )
+  if (profileError) {
+    console.error('[appStateSync] user_profile upsert failed', profileError)
+  }
 
-  return wroteShared
+  if (!wroteNutrition) {
+    console.error(
+      '[appStateSync] food_logs/saved_meals/recipes were not written to Supabase',
+      {
+        foodLogs: state.foodLogs?.length ?? 0,
+        savedMeals: state.savedMeals?.length ?? 0,
+        recipes: state.recipes?.length ?? 0,
+      },
+    )
+    return false
+  }
+
+  markNutritionCloudAck()
+  return true
 }
 
 export function subscribeSharedSync(
@@ -496,12 +541,18 @@ export function onWindowResume(onResume: () => void): () => void {
     if (document.visibilityState === 'visible') onResume()
   }
   const handleOnline = () => onResume()
+  const handlePageShow = (event: PageTransitionEvent) => {
+    if (event.persisted) onResume()
+    else onResume()
+  }
   window.addEventListener('focus', handleFocus)
   document.addEventListener('visibilitychange', handleVisibility)
   window.addEventListener('online', handleOnline)
+  window.addEventListener('pageshow', handlePageShow)
   return () => {
     window.removeEventListener('focus', handleFocus)
     document.removeEventListener('visibilitychange', handleVisibility)
     window.removeEventListener('online', handleOnline)
+    window.removeEventListener('pageshow', handlePageShow)
   }
 }

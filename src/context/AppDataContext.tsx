@@ -61,6 +61,7 @@ import {
   onWindowResume,
   pullAppState,
   pushAppState,
+  shouldKeepLocalList,
   subscribeSharedSync,
   type SyncedAppState,
 } from '../lib/appStateSync'
@@ -486,6 +487,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   >('idle')
   const hydratedRef = useRef(false)
   const skipNextPush = useRef(false)
+  const localDirtyRef = useRef(false)
+  const flushTimerRef = useRef<number>(0)
+  const snapshotRef = useRef<Omit<SyncedAppState, 'updatedAt'> | null>(null)
 
   const activeProgram =
     workoutPrograms.find((p) => p.id === activeProgramId) ??
@@ -955,6 +959,63 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     void syncRecipes()
   }, [syncRecipes])
 
+  snapshotRef.current = {
+    phase,
+    goal,
+    macroPresets,
+    activeProgramId: activeProgram?.id ?? activeProgramId,
+    workoutPrograms,
+    workoutTemplates,
+    consistencyDayMarks,
+    foodCategories,
+    savedMeals,
+    recipes,
+    foodLogs,
+    weightLogs,
+    profile,
+    activityLogs,
+    lifestyleLogs,
+    routines,
+    focusTracks,
+  }
+
+  const flushCloud = useCallback(
+    async (
+      reason: string,
+      patch?: Partial<Omit<SyncedAppState, 'updatedAt'>>,
+    ) => {
+      const current = snapshotRef.current
+      if (!current) return false
+      const next = { ...current, ...patch }
+      snapshotRef.current = next
+      setStateSyncStatus('syncing')
+      const ok = await pushAppState(next)
+      if (ok) {
+        localDirtyRef.current = false
+        setStateSyncStatus('synced')
+      } else {
+        console.error('[AppData] cloud flush failed', reason)
+        setStateSyncStatus('error')
+      }
+      return ok
+    },
+    [],
+  )
+
+  const scheduleFlush = useCallback(
+    (reason: string, patch?: Partial<Omit<SyncedAppState, 'updatedAt'>>) => {
+      localDirtyRef.current = true
+      if (patch && snapshotRef.current) {
+        snapshotRef.current = { ...snapshotRef.current, ...patch }
+      }
+      window.clearTimeout(flushTimerRef.current)
+      flushTimerRef.current = window.setTimeout(() => {
+        void flushCloud(reason)
+      }, 120)
+    },
+    [flushCloud],
+  )
+
   const applyRemoteState = useCallback(
     (remote: SyncedAppState) => {
       skipNextPush.current = true
@@ -990,17 +1051,38 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setFoodCategories(remote.foodCategories)
       }
       if (remote.savedMeals !== undefined) {
-        setSavedMeals(mergeSavedMeals(remote.savedMeals))
-        markCatalogSeeded()
+        setSavedMeals((local) => {
+          if (shouldKeepLocalList(local, remote.savedMeals, localDirtyRef.current)) {
+            skipNextPush.current = false
+            localDirtyRef.current = true
+            return local
+          }
+          markCatalogSeeded()
+          return mergeSavedMeals(remote.savedMeals ?? [])
+        })
       } else if (needsCatalogSeed()) {
         setSavedMeals((prev) => seedSavedMealsIfEmpty(prev))
         markCatalogSeeded()
       }
       if (remote.recipes !== undefined) {
-        setRecipes(mergeRecipes(remote.recipes))
+        setRecipes((local) => {
+          if (shouldKeepLocalList(local, remote.recipes, localDirtyRef.current)) {
+            skipNextPush.current = false
+            localDirtyRef.current = true
+            return local
+          }
+          return mergeRecipes(remote.recipes ?? [])
+        })
       }
       if (remote.foodLogs !== undefined) {
-        setFoodLogs(remote.foodLogs)
+        setFoodLogs((local) => {
+          if (shouldKeepLocalList(local, remote.foodLogs, localDirtyRef.current)) {
+            skipNextPush.current = false
+            localDirtyRef.current = true
+            return local
+          }
+          return remote.foodLogs ?? local
+        })
       }
       if (remote.weightLogs !== undefined) {
         setWeightLogs(
@@ -1064,6 +1146,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const hydrateFromCloud = useCallback(
     async (reason: 'load' | 'refetch') => {
+      if (localDirtyRef.current) {
+        await flushCloud(`before-${reason}`)
+      }
       const remote = await pullAppState()
       if (!remote) {
         if (reason === 'load' && needsPlanSeed()) {
@@ -1088,11 +1173,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
       applyRemoteState(remote)
       if (needsPlanSeed()) markPlanSeeded()
-      setStateSyncStatus('synced')
       hydratedRef.current = true
+      if (localDirtyRef.current) {
+        await flushCloud('hydrate-adopt-local-nutrition')
+        return
+      }
+      setStateSyncStatus('synced')
     },
     [
       applyRemoteState,
+      flushCloud,
       setPhaseState,
       setGoal,
       setMacroPresets,
@@ -1130,32 +1220,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       skipNextPush.current = false
       return
     }
-    if (!activeProgramId || workoutPrograms.length === 0) return
-
-    const handle = window.setTimeout(() => {
-      setStateSyncStatus('syncing')
-      void pushAppState({
-        phase,
-        goal,
-        macroPresets,
-        activeProgramId,
-        workoutPrograms,
-        workoutTemplates,
-        consistencyDayMarks,
-        foodCategories,
-        savedMeals,
-        recipes,
-        foodLogs,
-        weightLogs,
-        profile,
-        activityLogs,
-        lifestyleLogs,
-        routines,
-        focusTracks,
-      }).then((ok) => setStateSyncStatus(ok ? 'synced' : 'error'))
-    }, 800)
-
-    return () => window.clearTimeout(handle)
+    scheduleFlush('state-change')
   }, [
     phase,
     goal,
@@ -1174,6 +1239,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     lifestyleLogs,
     routines,
     focusTracks,
+    scheduleFlush,
   ])
 
   const addSetLog = useCallback(
@@ -1241,74 +1307,111 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const addFood = useCallback(
     (entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) => {
-      setFoodLogs((prev) => [
-        ...prev,
-        { ...entry, id: uid(), loggedAt: new Date().toISOString() },
-      ])
+      setFoodLogs((prev) => {
+        const next = [
+          ...prev,
+          { ...entry, id: uid(), loggedAt: new Date().toISOString() },
+        ]
+        scheduleFlush('addFood', { foodLogs: next })
+        return next
+      })
     },
-    [setFoodLogs],
+    [setFoodLogs, scheduleFlush],
   )
 
   const updateFood = useCallback(
     (id: string, patch: Partial<Omit<FoodLogEntry, 'id' | 'loggedAt'>>) => {
-      setFoodLogs((prev) =>
-        prev.map((f) => (f.id === id ? { ...f, ...patch } : f)),
-      )
+      setFoodLogs((prev) => {
+        const next = prev.map((f) => (f.id === id ? { ...f, ...patch } : f))
+        scheduleFlush('updateFood', { foodLogs: next })
+        return next
+      })
     },
-    [setFoodLogs],
+    [setFoodLogs, scheduleFlush],
   )
 
   const deleteFood = useCallback(
     (id: string) => {
-      setFoodLogs((prev) => prev.filter((f) => f.id !== id))
+      setFoodLogs((prev) => {
+        const next = prev.filter((f) => f.id !== id)
+        scheduleFlush('deleteFood', { foodLogs: next })
+        return next
+      })
     },
-    [setFoodLogs],
+    [setFoodLogs, scheduleFlush],
   )
 
   const addSavedMeal = useCallback(
     (meal: Omit<SavedMeal, 'id'>) => {
-      setSavedMeals((prev) => [
-        ...prev,
-        { kind: 'item', ...meal, id: uid() },
-      ])
+      setSavedMeals((prev) => {
+        const next: SavedMeal[] = [
+          ...prev,
+          { ...meal, kind: meal.kind ?? 'item', id: uid() },
+        ]
+        scheduleFlush('addSavedMeal', { savedMeals: next })
+        return next
+      })
     },
-    [setSavedMeals],
+    [setSavedMeals, scheduleFlush],
   )
 
   const updateSavedMeal = useCallback(
     (id: string, patch: Partial<SavedMeal>) => {
-      setSavedMeals((prev) =>
-        prev.map((m) => (m.id === id ? { ...m, ...patch } : m)),
-      )
+      setSavedMeals((prev) => {
+        const next = prev.map((m) => (m.id === id ? { ...m, ...patch } : m))
+        scheduleFlush('updateSavedMeal', { savedMeals: next })
+        return next
+      })
     },
-    [setSavedMeals],
+    [setSavedMeals, scheduleFlush],
   )
 
   const deleteSavedMeal = useCallback(
     (id: string) => {
-      setSavedMeals((prev) => prev.filter((m) => m.id !== id))
+      setSavedMeals((prev) => {
+        const next = prev.filter((m) => m.id !== id)
+        scheduleFlush('deleteSavedMeal', { savedMeals: next })
+        return next
+      })
     },
-    [setSavedMeals],
+    [setSavedMeals, scheduleFlush],
   )
 
   const addRecipe = useCallback(
     (recipe: Omit<Recipe, 'id'>) => {
-      setRecipes((prev) => [...prev, { ...recipe, id: uid() }])
+      setRecipes((prev) => {
+        const next = [...prev, { ...recipe, id: uid() }]
+        scheduleFlush('addRecipe', { recipes: next })
+        return next
+      })
     },
-    [setRecipes],
+    [setRecipes, scheduleFlush],
   )
 
   const importMealsAndRecipes = useCallback(
     (meals: SavedMeal[], nextRecipes: Recipe[]) => {
       if (meals.length) {
-        setSavedMeals((prev) => [
-          ...prev,
-          ...meals.map((m) => ({ ...m, kind: m.kind ?? 'meal' })),
-        ])
+        setSavedMeals((prev) => {
+          const next: SavedMeal[] = [
+            ...prev,
+            ...meals.map((m) => ({
+              ...m,
+              kind: m.kind === 'item' ? ('item' as const) : ('meal' as const),
+            })),
+          ]
+          scheduleFlush('importMeals', { savedMeals: next })
+          return next
+        })
       }
-      if (nextRecipes.length) setRecipes((prev) => [...prev, ...nextRecipes])
+      if (nextRecipes.length) {
+        setRecipes((prev) => {
+          const next = [...prev, ...nextRecipes]
+          scheduleFlush('importRecipes', { recipes: next })
+          return next
+        })
+      }
     },
-    [setSavedMeals, setRecipes],
+    [setSavedMeals, setRecipes, scheduleFlush],
   )
 
   const logSavedMeal = useCallback(
