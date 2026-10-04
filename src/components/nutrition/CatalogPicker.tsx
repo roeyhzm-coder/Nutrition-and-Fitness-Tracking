@@ -24,7 +24,7 @@ export function CatalogPicker({
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
 
-  const matches = useMemo(() => filterCatalog(items, query), [items, query])
+  const matches = useMemo(() => filterCatalog(items, query, 16), [items, query])
   const showList = open
 
   function pick(item: CatalogFood) {
@@ -106,6 +106,7 @@ export function CatalogPicker({
                     {catalogDisplayName(item)}
                   </span>
                   <span className="truncate text-[11px] text-muted">
+                    {item.kind === 'meal' ? 'מתכון · ' : ''}
                     {catalogMacroPreview(item)}
                     {' · '}
                     {item.servingLabel} {item.servingGrams}ג׳

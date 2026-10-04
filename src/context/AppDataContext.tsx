@@ -73,6 +73,7 @@ import {
   fetchRecipesFromSupabase,
 } from '../lib/recipesApi'
 import { latestDateKey, readLastAiExportAt } from '../lib/aiCheckin'
+import { hydrateServingPresets } from '../lib/servingPresets'
 import { isSupabaseConfigured } from '../lib/supabase'
 import type {
   ActivityLog,
@@ -968,6 +969,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void syncRecipes()
   }, [syncRecipes])
+
+  useEffect(() => {
+    void hydrateServingPresets()
+  }, [])
 
   snapshotRef.current = {
     phase,

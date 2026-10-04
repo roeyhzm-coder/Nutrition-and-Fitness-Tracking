@@ -157,6 +157,27 @@ export function isSavedPresetKind(value: unknown): value is SavedPresetKind {
   return value === 'item' || value === 'meal'
 }
 
+export type SavedMealComponent = {
+  name: string
+  amount: string
+  unit: 'grams' | 'serving'
+  servingGrams: number
+  servingLabel: string
+  calories: number
+  protein: number
+  carbs: number
+  fats: number
+  per100g: {
+    calories: number
+    protein: number
+    carbs: number
+    fats: number
+  }
+  kind?: SavedPresetKind
+  catalogId?: string
+  presetId?: string
+}
+
 export type SavedMeal = {
   id: string
   name: string
@@ -170,6 +191,8 @@ export type SavedMeal = {
   kind?: SavedPresetKind
   /** Grams represented by the stored macros (one unit / serving). */
   servingGrams?: number
+  /** Structured composer lines so a saved meal can be reopened and scaled. */
+  components?: SavedMealComponent[]
 }
 
 export type Sex = 'male' | 'female'

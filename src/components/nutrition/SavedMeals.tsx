@@ -13,15 +13,17 @@ import { savedPresetKind } from '../../data/defaults'
 import {
   buildFoodCatalog,
   catalogDisplayName,
-  catalogMacroPreview,
-  emptyIngredientLine,
+  componentToLine,
   formatIngredientNotes,
+  lineToComponent,
   macrosFromPer100g,
+  suggestMealName,
   sumIngredientLines,
   type CatalogFood,
   type MealIngredientLine,
 } from '../../lib/foodCatalog'
 import { formatNiceNumber, parseDecimal, parsePositiveDecimal, roundTo } from '../../lib/numericInput'
+import { matchPreset } from '../../lib/servingPresets'
 import { uid, type SavedMeal, type SavedPresetKind } from '../../lib/types'
 import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
@@ -29,8 +31,8 @@ import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
 import { CatalogPicker } from './CatalogPicker'
 import { MealIngredientBuilder } from './MealIngredientBuilder'
-import { PortionPills } from './PortionPills'
 import { QuickPortionModal } from './QuickPortionModal'
+import { ServingPresetPicker } from './ServingPresetPicker'
 
 const EMPTY_FORM = {
   name: '',
@@ -233,6 +235,7 @@ export function SavedMeals() {
   const [query, setQuery] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | null>(null)
+  const nameDirty = useRef(false)
 
   const q = query.trim()
   const items = useMemo(
@@ -266,10 +269,6 @@ export function SavedMeals() {
     () => catalog.filter((item) => item.kind === 'item'),
     [catalog],
   )
-  const recipeCatalog = useMemo(
-    () => catalog.filter((item) => item.kind === 'meal'),
-    [catalog],
-  )
 
   const namedLines = useMemo(
     () => lines.filter((line) => line.name.trim()),
@@ -285,6 +284,13 @@ export function SavedMeals() {
     setItemsOpen(true)
     setMealsOpen(true)
   }, [q])
+
+  useEffect(() => {
+    if (form.kind !== 'meal' || entryMode === 'manual' || nameDirty.current) return
+    if (editing) return
+    const suggested = suggestMealName(namedLines)
+    setForm((prev) => (prev.name === suggested ? prev : { ...prev, name: suggested }))
+  }, [namedLines, form.kind, entryMode, editing])
 
   useEffect(() => {
     return () => {
@@ -315,37 +321,24 @@ export function SavedMeals() {
     }))
   }
 
-  function applyRecipe(item: CatalogFood) {
-    const recipe = recipes.find((r) => `recipe:${r.id}` === item.id)
-    setPicked(item)
-    setLines([])
-    setForm((prev) => ({
-      ...prev,
-      name: item.name,
-      calories: String(item.calories),
-      protein: String(item.protein),
-      carbs: String(item.carbs),
-      fats: String(item.fats),
-      servingGrams: String(item.servingGrams),
-      notes: recipe?.ingredients.join(' · ') || prev.notes,
-      kind: 'meal',
-    }))
-    setEntryMode('manual')
-  }
-
   function openCreate(kind: SavedPresetKind) {
+    nameDirty.current = false
     setEditing(null)
     setPicked(null)
     setForm({ ...EMPTY_FORM, kind })
-    setLines(kind === 'meal' ? [emptyIngredientLine(uid())] : [])
+    setLines([])
     setEntryMode(kind === 'item' ? 'catalog' : 'compose')
     setOpen(true)
   }
 
   function openEdit(meal: SavedMeal) {
+    nameDirty.current = true
     setEditing(meal)
     setPicked(null)
-    setLines([])
+    const restored = (meal.components ?? []).map((component) =>
+      componentToLine(component, uid()),
+    )
+    setLines(restored)
     setForm({
       name: meal.name,
       calories: String(meal.calories),
@@ -356,7 +349,11 @@ export function SavedMeals() {
       servingGrams: meal.servingGrams != null ? String(meal.servingGrams) : '',
       kind: savedPresetKind(meal),
     })
-    setEntryMode('manual')
+    setEntryMode(
+      savedPresetKind(meal) === 'meal' && restored.length > 0
+        ? 'compose'
+        : 'manual',
+    )
     setOpen(true)
   }
 
@@ -371,11 +368,13 @@ export function SavedMeals() {
     if (editing?.id === meal.id) setOpen(false)
   }
 
-  function submitForm() {
+  function buildMealPayload(): Omit<SavedMeal, 'id'> | null {
     const fromLines = form.kind === 'meal' && namedLines.length > 0
     const totals = fromLines ? lineTotals : null
-    const payload: Omit<SavedMeal, 'id'> = {
-      name: form.name.trim(),
+    const name = form.name.trim() || suggestMealName(namedLines)
+    if (!name) return null
+    return {
+      name,
       calories: totals?.calories ?? parseDecimal(form.calories) ?? 0,
       protein: totals?.protein ?? parseDecimal(form.protein) ?? 0,
       carbs: totals?.carbs ?? parseDecimal(form.carbs) ?? 0,
@@ -388,11 +387,37 @@ export function SavedMeals() {
         totals?.grams ||
         parsePositiveDecimal(form.servingGrams) ||
         undefined,
+      components: fromLines ? namedLines.map(lineToComponent) : undefined,
     }
-    if (!payload.name) return
+  }
+
+  function submitForm() {
+    const payload = buildMealPayload()
+    if (!payload) return
     if (editing) updateSavedMeal(editing.id, payload)
     else addSavedMeal(payload)
     setOpen(false)
+    showToast(
+      payload.kind === 'meal'
+        ? 'נשמר כארוחה קבועה / מתכון'
+        : 'הפריט נשמר בקבועים',
+    )
+  }
+
+  function logComposedToToday() {
+    const payload = buildMealPayload()
+    if (!payload) return
+    addFood({
+      name: payload.name,
+      grams: payload.servingGrams ?? 0,
+      calories: payload.calories,
+      protein: payload.protein,
+      carbs: payload.carbs,
+      fats: payload.fats,
+      source: 'saved-meal',
+    })
+    setOpen(false)
+    showToast('נוסף ליומן היום')
   }
 
   const isMealForm = form.kind === 'meal'
@@ -536,9 +561,6 @@ export function SavedMeals() {
                     setLines([])
                   } else {
                     setEntryMode(editing ? 'manual' : 'compose')
-                    setLines((prev) =>
-                      prev.length ? prev : [emptyIngredientLine(uid())],
-                    )
                   }
                 }}
                 className={[
@@ -560,12 +582,9 @@ export function SavedMeals() {
                 { id: 'compose', label: 'הרכב ארוחה' },
                 { id: 'manual', label: 'הזנה ידנית' },
               ]}
-              onChange={(id) => {
+              onChange={(id) =>
                 setEntryMode(id === 'manual' ? 'manual' : 'compose')
-                if (id === 'compose' && lines.length === 0) {
-                  setLines([emptyIngredientLine(uid())])
-                }
-              }}
+              }
             />
           ) : (
             <ModeTabs
@@ -590,22 +609,32 @@ export function SavedMeals() {
           ) : null}
 
           {isMealForm && entryMode !== 'manual' ? (
-            <div className="space-y-2">
-              <label className="block text-xs text-muted">
-                שמירת מתכון קיים
-                <div className="mt-1">
-                  <CatalogPicker
-                    items={recipeCatalog}
-                    placeholder="חיפוש מתכון או ארוחה מוכנה…"
-                    onSelect={applyRecipe}
-                  />
+            <MealIngredientBuilder
+              catalog={catalog}
+              lines={lines}
+              onChange={setLines}
+            />
+          ) : null}
+
+          {isMealForm && entryMode !== 'manual' ? (
+            <div className="grid grid-cols-4 gap-1 rounded-xl border border-cyan-100 bg-cyan-50/80 p-2">
+              {(
+                [
+                  ['קלוריות', lineTotals.calories, 0],
+                  ['חלבון', lineTotals.protein, 1],
+                  ['פחמימות', lineTotals.carbs, 1],
+                  ['שומן', lineTotals.fats, 1],
+                ] as const
+              ).map(([label, value, digits]) => (
+                <div key={label} className="text-center">
+                  <p className="text-[10px] font-medium text-cyan-800/80">
+                    {label}
+                  </p>
+                  <p className="font-display text-sm font-bold tabular-nums text-cyan-950">
+                    {formatNiceNumber(value, digits)}
+                  </p>
                 </div>
-              </label>
-              <MealIngredientBuilder
-                catalog={ingredientCatalog}
-                lines={lines}
-                onChange={setLines}
-              />
+              ))}
             </div>
           ) : null}
 
@@ -613,10 +642,13 @@ export function SavedMeals() {
             {isMealForm ? 'שם הארוחה' : 'שם'}
             <input
               value={form.name}
-              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+              onChange={(e) => {
+                nameDirty.current = true
+                setForm((p) => ({ ...p, name: e.target.value }))
+              }}
               placeholder={
                 isMealForm
-                  ? 'למשל שייק חלבון ושיבולת שועל'
+                  ? "למשל קוטג' עם 4 פרוסות לחם"
                   : 'למשל 2 פרוסות לחם מלא'
               }
               className="mt-1 field"
@@ -670,35 +702,67 @@ export function SavedMeals() {
           ) : null}
 
           {!isMealForm && picked ? (
-            <PortionPills
-              value={
-                parsePositiveDecimal(form.servingGrams) != null &&
-                picked.servingGrams > 0
-                  ? roundTo(
-                      (parsePositiveDecimal(form.servingGrams) ?? 0) /
-                        picked.servingGrams,
-                      2,
-                    )
-                  : 1
+            <ServingPresetPicker
+              presets={picked.servingPresets}
+              activeId={
+                matchPreset(
+                  picked.servingPresets,
+                  parsePositiveDecimal(form.servingGrams),
+                  'serving',
+                )
               }
-              onChange={(servings) => applyCatalogItem(picked, servings)}
+              onSelectPreset={(preset) => {
+                const macros = macrosFromPer100g(picked.per100g, preset.grams)
+                setForm((p) => ({
+                  ...p,
+                  servingGrams: formatNiceNumber(preset.grams),
+                  calories: String(macros.calories),
+                  protein: String(macros.protein),
+                  carbs: String(macros.carbs),
+                  fats: String(macros.fats),
+                }))
+              }}
+              onSelectGrams={() => {
+                const grams =
+                  parsePositiveDecimal(form.servingGrams) ??
+                  picked.servingGrams
+                const macros = macrosFromPer100g(picked.per100g, grams)
+                setForm((p) => ({
+                  ...p,
+                  servingGrams: formatNiceNumber(grams),
+                  calories: String(macros.calories),
+                  protein: String(macros.protein),
+                  carbs: String(macros.carbs),
+                  fats: String(macros.fats),
+                }))
+              }}
             />
           ) : null}
 
           {!isMealForm || entryMode === 'manual' ? (
             <MacroFields form={form} setForm={setForm} />
-          ) : namedLines.length > 0 ? (
-            <p className="rounded-xl bg-cyan-50 px-3 py-2 text-xs font-medium text-cyan-900">
-              סה״כ: {catalogMacroPreview(lineTotals)}
-              {lineTotals.grams > 0
-                ? ` · ${formatNiceNumber(lineTotals.grams, 0)}ג׳`
-                : ''}
-            </p>
           ) : null}
 
-          <Button type="submit" className="w-full" variant="accent">
-            שמור
-          </Button>
+          {isMealForm && entryMode !== 'manual' ? (
+            <div className="grid grid-cols-1 gap-2">
+              <Button
+                type="button"
+                className="w-full"
+                variant="accent"
+                disabled={namedLines.length === 0}
+                onClick={logComposedToToday}
+              >
+                הוסף ליומן היום
+              </Button>
+              <Button type="submit" className="w-full" variant="surface">
+                שמור כארוחה קבועה / מתכון
+              </Button>
+            </div>
+          ) : (
+            <Button type="submit" className="w-full" variant="accent">
+              שמור
+            </Button>
+          )}
           {editing ? (
             <Button
               type="button"

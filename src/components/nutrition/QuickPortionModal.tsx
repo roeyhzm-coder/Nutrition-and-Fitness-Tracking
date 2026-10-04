@@ -9,10 +9,16 @@ import {
   savedItemServingGrams,
   type FoodAmountUnit,
 } from '../../lib/foodUnits'
+import {
+  GRAMS_PRESET_ID,
+  matchPreset,
+  presetsForFood,
+} from '../../lib/servingPresets'
 import type { FoodLogEntry, SavedMeal } from '../../lib/types'
 import { Button } from '../ui/button'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
+import { ServingPresetPicker } from './ServingPresetPicker'
 
 type QuickPortionModalProps = {
   item: SavedMeal | null
@@ -57,6 +63,17 @@ export function QuickPortionModal({
   const parsed = parsePositiveDecimal(amount)
   const scaled =
     item && parsed != null ? scaleSavedMeal(item, parsed, unit) : null
+  const presets = item
+    ? presetsForFood(item.name, undefined, baseGrams, 'מנה')
+    : []
+  const activePresetId =
+    unit === 'grams'
+      ? GRAMS_PRESET_ID
+      : matchPreset(
+          presets,
+          parsed != null ? parsed * baseGrams : baseGrams,
+          'serving',
+        )
 
   const preview = useMemo(() => {
     if (!scaled) return null
@@ -115,9 +132,28 @@ export function QuickPortionModal({
           </button>
         </div>
 
+        <ServingPresetPicker
+          presets={presets}
+          activeId={activePresetId}
+          onSelectPreset={(preset) => {
+            setUnit('grams')
+            setAmount(formatNiceNumber(preset.grams))
+          }}
+          onSelectGrams={() => {
+            const current = parsePositiveDecimal(amount)
+            const grams =
+              unit === 'grams'
+                ? current ?? baseGrams
+                : (current ?? 1) * baseGrams
+            setUnit('grams')
+            setAmount(formatNiceNumber(grams))
+          }}
+        />
+
         <label className="block text-xs text-muted">
           {unit === 'grams' ? 'גרם' : 'כמות (יחידות / מנות)'}
           <NumericInput
+            decimals={2}
             value={amount}
             onChange={setAmount}
             placeholder={unit === 'grams' ? '100' : '1'}

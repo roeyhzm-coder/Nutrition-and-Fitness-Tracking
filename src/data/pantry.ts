@@ -21,6 +21,15 @@ export const PANTRY_CATEGORY_LABELS: Record<PantryCategory, string> = {
   snacks: 'נשנושים',
 }
 
+export type PantryServingFamily =
+  | 'dairy_tub'
+  | 'bread'
+  | 'egg'
+  | 'scoop'
+  | 'spoon'
+  | 'unit'
+  | 'general'
+
 export type PantryItem = {
   id: string
   name: string
@@ -34,6 +43,7 @@ export type PantryItem = {
   fats: number
   servingGrams: number
   servingLabel: string
+  servingFamily?: PantryServingFamily
 }
 
 function p(
@@ -46,7 +56,11 @@ function p(
   fats: number,
   servingGrams: number,
   servingLabel: string,
-  extra?: { brand?: string; aliases?: string[] },
+  extra?: {
+    brand?: string
+    aliases?: string[]
+    servingFamily?: PantryServingFamily
+  },
 ): PantryItem {
   return {
     id,
@@ -60,6 +74,7 @@ function p(
     servingLabel,
     brand: extra?.brand,
     aliases: extra?.aliases ?? [],
+    servingFamily: extra?.servingFamily,
   }
 }
 
@@ -68,28 +83,35 @@ export const PANTRY_ITEMS: PantryItem[] = [
   p('pantry-cottage-tnuva-5', "קוטג' 5%", 'dairy', 95, 10.7, 1.8, 5, 250, 'גביע', {
     brand: 'תנובה',
     aliases: ['קוטג', 'cottage', 'קוטג תנובה', 'גביע קוטג'],
+    servingFamily: 'dairy_tub',
   }),
   p('pantry-cottage-strauss-5', "קוטג' 5%", 'dairy', 93, 11, 1.5, 5, 250, 'גביע', {
     brand: 'שטראוס',
     aliases: ['קוטג', 'cottage', 'קוטג שטראוס'],
+    servingFamily: 'dairy_tub',
   }),
   p('pantry-cottage-tnuva-3', "קוטג' 3%", 'dairy', 80, 12, 3.5, 3, 250, 'גביע', {
     brand: 'תנובה',
     aliases: ['קוטג', 'cottage', 'קוטג 3'],
+    servingFamily: 'dairy_tub',
   }),
   p('pantry-cottage-tnuva-9', "קוטג' 9%", 'dairy', 130, 10, 3.5, 9, 250, 'גביע', {
     brand: 'תנובה',
     aliases: ['קוטג', 'cottage', 'קוטג 9'],
+    servingFamily: 'dairy_tub',
   }),
   p('pantry-white-cheese-5', 'גבינה לבנה 5%', 'dairy', 97, 11, 3.5, 4.5, 100, 'מנה', {
     brand: 'תנובה',
     aliases: ['גבינה לבנה', 'white cheese'],
+    servingFamily: 'dairy_tub',
   }),
   p('pantry-greek-yogurt-0', 'יוגורט יווני 0%', 'dairy', 57, 10, 4, 0.2, 150, 'גביע', {
     aliases: ['יוגורט', 'greek yogurt', 'יווני'],
+    servingFamily: 'dairy_tub',
   }),
   p('pantry-yogurt-15', 'יוגורט 1.5%', 'dairy', 60, 4.5, 6, 1.5, 150, 'גביע', {
     aliases: ['יוגורט'],
+    servingFamily: 'dairy_tub',
   }),
   p('pantry-milk-1', 'חלב 1%', 'dairy', 42, 3.4, 5, 1, 200, 'כוס', {
     aliases: ['חלב', 'milk'],
@@ -109,8 +131,13 @@ export const PANTRY_ITEMS: PantryItem[] = [
       aliases: ['אלפרו', 'alpro', 'שקדים', 'משקה שקדים', 'חלב שקדים'],
     },
   ),
-  p('pantry-egg-l', 'ביצה L', 'dairy', 133, 12.5, 0.7, 9.2, 60, 'יחידה', {
-    aliases: ['ביצה', 'ביצים', 'egg'],
+  p('pantry-egg-l', 'ביצה L', 'dairy', 133, 12.5, 0.7, 9.2, 60, 'יחידה L', {
+    aliases: ['ביצה', 'ביצים', 'egg', 'L'],
+    servingFamily: 'egg',
+  }),
+  p('pantry-egg-m', 'ביצה M', 'dairy', 133, 12.5, 0.7, 9.2, 50, 'יחידה M', {
+    aliases: ['ביצה', 'ביצים', 'egg', 'M', 'ביצה בינונית'],
+    servingFamily: 'egg',
   }),
 
   p('pantry-mozz-gad-22', 'מוצרלה מגוררת 22%', 'cheese', 285, 21, 0, 22, 30, 'מנה', {
@@ -148,14 +175,21 @@ export const PANTRY_ITEMS: PantryItem[] = [
     {
       brand: "אנג'ל",
       aliases: ['לחם', 'לחם אנגול', 'לחם אנג׳ל', 'angel', 'פרוסה', 'מלא'],
+      servingFamily: 'bread',
     },
   ),
   p('pantry-angel-rye', 'לחם שיפון', 'bread', 230, 8, 40, 2, 35, 'פרוסה', {
     brand: "אנג'ל",
     aliases: ['לחם', 'שיפון', 'angel'],
+    servingFamily: 'bread',
+  }),
+  p('pantry-bread-generic', 'לחם', 'bread', 265, 9, 49, 3.2, 30, 'פרוסה', {
+    aliases: ['לחם', 'פרוסה', 'bread', 'slice'],
+    servingFamily: 'bread',
   }),
   p('pantry-pita-whole', 'פיתה מלאה', 'bread', 265, 9, 50, 2.5, 70, 'יחידה', {
     aliases: ['פיתה', 'pita', 'לחם'],
+    servingFamily: 'bread',
   }),
   p(
     'pantry-tortilla-shkadia',
@@ -201,10 +235,12 @@ export const PANTRY_ITEMS: PantryItem[] = [
     {
       brand: 'Myprotein',
       aliases: ['אבקת', 'חלבון', 'whey', 'myprotein', 'מייפרוטאין', 'סקופ', 'שוקולד'],
+      servingFamily: 'scoop',
     },
   ),
   p('pantry-whey-generic', 'אבקת חלבון', 'protein', 400, 80, 5, 5, 30, 'סקופ', {
     aliases: ['אבקת', 'חלבון', 'whey', 'protein'],
+    servingFamily: 'scoop',
   }),
   p('pantry-chicken-breast', 'חזה עוף מבושל', 'protein', 165, 31, 0, 3.6, 100, 'מנה', {
     aliases: ['עוף', 'חזה', 'chicken'],
@@ -233,9 +269,11 @@ export const PANTRY_ITEMS: PantryItem[] = [
   p('pantry-pb-bd', 'חמאת בוטנים טבעית', 'spreads', 630, 26, 15, 52, 15, 'כף', {
     brand: 'B&D',
     aliases: ['חמאת בוטנים', 'בוטנים', 'peanut', 'bd', 'בי אנד די'],
+    servingFamily: 'spoon',
   }),
   p('pantry-tahini', 'טחינה גולמית', 'spreads', 595, 17, 21, 54, 15, 'כף', {
     aliases: ['טחינה', 'tahini'],
+    servingFamily: 'spoon',
   }),
   p('pantry-hummus', 'חומוס', 'spreads', 166, 8, 14, 10, 50, 'מנה', {
     aliases: ['חומוס', 'hummus'],
@@ -267,8 +305,9 @@ export const PANTRY_ITEMS: PantryItem[] = [
   p('pantry-mayo-light', 'מיונז לייט', 'sauces', 270, 1, 7, 26, 15, 'כף', {
     aliases: ['מיונז', 'mayo', 'רוטב'],
   }),
-  p('pantry-olive-oil', 'שמן זית', 'sauces', 884, 0, 0, 100, 10, 'כף', {
+  p('pantry-olive-oil', 'שמן זית', 'sauces', 884, 0, 0, 100, 15, 'כף', {
     aliases: ['שמן', 'זית', 'olive'],
+    servingFamily: 'spoon',
   }),
   p('pantry-soy-sauce', 'רוטב סויה', 'sauces', 53, 8, 5, 0, 10, 'כף', {
     aliases: ['סויה', 'soy', 'רוטב'],
@@ -334,6 +373,7 @@ export const PANTRY_ITEMS: PantryItem[] = [
     {
       brand: 'Quaker',
       aliases: ['שיבולת', 'שועל', 'oats', 'קווקר', 'quaker'],
+      servingFamily: 'scoop',
     },
   ),
   p(

@@ -2,7 +2,17 @@ import { PANTRY_CATEGORY_LABELS, PANTRY_ITEMS, type PantryItem } from '../data/p
 import { savedPresetKind } from '../data/defaults'
 import { savedItemServingGrams } from './foodUnits'
 import { formatNiceNumber, parsePositiveDecimal, roundTo } from './numericInput'
-import type { Recipe, SavedMeal, SavedPresetKind } from './types'
+import {
+  presetsForFood,
+  type ServingFamily,
+  type ServingPreset,
+} from './servingPresets'
+import type {
+  Recipe,
+  SavedMeal,
+  SavedMealComponent,
+  SavedPresetKind,
+} from './types'
 
 export type MacroPer100g = {
   calories: number
@@ -28,6 +38,8 @@ export type CatalogFood = {
   per100g: MacroPer100g
   source: CatalogSource
   kind: SavedPresetKind
+  servingFamily?: ServingFamily
+  servingPresets: ServingPreset[]
 }
 
 export type MealIngredientLine = {
@@ -42,6 +54,10 @@ export type MealIngredientLine = {
   carbs: number
   fats: number
   per100g: MacroPer100g
+  kind: SavedPresetKind
+  catalogId?: string
+  presetId?: string
+  servingPresets: ServingPreset[]
 }
 
 export function normalizeSearch(value: string): string {
@@ -101,6 +117,14 @@ export function pantryToCatalog(item: PantryItem): CatalogFood {
     },
     source: 'pantry',
     kind: 'item',
+    servingFamily: item.servingFamily,
+    servingPresets: presetsForFood(
+      item.name,
+      item.brand,
+      item.servingGrams,
+      item.servingLabel,
+      item.servingFamily,
+    ),
   }
 }
 
@@ -126,6 +150,14 @@ export function recipeToCatalog(recipe: Recipe): CatalogFood {
     ),
     source: 'recipe',
     kind: 'meal',
+    servingFamily: 'unit',
+    servingPresets: presetsForFood(
+      recipe.name,
+      undefined,
+      servingGrams,
+      'מנה',
+      'unit',
+    ),
   }
 }
 
@@ -152,6 +184,14 @@ export function savedToCatalog(meal: SavedMeal): CatalogFood {
     ),
     source: 'saved',
     kind,
+    servingFamily: kind === 'meal' ? 'unit' : undefined,
+    servingPresets: presetsForFood(
+      meal.name,
+      undefined,
+      servingGrams,
+      'מנה',
+      kind === 'meal' ? 'unit' : undefined,
+    ),
   }
 }
 
@@ -216,18 +256,26 @@ export function catalogMacroPreview(item: {
 }
 
 export function catalogToLine(item: CatalogFood, id: string): MealIngredientLine {
+  const defaultPreset = item.servingPresets[0]
+  const servingGrams = defaultPreset?.grams ?? item.servingGrams
+  const servingLabel = defaultPreset?.label ?? item.servingLabel
+  const macros = macrosFromPer100g(item.per100g, servingGrams)
   return {
     id,
     name: catalogDisplayName(item),
     amount: '1',
     unit: 'serving',
-    servingGrams: item.servingGrams,
-    servingLabel: item.servingLabel,
-    calories: item.calories,
-    protein: item.protein,
-    carbs: item.carbs,
-    fats: item.fats,
+    servingGrams,
+    servingLabel,
+    calories: macros.calories,
+    protein: macros.protein,
+    carbs: macros.carbs,
+    fats: macros.fats,
     per100g: item.per100g,
+    kind: item.kind,
+    catalogId: item.id,
+    presetId: defaultPreset?.id,
+    servingPresets: item.servingPresets,
   }
 }
 
@@ -244,7 +292,109 @@ export function emptyIngredientLine(id: string): MealIngredientLine {
     carbs: 0,
     fats: 0,
     per100g: { calories: 0, protein: 0, carbs: 0, fats: 0 },
+    kind: 'item',
+    servingPresets: presetsForFood('מזון', undefined, 100, 'מנה', 'general'),
   }
+}
+
+export function applyServingPreset(
+  line: MealIngredientLine,
+  preset: ServingPreset,
+): MealIngredientLine {
+  const macros = macrosFromPer100g(line.per100g, preset.grams)
+  return {
+    ...line,
+    unit: 'serving',
+    amount: '1',
+    servingGrams: preset.grams,
+    servingLabel: preset.label,
+    presetId: preset.id,
+    calories: macros.calories,
+    protein: macros.protein,
+    carbs: macros.carbs,
+    fats: macros.fats,
+  }
+}
+
+export function applyManualGrams(
+  line: MealIngredientLine,
+  gramsDraft: string,
+): MealIngredientLine {
+  const grams = parsePositiveDecimal(gramsDraft)
+  const macros =
+    grams != null
+      ? macrosFromPer100g(line.per100g, grams)
+      : { calories: 0, protein: 0, carbs: 0, fats: 0 }
+  return {
+    ...line,
+    unit: 'grams',
+    amount: gramsDraft,
+    presetId: undefined,
+    calories: macros.calories,
+    protein: macros.protein,
+    carbs: macros.carbs,
+    fats: macros.fats,
+  }
+}
+
+export function lineToComponent(line: MealIngredientLine): SavedMealComponent {
+  return {
+    name: line.name,
+    amount: line.amount,
+    unit: line.unit,
+    servingGrams: line.servingGrams,
+    servingLabel: line.servingLabel,
+    calories: line.calories,
+    protein: line.protein,
+    carbs: line.carbs,
+    fats: line.fats,
+    per100g: line.per100g,
+    kind: line.kind,
+    catalogId: line.catalogId,
+    presetId: line.presetId,
+  }
+}
+
+export function componentToLine(
+  component: SavedMealComponent,
+  id: string,
+): MealIngredientLine {
+  return {
+    id,
+    name: component.name,
+    amount: component.amount,
+    unit: component.unit,
+    servingGrams: component.servingGrams,
+    servingLabel: component.servingLabel,
+    calories: component.calories,
+    protein: component.protein,
+    carbs: component.carbs,
+    fats: component.fats,
+    per100g: component.per100g,
+    kind: component.kind ?? 'item',
+    catalogId: component.catalogId,
+    presetId: component.presetId,
+    servingPresets: presetsForFood(
+      component.name,
+      undefined,
+      component.servingGrams,
+      component.servingLabel,
+      component.kind === 'meal' ? 'unit' : undefined,
+    ),
+  }
+}
+
+export function suggestMealName(lines: MealIngredientLine[]): string {
+  const named = lines.filter((line) => line.name.trim())
+  if (named.length === 0) return ''
+  const describe = (line: MealIngredientLine) => {
+    const amount = line.amount.trim() || '1'
+    if (line.unit === 'grams') return `${amount} גרם ${line.name}`
+    return `${amount} ${line.servingLabel} ${line.name}`
+  }
+  if (named.length === 1) return describe(named[0])
+  const [first, ...rest] = named
+  return `${first.name} עם ${rest.map(describe).join(' ו')}`
 }
 
 export function scaleIngredientLine(line: MealIngredientLine) {

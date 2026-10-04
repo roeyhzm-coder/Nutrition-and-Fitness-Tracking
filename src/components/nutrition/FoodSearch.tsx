@@ -2,16 +2,19 @@ import { useEffect, useRef, useState } from 'react'
 import { Plus, Star } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import {
+  formatNiceNumber,
   parseDecimal,
   parsePositiveDecimal,
 } from '../../lib/numericInput'
 import {
   DEFAULT_GRAMS_AMOUNT,
   DEFAULT_SERVING_AMOUNT,
+  gramsPerServing,
   type FoodAmountUnit,
   resolveAmountGrams,
   servingHint,
 } from '../../lib/foodUnits'
+import { matchPreset, presetsForFood } from '../../lib/servingPresets'
 import type { FoodProduct } from '../../lib/openFoodFacts'
 import { searchOpenFoodFacts } from '../../lib/openFoodFacts'
 import type { FoodLogEntry, SavedMeal } from '../../lib/types'
@@ -20,6 +23,7 @@ import { Card } from '../ui/Card'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
+import { ServingPresetPicker } from './ServingPresetPicker'
 
 type FoodSearchProps = {
   onAdd: (entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) => void
@@ -230,6 +234,10 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
           const unit = unitOf(p.code)
           const grams = gramsOf(p)
           const favorite = isFavorite(productLabel(p))
+          const servingG = gramsPerServing(p.name, p.brand)
+          const presets = presetsForFood(p.name, p.brand, servingG, 'מנה')
+          const activePresetId =
+            unit === 'grams' ? matchPreset(presets, grams, 'serving') : ''
           return (
             <li
               key={p.code}
@@ -255,6 +263,22 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
                       ? `${Math.round(p.caloriesPer100g)} קק״ל/100ג׳`
                       : 'ללא נתונים'}
                   </p>
+                  <div className="mt-2">
+                    <ServingPresetPicker
+                      presets={presets}
+                      activeId={activePresetId}
+                      onSelectPreset={(preset) => {
+                        switchUnit(p, 'grams')
+                        setAmount(p.code, 'grams', formatNiceNumber(preset.grams))
+                      }}
+                      onSelectGrams={() => {
+                        switchUnit(p, 'grams')
+                        if (!amountOf(p.code, 'grams')) {
+                          setAmount(p.code, 'grams', DEFAULT_GRAMS_AMOUNT)
+                        }
+                      }}
+                    />
+                  </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <NumericInput
                       decimals={2}
