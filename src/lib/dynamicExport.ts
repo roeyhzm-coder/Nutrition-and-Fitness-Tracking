@@ -188,17 +188,62 @@ function csvEscape(value: string | number | boolean | null): string {
   return text
 }
 
+const PROMPT_OMIT_ENTITIES = new Set([
+  'workoutTemplates',
+  'workoutPrograms',
+  'setLogs',
+])
+
+const INTERNAL_KEY_RE =
+  /^(id|.*Id|.*_id|programId|dayId|exerciseId|templateId|sourceTemplateId|trackId|habitId|workoutId)$/i
+const UUID_RE =
+  /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi
+
+function isInternalKey(key: string) {
+  return INTERNAL_KEY_RE.test(key)
+}
+
+function stripInternalValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    const trimmed = value.replace(UUID_RE, '').replace(/\s+/g, ' ').trim()
+    return trimmed
+  }
+  if (Array.isArray(value)) {
+    return value
+      .map(stripInternalValue)
+      .filter((item) => item !== '' && item != null)
+  }
+  if (value && typeof value === 'object') {
+    const next: Record<string, unknown> = {}
+    for (const [key, nested] of Object.entries(value)) {
+      if (isInternalKey(key)) continue
+      const cleaned = stripInternalValue(nested)
+      if (cleaned === '' || cleaned == null) continue
+      next[key] = cleaned
+    }
+    return next
+  }
+  return value
+}
+
 export function formatEntitiesForPrompt(input: DynamicExportInput): string {
   const entities = collectExportEntities(input)
-  const sections = Object.entries(entities).map(([name, rows]) => {
-    if (!rows.length) return `### ${name}\nאין רשומות`
-    const lines = rows.map((row, index) => {
+  const sections = Object.entries(entities).flatMap(([name, rows]) => {
+    if (PROMPT_OMIT_ENTITIES.has(name) || !rows.length) return []
+    const lines = rows.flatMap((row, index) => {
       const fields = Object.entries(row)
-        .map(([key, value]) => `${key}=${stringifyPromptValue(value)}`)
-        .join(' | ')
-      return `${index + 1}. ${fields}`
+        .filter(([key]) => !isInternalKey(key))
+        .map(([key, value]) => {
+          const cleaned = stripInternalValue(value)
+          if (cleaned === '' || cleaned == null) return null
+          return `${key}=${stringifyPromptValue(cleaned)}`
+        })
+        .filter((part): part is string => Boolean(part))
+      if (!fields.length) return []
+      return [`${index + 1}. ${fields.join(' | ')}`]
     })
-    return `### ${name} (${rows.length})\n${lines.join('\n')}`
+    if (!lines.length) return []
+    return [`### ${name} (${lines.length})\n${lines.join('\n')}`]
   })
   return sections.join('\n\n')
 }

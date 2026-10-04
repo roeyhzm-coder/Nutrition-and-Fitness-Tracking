@@ -16,8 +16,6 @@ export function AiExportPanel() {
     goal,
     phase,
     workoutDays,
-    workoutPrograms,
-    workoutTemplates,
     profile,
     activityLogs,
     lifestyleLogs,
@@ -25,6 +23,9 @@ export function AiExportPanel() {
     activeProgram,
     routines,
     focusTracks,
+    consistencyDayMarks,
+    savedMeals,
+    recipes,
   } = useAppData()
   const { workoutLogs } = useWorkoutSession()
   const [copied, setCopied] = useState(false)
@@ -46,12 +47,13 @@ export function AiExportPanel() {
         lifestyleLogs,
         phaseHistory,
         workoutLogs,
-        workoutTemplates,
-        workoutPrograms,
         activeProgramId: activeProgram?.id ?? '',
         activeProgramName: activeProgram?.name ?? '',
         routines,
         focusTracks,
+        consistencyDayMarks,
+        savedMeals,
+        recipes,
       }),
     [
       setLogs,
@@ -68,12 +70,13 @@ export function AiExportPanel() {
       lifestyleLogs,
       phaseHistory,
       workoutLogs,
-      workoutTemplates,
-      workoutPrograms,
       activeProgram?.id,
       activeProgram?.name,
       routines,
       focusTracks,
+      consistencyDayMarks,
+      savedMeals,
+      recipes,
     ],
   )
 
@@ -90,9 +93,8 @@ export function AiExportPanel() {
   return (
     <Card title="ייצוא נתונים">
       <p className="mb-3 text-sm text-muted">
-        הפרומפט סורק דינמית את כל הישויות באפליקציה: לוגים, שגרות, מסלולי מיקוד,
-        תבניות ותוכניות. כל מסלול או אימון חדש נכנס אוטומטית עם תאריך ביצוע
-        וקלוריות.
+        פרומפט ממוקד לניתוח AI: מדדי גוף, עקביות, התקדמות כוח, אימונים אחרונים
+        וממוצעים נעים — בלי תבניות, תוכניות גולמיות או מזהים פנימיים.
       </p>
       <Button className="w-full" variant="accent" onClick={copy}>
         {copied ? 'הועתק ✓' : 'העתק פרומפט AI'}
