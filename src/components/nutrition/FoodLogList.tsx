@@ -2,11 +2,13 @@ import { useState } from 'react'
 import { Pencil, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import { acceptNumericInput, parseDecimal } from '../../lib/numericInput'
+import { GRAMS_UNIT_ID, resolveServingUnits } from '../../lib/servingUnits'
 import type { FoodLogEntry } from '../../lib/types'
 import { Button } from '../ui/button'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
+import { UniversalQuantitySelector } from './UniversalQuantitySelector'
 
 type FoodLogListProps = {
   entries: FoodLogEntry[]
@@ -71,16 +73,22 @@ function EditFoodModal({
 }) {
   const { updateFood } = useAppData()
   const [form, setForm] = useState<EditForm>(() => initialForm(entry))
-  const gramBased = isGramBased(entry)
-  const baseQty = gramBased ? entry.grams : 1
+  const units = resolveServingUnits({
+    name: entry.name,
+    servingGrams: entry.grams > 0 ? entry.grams : 100,
+    servingLabel: 'מנה',
+  })
+  const [unitId, setUnitId] = useState(GRAMS_UNIT_ID)
+  const [grams, setGrams] = useState(entry.grams)
+  const baseGrams = entry.grams > 0 ? entry.grams : 1
 
-  function changeQuantity(raw: string) {
-    const qty = toNum(raw)
-    const factor = qty / baseQty
+  function applyGrams(raw: string, nextGrams: number) {
+    const factor = nextGrams / baseGrams
+    setGrams(nextGrams)
     setForm((p) => ({
       ...p,
       quantity: raw,
-      ...(qty > 0
+      ...(nextGrams > 0
         ? {
             calories: String(Math.round(entry.calories * factor)),
             protein: String(round1(entry.protein * factor)),
@@ -99,10 +107,9 @@ function EditFoodModal({
           e.preventDefault()
           const name = form.name.trim()
           if (!name) return
-          const qty = toNum(form.quantity)
           updateFood(entry.id, {
             name,
-            grams: gramBased && qty > 0 ? qty : entry.grams,
+            grams: grams > 0 ? grams : entry.grams,
             calories: Math.round(toNum(form.calories)),
             protein: round1(toNum(form.protein)),
             carbs: round1(toNum(form.carbs)),
@@ -120,17 +127,21 @@ function EditFoodModal({
             required
           />
         </label>
-        <label className="block text-xs text-muted">
-          {gramBased ? 'כמות (גרם)' : 'מספר מנות'}
-          <NumericInput
-            value={form.quantity}
-            onChange={(next) => changeQuantity(next)}
-            className={inputClass}
+        <div>
+          <p className="mb-1 text-xs text-muted">כמות</p>
+          <UniversalQuantitySelector
+            units={units}
+            quantity={form.quantity}
+            unitId={unitId}
+            onChange={(next) => {
+              setUnitId(next.unitId)
+              applyGrams(next.quantity, next.grams)
+            }}
           />
-          <span className="mt-1 block text-[10px]">
+          <span className="mt-1 block text-[10px] text-muted">
             שינוי הכמות מחשב מחדש את המאקרו באופן יחסי
           </span>
-        </label>
+        </div>
         <div className="grid grid-cols-2 gap-2">
           {MACRO_FIELDS.map(([key, label]) => (
             <label key={key} className="block text-xs text-muted">

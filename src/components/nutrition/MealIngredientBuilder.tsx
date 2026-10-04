@@ -1,19 +1,16 @@
-import { Minus, Plus, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import {
-  applyManualGrams,
-  applyServingPreset,
+  applyLineQuantity,
   catalogMacroPreview,
   catalogToLine,
   scaleIngredientLine,
   type CatalogFood,
   type MealIngredientLine,
 } from '../../lib/foodCatalog'
-import { formatNiceNumber, parsePositiveDecimal, roundTo } from '../../lib/numericInput'
-import { GRAMS_PRESET_ID, matchPreset } from '../../lib/servingPresets'
+import { formatNiceNumber } from '../../lib/numericInput'
 import { uid } from '../../lib/types'
-import { NumericInput } from '../ui/NumericInput'
 import { CatalogPicker } from './CatalogPicker'
-import { ServingPresetPicker } from './ServingPresetPicker'
+import { UniversalQuantitySelector } from './UniversalQuantitySelector'
 
 type MealIngredientBuilderProps = {
   catalog: CatalogFood[]
@@ -33,26 +30,12 @@ export function MealIngredientBuilder({
     onChange(lines.map((line) => (line.id === id ? next : line)))
   }
 
-  function patchAmount(line: MealIngredientLine, amount: string) {
-    if (line.unit === 'grams') {
-      updateLine(line.id, applyManualGrams(line, amount))
-      return
-    }
-    updateLine(line.id, { ...line, amount })
-  }
-
   function removeLine(id: string) {
     onChange(lines.filter((line) => line.id !== id))
   }
 
   function addItem(item: CatalogFood) {
     onChange([...lines, catalogToLine(item, uid())])
-  }
-
-  function bump(line: MealIngredientLine, delta: number) {
-    const current = parsePositiveDecimal(line.amount) ?? 0
-    const next = roundTo(Math.max(0, current + delta), 2)
-    patchAmount(line, next > 0 ? formatNiceNumber(next) : '')
   }
 
   return (
@@ -63,7 +46,7 @@ export function MealIngredientBuilder({
           <div className="mt-1">
             <CatalogPicker
               items={items}
-              placeholder="קוטג, לחם, ביצים, שיבולת, שמן זית…"
+              placeholder="קוטג, לחם, במבה, טונה, ביצים…"
               onSelect={addItem}
             />
           </div>
@@ -88,16 +71,12 @@ export function MealIngredientBuilder({
         <ul className="space-y-1.5">
           {lines.map((line) => {
             const scaled = scaleIngredientLine(line)
-            const activeId =
-              line.presetId ??
-              matchPreset(line.servingPresets, line.servingGrams, line.unit)
-            const step = line.unit === 'grams' ? 10 : 0.5
             return (
               <li
                 key={line.id}
                 className="rounded-xl border border-slate-200 bg-white px-2 py-1.5"
               >
-                <div className="flex min-h-11 items-center gap-1">
+                <div className="flex min-h-11 items-start gap-1">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-semibold text-text">
                       {line.kind === 'meal' ? (
@@ -110,33 +89,24 @@ export function MealIngredientBuilder({
                     <p className="truncate text-[10px] text-muted">
                       {catalogMacroPreview(scaled)}
                       {scaled.grams > 0
-                        ? ` · ${formatNiceNumber(scaled.grams, 1)}ג׳`
+                        ? ` · ${formatNiceNumber(scaled.grams, 2)}ג׳`
                         : ''}
                     </p>
+                    <div className="mt-1">
+                      <UniversalQuantitySelector
+                        compact
+                        units={line.serving_units}
+                        quantity={line.amount}
+                        unitId={line.unitId}
+                        onChange={({ quantity, unitId }) =>
+                          updateLine(
+                            line.id,
+                            applyLineQuantity(line, quantity, unitId),
+                          )
+                        }
+                      />
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    aria-label="הפחת כמות"
-                    onClick={() => bump(line, -step)}
-                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-slate-100"
-                  >
-                    <Minus className="size-3.5" strokeWidth={2} />
-                  </button>
-                  <NumericInput
-                    decimals={2}
-                    value={line.amount}
-                    onChange={(next) => patchAmount(line, next)}
-                    className="field h-8 w-16 shrink-0 px-1.5 py-0 text-center text-xs"
-                    aria-label="כמות"
-                  />
-                  <button
-                    type="button"
-                    aria-label="הוסף כמות"
-                    onClick={() => bump(line, step)}
-                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-muted hover:bg-slate-100"
-                  >
-                    <Plus className="size-3.5" strokeWidth={2} />
-                  </button>
                   <button
                     type="button"
                     aria-label="הסר רכיב"
@@ -145,28 +115,6 @@ export function MealIngredientBuilder({
                   >
                     <X className="size-3.5" strokeWidth={1.75} />
                   </button>
-                </div>
-                <div className="mt-1.5">
-                  <ServingPresetPicker
-                    presets={line.servingPresets}
-                    activeId={
-                      line.unit === 'grams' ? GRAMS_PRESET_ID : activeId
-                    }
-                    onSelectPreset={(preset) =>
-                      updateLine(line.id, applyServingPreset(line, preset))
-                    }
-                    onSelectGrams={() => {
-                      const grams =
-                        parsePositiveDecimal(line.amount) != null &&
-                        line.unit === 'grams'
-                          ? line.amount
-                          : formatNiceNumber(
-                              (parsePositiveDecimal(line.amount) ?? 1) *
-                                line.servingGrams,
-                            )
-                      updateLine(line.id, applyManualGrams(line, grams))
-                    }}
-                  />
                 </div>
               </li>
             )

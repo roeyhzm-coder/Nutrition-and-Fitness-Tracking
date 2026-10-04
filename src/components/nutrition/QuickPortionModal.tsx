@@ -2,23 +2,19 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   formatNiceNumber,
   parsePositiveDecimal,
-  roundTo,
 } from '../../lib/numericInput'
+import { savedItemServingGrams } from '../../lib/foodUnits'
 import {
-  PORTION_PRESETS,
-  savedItemServingGrams,
-  type FoodAmountUnit,
-} from '../../lib/foodUnits'
-import {
-  GRAMS_PRESET_ID,
-  matchPreset,
-  presetsForFood,
-} from '../../lib/servingPresets'
+  defaultServingUnit,
+  effectiveGrams,
+  GRAMS_UNIT_ID,
+  resolveServingUnits,
+} from '../../lib/servingUnits'
 import type { FoodLogEntry, SavedMeal } from '../../lib/types'
+import { macrosFromPer100g } from '../../lib/foodCatalog'
 import { Button } from '../ui/button'
 import { Modal } from '../ui/Modal'
-import { NumericInput } from '../ui/NumericInput'
-import { ServingPresetPicker } from './ServingPresetPicker'
+import { UniversalQuantitySelector } from './UniversalQuantitySelector'
 
 type QuickPortionModalProps = {
   item: SavedMeal | null
@@ -26,54 +22,53 @@ type QuickPortionModalProps = {
   onAdd: (entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) => void
 }
 
-function scaleSavedMeal(
-  item: SavedMeal,
-  amount: number,
-  unit: FoodAmountUnit,
-): Omit<FoodLogEntry, 'id' | 'loggedAt'> {
-  const baseGrams = savedItemServingGrams(item)
-  const factor = unit === 'grams' ? amount / baseGrams : amount
-  const grams = unit === 'grams' ? amount : roundTo(amount * baseGrams, 2)
-  return {
-    name: item.name,
-    grams,
-    calories: Math.round(item.calories * factor),
-    protein: roundTo(item.protein * factor, 2),
-    carbs: roundTo(item.carbs * factor, 2),
-    fats: roundTo(item.fats * factor, 2),
-    source: 'saved-meal',
-  }
-}
-
 export function QuickPortionModal({
   item,
   onClose,
   onAdd,
 }: QuickPortionModalProps) {
-  const [unit, setUnit] = useState<FoodAmountUnit>('serving')
-  const [amount, setAmount] = useState('1')
+  const units = useMemo(() => {
+    if (!item) return []
+    return resolveServingUnits({
+      name: item.name,
+      servingGrams: savedItemServingGrams(item),
+      servingLabel: 'מנה',
+      family: item.kind === 'meal' ? 'unit' : undefined,
+      serving_units: item.serving_units,
+    })
+  }, [item])
+
+  const [quantity, setQuantity] = useState('1')
+  const [unitId, setUnitId] = useState(GRAMS_UNIT_ID)
 
   useEffect(() => {
     if (!item) return
-    setUnit('serving')
-    setAmount('1')
-  }, [item])
+    const def = defaultServingUnit(units)
+    setQuantity('1')
+    setUnitId(def?.id ?? GRAMS_UNIT_ID)
+  }, [item, units])
 
   const baseGrams = item ? savedItemServingGrams(item) : 100
-  const parsed = parsePositiveDecimal(amount)
+  const parsed = parsePositiveDecimal(quantity)
+  const grams = parsed != null ? effectiveGrams(parsed, unitId, units) : 0
+  const factor = baseGrams > 0 ? grams / baseGrams : 0
   const scaled =
-    item && parsed != null ? scaleSavedMeal(item, parsed, unit) : null
-  const presets = item
-    ? presetsForFood(item.name, undefined, baseGrams, 'מנה')
-    : []
-  const activePresetId =
-    unit === 'grams'
-      ? GRAMS_PRESET_ID
-      : matchPreset(
-          presets,
-          parsed != null ? parsed * baseGrams : baseGrams,
-          'serving',
-        )
+    item && grams > 0
+      ? {
+          name: item.name,
+          grams,
+          ...macrosFromPer100g(
+            {
+              calories: (item.calories * 100) / baseGrams,
+              protein: (item.protein * 100) / baseGrams,
+              carbs: (item.carbs * 100) / baseGrams,
+              fats: (item.fats * 100) / baseGrams,
+            },
+            grams,
+          ),
+          source: 'saved-meal' as const,
+        }
+      : null
 
   const preview = useMemo(() => {
     if (!scaled) return null
@@ -85,120 +80,24 @@ export function QuickPortionModal({
     ].join(' · ')
   }, [scaled])
 
-  function switchUnit(next: FoodAmountUnit) {
-    if (next === unit) return
-    const current = parsePositiveDecimal(amount)
-    if (current != null) {
-      if (next === 'grams') {
-        setAmount(formatNiceNumber(current * baseGrams))
-      } else {
-        setAmount(formatNiceNumber(current / baseGrams))
-      }
-    } else {
-      setAmount(next === 'grams' ? formatNiceNumber(baseGrams) : '1')
-    }
-    setUnit(next)
-  }
-
   if (!item) return null
 
   return (
     <Modal open title={`כמות · ${item.name}`} onClose={onClose}>
       <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-50 p-1">
-          <button
-            type="button"
-            onClick={() => switchUnit('serving')}
-            className={[
-              'min-h-10 rounded-lg px-2 text-xs font-semibold transition',
-              unit === 'serving'
-                ? 'bg-white text-text shadow-sm'
-                : 'text-muted hover:text-text',
-            ].join(' ')}
-          >
-            יחידה / מנה
-          </button>
-          <button
-            type="button"
-            onClick={() => switchUnit('grams')}
-            className={[
-              'min-h-10 rounded-lg px-2 text-xs font-semibold transition',
-              unit === 'grams'
-                ? 'bg-white text-text shadow-sm'
-                : 'text-muted hover:text-text',
-            ].join(' ')}
-          >
-            גרם
-          </button>
-        </div>
-
-        <ServingPresetPicker
-          presets={presets}
-          activeId={activePresetId}
-          onSelectPreset={(preset) => {
-            setUnit('grams')
-            setAmount(formatNiceNumber(preset.grams))
-          }}
-          onSelectGrams={() => {
-            const current = parsePositiveDecimal(amount)
-            const grams =
-              unit === 'grams'
-                ? current ?? baseGrams
-                : (current ?? 1) * baseGrams
-            setUnit('grams')
-            setAmount(formatNiceNumber(grams))
+        <UniversalQuantitySelector
+          units={units}
+          quantity={quantity}
+          unitId={unitId}
+          onChange={(next) => {
+            setQuantity(next.quantity)
+            setUnitId(next.unitId)
           }}
         />
 
-        <label className="block text-xs text-muted">
-          {unit === 'grams' ? 'גרם' : 'כמות (יחידות / מנות)'}
-          <NumericInput
-            decimals={2}
-            value={amount}
-            onChange={setAmount}
-            placeholder={unit === 'grams' ? '100' : '1'}
-          />
-        </label>
-
-        <div className="flex flex-wrap gap-1.5">
-          {PORTION_PRESETS.map((preset) => {
-            const label =
-              unit === 'grams'
-                ? formatNiceNumber(roundTo(preset * baseGrams, 2))
-                : formatNiceNumber(preset)
-            const active =
-              parsed != null &&
-              Math.abs(
-                parsed -
-                  (unit === 'grams' ? preset * baseGrams : preset),
-              ) < 0.001
-            return (
-              <button
-                key={preset}
-                type="button"
-                onClick={() =>
-                  setAmount(
-                    unit === 'grams'
-                      ? formatNiceNumber(roundTo(preset * baseGrams, 2))
-                      : formatNiceNumber(preset),
-                  )
-                }
-                className={[
-                  'min-h-9 rounded-full px-3 text-xs font-semibold tabular-nums transition',
-                  active
-                    ? 'bg-cyan-600 text-white'
-                    : 'bg-slate-100 text-muted hover:text-text',
-                ].join(' ')}
-              >
-                {label}
-                {unit === 'serving' ? '×' : 'ג׳'}
-              </button>
-            )
-          })}
-        </div>
-
         <p className="text-[11px] text-muted">
           מנה שמורה ≈ {formatNiceNumber(baseGrams)} גרם
+          {factor > 0 ? ` · ×${formatNiceNumber(factor, 3)}` : ''}
         </p>
         <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-medium tabular-nums text-text">
           {preview ?? 'הזן כמות תקינה'}

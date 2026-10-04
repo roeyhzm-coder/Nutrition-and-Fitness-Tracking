@@ -151,6 +151,13 @@ export type Routine = {
   archivedAt: string | null
 }
 
+export type ServingUnit = {
+  id: string
+  name: string
+  grams: number
+  is_default?: boolean
+}
+
 export type SavedPresetKind = 'item' | 'meal'
 
 export function isSavedPresetKind(value: unknown): value is SavedPresetKind {
@@ -176,6 +183,8 @@ export type SavedMealComponent = {
   kind?: SavedPresetKind
   catalogId?: string
   presetId?: string
+  unitId?: string
+  serving_units?: ServingUnit[]
 }
 
 export type SavedMeal = {
@@ -193,6 +202,7 @@ export type SavedMeal = {
   servingGrams?: number
   /** Structured composer lines so a saved meal can be reopened and scaled. */
   components?: SavedMealComponent[]
+  serving_units?: ServingUnit[]
 }
 
 export type Sex = 'male' | 'female'

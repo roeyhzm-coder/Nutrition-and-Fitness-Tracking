@@ -4,12 +4,16 @@ import { MEAL_TYPE_LABELS } from '../../data/recipes'
 import { useAppData } from '../../context/AppDataContext'
 import { parsePositiveDecimal } from '../../lib/numericInput'
 import { resolveServingGrams } from '../../lib/recipesApi'
+import {
+  defaultServingUnit,
+  effectiveGrams,
+  GRAMS_UNIT_ID,
+  resolveServingUnits,
+} from '../../lib/servingUnits'
 import type { Recipe } from '../../lib/types'
 import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
-import { NumericInput } from '../ui/NumericInput'
-
-const PORTION_MULTIPLIERS = [0.5, 1, 1.5, 2] as const
+import { UniversalQuantitySelector } from './UniversalQuantitySelector'
 
 const MACRO_BADGES = [
   { key: 'calories', label: 'קלוריות', unit: '', chip: 'bg-orange-50 text-orange-700' },
@@ -69,7 +73,16 @@ function RecipeFoodCard({
 }) {
   const { addFood } = useAppData()
   const baseGrams = resolveServingGrams(recipe)
-  const [gramsDraft, setGramsDraft] = useState(String(baseGrams))
+  const units = resolveServingUnits({
+    name: recipe.name,
+    servingGrams: baseGrams,
+    servingLabel: 'מנה',
+    family: 'unit',
+  })
+  const [quantity, setQuantity] = useState('1')
+  const [unitId, setUnitId] = useState(
+    () => defaultServingUnit(units)?.id ?? GRAMS_UNIT_ID,
+  )
   const [justLogged, setJustLogged] = useState(false)
   const loggedTimer = useRef<number | null>(null)
 
@@ -79,17 +92,14 @@ function RecipeFoodCard({
     }
   }, [])
 
-  const grams = parsePositiveDecimal(gramsDraft)
+  const parsed = parsePositiveDecimal(quantity)
+  const grams = parsed != null ? effectiveGrams(parsed, unitId, units) : null
   const factor = grams != null && baseGrams > 0 ? grams / baseGrams : 0
   const macros = {
     calories: scaleCalories(recipe.calories, factor),
     protein: round1(recipe.proteinG * factor),
     carbs: round1(recipe.carbsG * factor),
     fats: round1(recipe.fatsG * factor),
-  }
-
-  function applyMultiplier(multiplier: number) {
-    setGramsDraft(String(Math.round(baseGrams * multiplier)))
   }
 
   function logScaled() {
@@ -134,39 +144,17 @@ function RecipeFoodCard({
         ))}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-2 text-xs text-muted">
-          <span className="font-medium">גרם</span>
-          <NumericInput
-            decimals={2}
-            value={gramsDraft}
-            onChange={setGramsDraft}
-            className="field w-24 px-2 text-sm"
-            aria-label={`גרם עבור ${recipe.name}`}
-          />
-        </label>
-        <div className="flex flex-wrap gap-1.5">
-          {PORTION_MULTIPLIERS.map((multiplier) => {
-            const active =
-              grams != null &&
-              Math.abs(grams - baseGrams * multiplier) < 0.51
-            return (
-              <button
-                key={multiplier}
-                type="button"
-                onClick={() => applyMultiplier(multiplier)}
-                className={[
-                  'min-h-9 rounded-xl px-2.5 text-xs font-semibold tabular-nums transition',
-                  active
-                    ? 'bg-orange-500 text-white'
-                    : 'bg-white text-muted ring-1 ring-slate-200 hover:text-text',
-                ].join(' ')}
-              >
-                {multiplier}x
-              </button>
-            )
-          })}
-        </div>
+      <div className="mt-3">
+        <UniversalQuantitySelector
+          units={units}
+          quantity={quantity}
+          unitId={unitId}
+          onChange={(next) => {
+            setQuantity(next.quantity)
+            setUnitId(next.unitId)
+          }}
+          ariaLabel={`כמות עבור ${recipe.name}`}
+        />
       </div>
 
       <Button

@@ -3,10 +3,13 @@ import { savedPresetKind } from '../data/defaults'
 import { savedItemServingGrams } from './foodUnits'
 import { formatNiceNumber, parsePositiveDecimal, roundTo } from './numericInput'
 import {
-  presetsForFood,
+  defaultServingUnit,
+  effectiveGrams,
+  GRAMS_UNIT_ID,
+  resolveServingUnits,
   type ServingFamily,
-  type ServingPreset,
-} from './servingPresets'
+} from './servingUnits'
+import type { ServingUnit } from './types'
 import type {
   Recipe,
   SavedMeal,
@@ -39,7 +42,8 @@ export type CatalogFood = {
   source: CatalogSource
   kind: SavedPresetKind
   servingFamily?: ServingFamily
-  servingPresets: ServingPreset[]
+  serving_units: ServingUnit[]
+  servingPresets: ServingUnit[]
 }
 
 export type MealIngredientLine = {
@@ -47,6 +51,7 @@ export type MealIngredientLine = {
   name: string
   amount: string
   unit: 'grams' | 'serving'
+  unitId: string
   servingGrams: number
   servingLabel: string
   calories: number
@@ -57,7 +62,8 @@ export type MealIngredientLine = {
   kind: SavedPresetKind
   catalogId?: string
   presetId?: string
-  servingPresets: ServingPreset[]
+  serving_units: ServingUnit[]
+  servingPresets: ServingUnit[]
 }
 
 export function normalizeSearch(value: string): string {
@@ -95,8 +101,22 @@ function per100gFromServing(
   }
 }
 
+function withUnits(
+  units: ServingUnit[],
+): { serving_units: ServingUnit[]; servingPresets: ServingUnit[] } {
+  return { serving_units: units, servingPresets: units }
+}
+
 export function pantryToCatalog(item: PantryItem): CatalogFood {
   const macros = macrosFromPer100g(item, item.servingGrams)
+  const units = resolveServingUnits({
+    name: item.name,
+    brand: item.brand,
+    servingGrams: item.servingGrams,
+    servingLabel: item.servingLabel,
+    family: item.servingFamily,
+    serving_units: item.serving_units,
+  })
   return {
     id: item.id,
     name: item.name,
@@ -118,13 +138,7 @@ export function pantryToCatalog(item: PantryItem): CatalogFood {
     source: 'pantry',
     kind: 'item',
     servingFamily: item.servingFamily,
-    servingPresets: presetsForFood(
-      item.name,
-      item.brand,
-      item.servingGrams,
-      item.servingLabel,
-      item.servingFamily,
-    ),
+    ...withUnits(units),
   }
 }
 
@@ -151,12 +165,13 @@ export function recipeToCatalog(recipe: Recipe): CatalogFood {
     source: 'recipe',
     kind: 'meal',
     servingFamily: 'unit',
-    servingPresets: presetsForFood(
-      recipe.name,
-      undefined,
-      servingGrams,
-      'מנה',
-      'unit',
+    ...withUnits(
+      resolveServingUnits({
+        name: recipe.name,
+        servingGrams,
+        servingLabel: 'מנה',
+        family: 'unit',
+      }),
     ),
   }
 }
@@ -185,12 +200,14 @@ export function savedToCatalog(meal: SavedMeal): CatalogFood {
     source: 'saved',
     kind,
     servingFamily: kind === 'meal' ? 'unit' : undefined,
-    servingPresets: presetsForFood(
-      meal.name,
-      undefined,
-      servingGrams,
-      'מנה',
-      kind === 'meal' ? 'unit' : undefined,
+    ...withUnits(
+      resolveServingUnits({
+        name: meal.name,
+        servingGrams,
+        servingLabel: 'מנה',
+        family: kind === 'meal' ? 'unit' : undefined,
+        serving_units: meal.serving_units,
+      }),
     ),
   }
 }
@@ -256,15 +273,17 @@ export function catalogMacroPreview(item: {
 }
 
 export function catalogToLine(item: CatalogFood, id: string): MealIngredientLine {
-  const defaultPreset = item.servingPresets[0]
-  const servingGrams = defaultPreset?.grams ?? item.servingGrams
-  const servingLabel = defaultPreset?.label ?? item.servingLabel
+  const units = item.serving_units
+  const def = defaultServingUnit(units)
+  const servingGrams = def?.grams ?? item.servingGrams
+  const servingLabel = def?.name ?? item.servingLabel
   const macros = macrosFromPer100g(item.per100g, servingGrams)
   return {
     id,
     name: catalogDisplayName(item),
     amount: '1',
     unit: 'serving',
+    unitId: def?.id ?? GRAMS_UNIT_ID,
     servingGrams,
     servingLabel,
     calories: macros.calories,
@@ -274,17 +293,25 @@ export function catalogToLine(item: CatalogFood, id: string): MealIngredientLine
     per100g: item.per100g,
     kind: item.kind,
     catalogId: item.id,
-    presetId: defaultPreset?.id,
-    servingPresets: item.servingPresets,
+    presetId: def?.id,
+    serving_units: units,
+    servingPresets: units,
   }
 }
 
 export function emptyIngredientLine(id: string): MealIngredientLine {
+  const units = resolveServingUnits({
+    name: 'מזון',
+    servingGrams: 100,
+    servingLabel: 'מנה',
+    family: 'general',
+  })
   return {
     id,
     name: '',
     amount: '1',
     unit: 'serving',
+    unitId: defaultServingUnit(units)?.id ?? GRAMS_UNIT_ID,
     servingGrams: 100,
     servingLabel: 'מנה',
     calories: 0,
@@ -293,43 +320,32 @@ export function emptyIngredientLine(id: string): MealIngredientLine {
     fats: 0,
     per100g: { calories: 0, protein: 0, carbs: 0, fats: 0 },
     kind: 'item',
-    servingPresets: presetsForFood('מזון', undefined, 100, 'מנה', 'general'),
+    serving_units: units,
+    servingPresets: units,
   }
 }
 
-export function applyServingPreset(
+export function applyLineQuantity(
   line: MealIngredientLine,
-  preset: ServingPreset,
+  quantity: string,
+  unitId: string,
 ): MealIngredientLine {
-  const macros = macrosFromPer100g(line.per100g, preset.grams)
-  return {
-    ...line,
-    unit: 'serving',
-    amount: '1',
-    servingGrams: preset.grams,
-    servingLabel: preset.label,
-    presetId: preset.id,
-    calories: macros.calories,
-    protein: macros.protein,
-    carbs: macros.carbs,
-    fats: macros.fats,
-  }
-}
-
-export function applyManualGrams(
-  line: MealIngredientLine,
-  gramsDraft: string,
-): MealIngredientLine {
-  const grams = parsePositiveDecimal(gramsDraft)
+  const units = line.serving_units
+  const amount = parsePositiveDecimal(quantity)
+  const grams = amount != null ? effectiveGrams(amount, unitId, units) : 0
   const macros =
-    grams != null
+    grams > 0
       ? macrosFromPer100g(line.per100g, grams)
       : { calories: 0, protein: 0, carbs: 0, fats: 0 }
+  const found = units.find((u) => u.id === unitId)
   return {
     ...line,
-    unit: 'grams',
-    amount: gramsDraft,
-    presetId: undefined,
+    amount: quantity,
+    unitId,
+    unit: unitId === GRAMS_UNIT_ID ? 'grams' : 'serving',
+    servingGrams: found?.grams ?? (unitId === GRAMS_UNIT_ID ? 1 : line.servingGrams),
+    servingLabel: found?.name ?? (unitId === GRAMS_UNIT_ID ? 'גרמים' : line.servingLabel),
+    presetId: found?.id,
     calories: macros.calories,
     protein: macros.protein,
     carbs: macros.carbs,
@@ -352,6 +368,8 @@ export function lineToComponent(line: MealIngredientLine): SavedMealComponent {
     kind: line.kind,
     catalogId: line.catalogId,
     presetId: line.presetId,
+    unitId: line.unitId,
+    serving_units: line.serving_units,
   }
 }
 
@@ -359,29 +377,39 @@ export function componentToLine(
   component: SavedMealComponent,
   id: string,
 ): MealIngredientLine {
-  return {
-    id,
+  const units = resolveServingUnits({
     name: component.name,
-    amount: component.amount,
-    unit: component.unit,
     servingGrams: component.servingGrams,
     servingLabel: component.servingLabel,
-    calories: component.calories,
-    protein: component.protein,
-    carbs: component.carbs,
-    fats: component.fats,
-    per100g: component.per100g,
-    kind: component.kind ?? 'item',
-    catalogId: component.catalogId,
-    presetId: component.presetId,
-    servingPresets: presetsForFood(
-      component.name,
-      undefined,
-      component.servingGrams,
-      component.servingLabel,
-      component.kind === 'meal' ? 'unit' : undefined,
-    ),
-  }
+    family: component.kind === 'meal' ? 'unit' : undefined,
+    serving_units: component.serving_units,
+  })
+  const unitId =
+    component.unitId ??
+    (component.unit === 'grams' ? GRAMS_UNIT_ID : component.presetId ?? defaultServingUnit(units)?.id ?? GRAMS_UNIT_ID)
+  return applyLineQuantity(
+    {
+      id,
+      name: component.name,
+      amount: component.amount,
+      unit: component.unit,
+      unitId,
+      servingGrams: component.servingGrams,
+      servingLabel: component.servingLabel,
+      calories: component.calories,
+      protein: component.protein,
+      carbs: component.carbs,
+      fats: component.fats,
+      per100g: component.per100g,
+      kind: component.kind ?? 'item',
+      catalogId: component.catalogId,
+      presetId: component.presetId,
+      serving_units: units,
+      servingPresets: units,
+    },
+    component.amount,
+    unitId,
+  )
 }
 
 export function suggestMealName(lines: MealIngredientLine[]): string {
@@ -402,16 +430,12 @@ export function scaleIngredientLine(line: MealIngredientLine) {
   if (amount == null) {
     return { calories: 0, protein: 0, carbs: 0, fats: 0, grams: 0 }
   }
-  if (line.unit === 'grams') {
-    return { ...macrosFromPer100g(line.per100g, amount), grams: amount }
-  }
-  return {
-    calories: Math.round(line.calories * amount),
-    protein: roundTo(line.protein * amount, 2),
-    carbs: roundTo(line.carbs * amount, 2),
-    fats: roundTo(line.fats * amount, 2),
-    grams: roundTo(amount * line.servingGrams, 2),
-  }
+  const grams = effectiveGrams(
+    amount,
+    line.unitId ?? (line.unit === 'grams' ? GRAMS_UNIT_ID : line.presetId ?? GRAMS_UNIT_ID),
+    line.serving_units ?? line.servingPresets,
+  )
+  return { ...macrosFromPer100g(line.per100g, grams), grams }
 }
 
 export function sumIngredientLines(lines: MealIngredientLine[]) {

@@ -1,3 +1,5 @@
+import type { ServingUnit } from '../lib/types'
+
 export type PantryCategory =
   | 'dairy'
   | 'cheese'
@@ -27,6 +29,9 @@ export type PantryServingFamily =
   | 'egg'
   | 'scoop'
   | 'spoon'
+  | 'snack_bag'
+  | 'canned'
+  | 'produce'
   | 'unit'
   | 'general'
 
@@ -44,6 +49,7 @@ export type PantryItem = {
   servingGrams: number
   servingLabel: string
   servingFamily?: PantryServingFamily
+  serving_units?: ServingUnit[]
 }
 
 function p(
@@ -60,6 +66,7 @@ function p(
     brand?: string
     aliases?: string[]
     servingFamily?: PantryServingFamily
+    serving_units?: ServingUnit[]
   },
 ): PantryItem {
   return {
@@ -75,6 +82,7 @@ function p(
     brand: extra?.brand,
     aliases: extra?.aliases ?? [],
     servingFamily: extra?.servingFamily,
+    serving_units: extra?.serving_units,
   }
 }
 
@@ -84,6 +92,11 @@ export const PANTRY_ITEMS: PantryItem[] = [
     brand: 'תנובה',
     aliases: ['קוטג', 'cottage', 'קוטג תנובה', 'גביע קוטג'],
     servingFamily: 'dairy_tub',
+    serving_units: [
+      { id: 'tub-full', name: 'גביע שלם (250g)', grams: 250, is_default: true },
+      { id: 'tub-half', name: 'חצי גביע (125g)', grams: 125 },
+      { id: 'heaped-tbsp', name: 'כף גדושה (30g)', grams: 30 },
+    ],
   }),
   p('pantry-cottage-strauss-5', "קוטג' 5%", 'dairy', 93, 11, 1.5, 5, 250, 'גביע', {
     brand: 'שטראוס',
@@ -134,10 +147,18 @@ export const PANTRY_ITEMS: PantryItem[] = [
   p('pantry-egg-l', 'ביצה L', 'dairy', 133, 12.5, 0.7, 9.2, 60, 'יחידה L', {
     aliases: ['ביצה', 'ביצים', 'egg', 'L'],
     servingFamily: 'egg',
+    serving_units: [
+      { id: 'egg-l', name: 'יחידה L (60g)', grams: 60, is_default: true },
+      { id: 'egg-m', name: 'יחידה M (50g)', grams: 50 },
+    ],
   }),
   p('pantry-egg-m', 'ביצה M', 'dairy', 133, 12.5, 0.7, 9.2, 50, 'יחידה M', {
     aliases: ['ביצה', 'ביצים', 'egg', 'M', 'ביצה בינונית'],
     servingFamily: 'egg',
+    serving_units: [
+      { id: 'egg-m', name: 'יחידה M (50g)', grams: 50, is_default: true },
+      { id: 'egg-l', name: 'יחידה L (60g)', grams: 60 },
+    ],
   }),
 
   p('pantry-mozz-gad-22', 'מוצרלה מגוררת 22%', 'cheese', 285, 21, 0, 22, 30, 'מנה', {
@@ -187,9 +208,22 @@ export const PANTRY_ITEMS: PantryItem[] = [
     aliases: ['לחם', 'פרוסה', 'bread', 'slice'],
     servingFamily: 'bread',
   }),
-  p('pantry-pita-whole', 'פיתה מלאה', 'bread', 265, 9, 50, 2.5, 70, 'יחידה', {
+  p('pantry-pita-whole', 'פיתה מלאה', 'bread', 265, 9, 50, 2.5, 100, 'פיתה', {
     aliases: ['פיתה', 'pita', 'לחם'],
     servingFamily: 'bread',
+    serving_units: [
+      { id: 'pita-100', name: 'פיתה (100g)', grams: 100, is_default: true },
+      { id: 'pita-70', name: 'פיתה קטנה (70g)', grams: 70 },
+      { id: 'slice-30', name: 'פרוסה (30g)', grams: 30 },
+    ],
+  }),
+  p('pantry-bun', 'לחמניה', 'bread', 270, 9, 50, 3.5, 80, 'לחמניה', {
+    aliases: ['לחמניה', 'לחמני', 'bun', 'roll'],
+    servingFamily: 'bread',
+    serving_units: [
+      { id: 'bun-80', name: 'לחמניה (80g)', grams: 80, is_default: true },
+      { id: 'slice-30', name: 'פרוסה (30g)', grams: 30 },
+    ],
   }),
   p(
     'pantry-tortilla-shkadia',
@@ -241,6 +275,18 @@ export const PANTRY_ITEMS: PantryItem[] = [
   p('pantry-whey-generic', 'אבקת חלבון', 'protein', 400, 80, 5, 5, 30, 'סקופ', {
     aliases: ['אבקת', 'חלבון', 'whey', 'protein'],
     servingFamily: 'scoop',
+    serving_units: [
+      { id: 'scoop-30', name: 'סקופ (30g)', grams: 30, is_default: true },
+      { id: 'scoop-25', name: 'סקופ (25g)', grams: 25 },
+    ],
+  }),
+  p('pantry-tuna-water', 'טונה במים', 'protein', 116, 26, 0, 1, 112, 'קופסה מסוננת', {
+    aliases: ['טונה', 'tuna', 'שימורים', 'קופסה'],
+    servingFamily: 'canned',
+    serving_units: [
+      { id: 'tuna-drained', name: 'קופסה מסוננת (112g)', grams: 112, is_default: true },
+      { id: 'tuna-full', name: 'קופסה מלאה (160g)', grams: 160 },
+    ],
   }),
   p('pantry-chicken-breast', 'חזה עוף מבושל', 'protein', 165, 31, 0, 3.6, 100, 'מנה', {
     aliases: ['עוף', 'חזה', 'chicken'],
@@ -322,8 +368,13 @@ export const PANTRY_ITEMS: PantryItem[] = [
   p('pantry-tomato', 'עגבנייה', 'produce', 18, 0.9, 3.9, 0.2, 100, 'יחידה', {
     aliases: ['עגבניה', 'tomato'],
   }),
-  p('pantry-banana', 'בננה', 'produce', 89, 1.1, 23, 0.3, 120, 'יחידה', {
+  p('pantry-banana', 'בננה', 'produce', 89, 1.1, 23, 0.3, 100, 'יחידה בינונית', {
     aliases: ['בננה', 'banana'],
+    servingFamily: 'produce',
+    serving_units: [
+      { id: 'banana-med', name: 'יחידה בינונית (100g)', grams: 100, is_default: true },
+      { id: 'banana-large', name: 'יחידה גדולה (120g)', grams: 120 },
+    ],
   }),
   p('pantry-apple', 'תפוח', 'produce', 52, 0.3, 14, 0.2, 150, 'יחידה', {
     aliases: ['תפוח', 'apple'],
@@ -428,6 +479,27 @@ export const PANTRY_ITEMS: PantryItem[] = [
     },
   ),
 
+  p(
+    'pantry-bamba',
+    'במבה',
+    'snacks',
+    534,
+    15.5,
+    49,
+    33,
+    80,
+    'שקית גדולה',
+    {
+      brand: 'אוסם',
+      aliases: ['במבה', 'bamba', 'חטיף', 'שקית'],
+      servingFamily: 'snack_bag',
+      serving_units: [
+        { id: 'bamba-small', name: 'שקית קטנה (25g)', grams: 25 },
+        { id: 'bamba-large', name: 'שקית גדולה (80g)', grams: 80, is_default: true },
+        { id: 'bamba-mega', name: 'שקית ענק (100g)', grams: 100 },
+      ],
+    },
+  ),
   p(
     'pantry-chips-sweetango',
     "שוקולד צ'יפס ללא סוכר",

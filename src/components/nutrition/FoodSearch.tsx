@@ -1,20 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Star } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
+import { parseDecimal, parsePositiveDecimal } from '../../lib/numericInput'
+import { gramsPerServing } from '../../lib/foodUnits'
 import {
-  formatNiceNumber,
-  parseDecimal,
-  parsePositiveDecimal,
-} from '../../lib/numericInput'
-import {
-  DEFAULT_GRAMS_AMOUNT,
-  DEFAULT_SERVING_AMOUNT,
-  gramsPerServing,
-  type FoodAmountUnit,
-  resolveAmountGrams,
-  servingHint,
-} from '../../lib/foodUnits'
-import { matchPreset, presetsForFood } from '../../lib/servingPresets'
+  defaultServingUnit,
+  effectiveGrams,
+  GRAMS_UNIT_ID,
+  resolveServingUnits,
+} from '../../lib/servingUnits'
 import type { FoodProduct } from '../../lib/openFoodFacts'
 import { searchOpenFoodFacts } from '../../lib/openFoodFacts'
 import type { FoodLogEntry, SavedMeal } from '../../lib/types'
@@ -23,7 +17,7 @@ import { Card } from '../ui/Card'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
-import { ServingPresetPicker } from './ServingPresetPicker'
+import { UniversalQuantitySelector } from './UniversalQuantitySelector'
 
 type FoodSearchProps = {
   onAdd: (entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) => void
@@ -56,9 +50,7 @@ function macrosForGrams(product: FoodProduct, grams: number) {
   }
 }
 
-function defaultAmount(unit: FoodAmountUnit) {
-  return unit === 'grams' ? DEFAULT_GRAMS_AMOUNT : DEFAULT_SERVING_AMOUNT
-}
+type QtyDraft = { quantity: string; unitId: string }
 
 export function FoodSearch({ onAdd }: FoodSearchProps) {
   const { addSavedMeal, savedMeals } = useAppData()
@@ -66,8 +58,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
   const [results, setResults] = useState<FoodProduct[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [amounts, setAmounts] = useState<Record<string, string>>({})
-  const [units, setUnits] = useState<Record<string, FoodAmountUnit>>({})
+  const [qtyDrafts, setQtyDrafts] = useState<Record<string, QtyDraft>>({})
   const [customOpen, setCustomOpen] = useState(false)
   const [custom, setCustom] = useState(EMPTY_CUSTOM)
   const [saveCustom, setSaveCustom] = useState(false)
@@ -118,23 +109,29 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
     toastTimer.current = window.setTimeout(() => setToast(null), 2800)
   }
 
-  function unitOf(code: string): FoodAmountUnit {
-    return units[code] ?? 'grams'
+  function unitsOf(product: FoodProduct) {
+    return resolveServingUnits({
+      name: product.name,
+      brand: product.brand,
+      servingGrams: gramsPerServing(product.name, product.brand),
+      servingLabel: 'מנה',
+    })
   }
 
-  function amountOf(code: string, unit: FoodAmountUnit) {
-    return amounts[`${code}:${unit}`] ?? defaultAmount(unit)
-  }
-
-  function setAmount(code: string, unit: FoodAmountUnit, next: string) {
-    setAmounts((prev) => ({ ...prev, [`${code}:${unit}`]: next }))
+  function qtyOf(product: FoodProduct): QtyDraft {
+    return (
+      qtyDrafts[product.code] ?? {
+        quantity: '1',
+        unitId: defaultServingUnit(unitsOf(product))?.id ?? GRAMS_UNIT_ID,
+      }
+    )
   }
 
   function gramsOf(product: FoodProduct): number | null {
-    const unit = unitOf(product.code)
-    const amount = parsePositiveDecimal(amountOf(product.code, unit))
+    const draft = qtyOf(product)
+    const amount = parsePositiveDecimal(draft.quantity)
     if (amount == null) return null
-    return resolveAmountGrams(amount, unit, product.name, product.brand)
+    return effectiveGrams(amount, draft.unitId, unitsOf(product))
   }
 
   function isFavorite(name: string) {
@@ -163,18 +160,17 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
     const grams = gramsOf(product)
     if (grams == null) return
     const macros = macrosForGrams(product, grams)
-    const unit = unitOf(product.code)
-    const amount = amountOf(product.code, unit)
-    const notes =
-      unit === 'serving'
-        ? `${amount} ${servingHint(product.name, product.brand)} · ${round1(grams)} גרם`
-        : `${round1(grams)} גרם`
-    addSavedMeal({ name, ...macros, notes, kind: 'item', servingGrams: grams })
+    const draft = qtyOf(product)
+    const notes = `${draft.quantity} · ${round1(grams)} גרם`
+    addSavedMeal({
+      name,
+      ...macros,
+      notes,
+      kind: 'item',
+      servingGrams: grams,
+      serving_units: unitsOf(product),
+    })
     showToast('נשמר לקבועים שלי')
-  }
-
-  function switchUnit(product: FoodProduct, next: FoodAmountUnit) {
-    setUnits((prev) => ({ ...prev, [product.code]: next }))
   }
 
   function submitCustom() {
@@ -231,13 +227,10 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
 
       <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto">
         {results.map((p) => {
-          const unit = unitOf(p.code)
           const grams = gramsOf(p)
           const favorite = isFavorite(productLabel(p))
-          const servingG = gramsPerServing(p.name, p.brand)
-          const presets = presetsForFood(p.name, p.brand, servingG, 'מנה')
-          const activePresetId =
-            unit === 'grams' ? matchPreset(presets, grams, 'serving') : ''
+          const draft = qtyOf(p)
+          const servingUnits = unitsOf(p)
           return (
             <li
               key={p.code}
@@ -264,40 +257,23 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
                       : 'ללא נתונים'}
                   </p>
                   <div className="mt-2">
-                    <ServingPresetPicker
-                      presets={presets}
-                      activeId={activePresetId}
-                      onSelectPreset={(preset) => {
-                        switchUnit(p, 'grams')
-                        setAmount(p.code, 'grams', formatNiceNumber(preset.grams))
-                      }}
-                      onSelectGrams={() => {
-                        switchUnit(p, 'grams')
-                        if (!amountOf(p.code, 'grams')) {
-                          setAmount(p.code, 'grams', DEFAULT_GRAMS_AMOUNT)
-                        }
-                      }}
+                    <UniversalQuantitySelector
+                      compact
+                      units={servingUnits}
+                      quantity={draft.quantity}
+                      unitId={draft.unitId}
+                      onChange={(next) =>
+                        setQtyDrafts((prev) => ({
+                          ...prev,
+                          [p.code]: {
+                            quantity: next.quantity,
+                            unitId: next.unitId,
+                          },
+                        }))
+                      }
                     />
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <NumericInput
-                      decimals={2}
-                      value={amountOf(p.code, unit)}
-                      onChange={(next) => setAmount(p.code, unit, next)}
-                      className="field w-20 px-2 text-xs"
-                      aria-label={unit === 'grams' ? 'גרמים' : 'פרוסות או מנות'}
-                    />
-                    <select
-                      value={unit}
-                      onChange={(e) =>
-                        switchUnit(p, e.target.value as FoodAmountUnit)
-                      }
-                      className="field w-auto min-w-[8.5rem] px-2 text-xs"
-                      aria-label="יחידת מידה"
-                    >
-                      <option value="grams">גרם</option>
-                      <option value="serving">פרוסה / מנה</option>
-                    </select>
                     <IconButton
                       label={
                         favorite ? 'שמור בקבועים שלי' : 'שמירה לקבועים שלי'
@@ -319,10 +295,9 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
                       הוסף
                     </Button>
                   </div>
-                  {unit === 'serving' ? (
+                  {grams != null ? (
                     <p className="mt-1 text-[10px] text-muted">
-                      {servingHint(p.name, p.brand)}
-                      {grams != null ? ` · סה״כ ${round1(grams)} גרם` : ''}
+                      סה״כ {round1(grams)} גרם
                     </p>
                   ) : null}
                 </div>

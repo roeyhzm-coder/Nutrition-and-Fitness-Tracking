@@ -22,8 +22,8 @@ import {
   type CatalogFood,
   type MealIngredientLine,
 } from '../../lib/foodCatalog'
-import { formatNiceNumber, parseDecimal, parsePositiveDecimal, roundTo } from '../../lib/numericInput'
-import { matchPreset } from '../../lib/servingPresets'
+import { formatNiceNumber, parseDecimal, parsePositiveDecimal } from '../../lib/numericInput'
+import { defaultServingUnit, effectiveGrams, GRAMS_UNIT_ID } from '../../lib/servingUnits'
 import { uid, type SavedMeal, type SavedPresetKind } from '../../lib/types'
 import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
@@ -32,7 +32,7 @@ import { NumericInput } from '../ui/NumericInput'
 import { CatalogPicker } from './CatalogPicker'
 import { MealIngredientBuilder } from './MealIngredientBuilder'
 import { QuickPortionModal } from './QuickPortionModal'
-import { ServingPresetPicker } from './ServingPresetPicker'
+import { UniversalQuantitySelector } from './UniversalQuantitySelector'
 
 const EMPTY_FORM = {
   name: '',
@@ -236,6 +236,7 @@ export function SavedMeals() {
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | null>(null)
   const nameDirty = useRef(false)
+  const [itemQty, setItemQty] = useState({ quantity: '1', unitId: GRAMS_UNIT_ID })
 
   const q = query.trim()
   const items = useMemo(
@@ -304,10 +305,13 @@ export function SavedMeals() {
     toastTimer.current = window.setTimeout(() => setToast(null), 2200)
   }
 
-  function applyCatalogItem(item: CatalogFood, servings = 1) {
-    const grams = roundTo(item.servingGrams * servings, 2)
+  function applyCatalogItem(item: CatalogFood) {
+    const def = defaultServingUnit(item.serving_units)
+    const unitId = def?.id ?? GRAMS_UNIT_ID
+    const grams = effectiveGrams(1, unitId, item.serving_units)
     const macros = macrosFromPer100g(item.per100g, grams)
     setPicked(item)
+    setItemQty({ quantity: '1', unitId })
     setForm((prev) => ({
       ...prev,
       name: catalogDisplayName(item),
@@ -675,7 +679,7 @@ export function SavedMeals() {
             </label>
           ) : null}
 
-          {!isMealForm || entryMode === 'manual' ? (
+          {((!isMealForm && !picked) || (isMealForm && entryMode === 'manual')) ? (
             <label className="block text-xs text-muted">
               גודל מנה (גרם)
               <NumericInput
@@ -702,34 +706,16 @@ export function SavedMeals() {
           ) : null}
 
           {!isMealForm && picked ? (
-            <ServingPresetPicker
-              presets={picked.servingPresets}
-              activeId={
-                matchPreset(
-                  picked.servingPresets,
-                  parsePositiveDecimal(form.servingGrams),
-                  'serving',
-                )
-              }
-              onSelectPreset={(preset) => {
-                const macros = macrosFromPer100g(picked.per100g, preset.grams)
+            <UniversalQuantitySelector
+              units={picked.serving_units}
+              quantity={itemQty.quantity}
+              unitId={itemQty.unitId}
+              onChange={(next) => {
+                setItemQty({ quantity: next.quantity, unitId: next.unitId })
+                const macros = macrosFromPer100g(picked.per100g, next.grams)
                 setForm((p) => ({
                   ...p,
-                  servingGrams: formatNiceNumber(preset.grams),
-                  calories: String(macros.calories),
-                  protein: String(macros.protein),
-                  carbs: String(macros.carbs),
-                  fats: String(macros.fats),
-                }))
-              }}
-              onSelectGrams={() => {
-                const grams =
-                  parsePositiveDecimal(form.servingGrams) ??
-                  picked.servingGrams
-                const macros = macrosFromPer100g(picked.per100g, grams)
-                setForm((p) => ({
-                  ...p,
-                  servingGrams: formatNiceNumber(grams),
+                  servingGrams: formatNiceNumber(next.grams),
                   calories: String(macros.calories),
                   protein: String(macros.protein),
                   carbs: String(macros.carbs),
