@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
 import { ActiveWorkoutTracker } from '../workouts/ActiveWorkoutTracker'
+import { SyncNoticeToast } from './SyncNoticeToast'
 
 export function AppShell() {
   return (
@@ -10,6 +11,7 @@ export function AppShell() {
       </div>
       <BottomNav />
       <ActiveWorkoutTracker />
+      <SyncNoticeToast />
     </div>
   )
 }

@@ -59,10 +59,13 @@ import {
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import {
   onWindowResume,
+  countNewById,
+  isMobileClient,
   pullAppState,
   pushAppState,
   shouldKeepLocalList,
   subscribeSharedSync,
+  unionById,
   type SyncedAppState,
 } from '../lib/appStateSync'
 import {
@@ -217,6 +220,9 @@ type AppDataContextValue = {
   recipesSyncError: string | null
   syncRecipes: () => Promise<void>
   stateSyncStatus: 'idle' | 'syncing' | 'synced' | 'error'
+  lastSyncNotice: { type: 'ok' | 'error'; message: string } | null
+  clearSyncNotice: () => void
+  syncNow: () => Promise<{ ok: boolean; uploaded: number; error?: string }>
   addSetLog: (entry: Omit<SetLog, 'id' | 'loggedAt'>) => void
   addWeight: (input: {
     weightKg: number
@@ -485,6 +491,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [stateSyncStatus, setStateSyncStatus] = useState<
     'idle' | 'syncing' | 'synced' | 'error'
   >('idle')
+  const [lastSyncNotice, setLastSyncNotice] = useState<{
+    type: 'ok' | 'error'
+    message: string
+  } | null>(null)
   const hydratedRef = useRef(false)
   const skipNextPush = useRef(false)
   const localDirtyRef = useRef(false)
@@ -989,15 +999,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       const next = { ...current, ...patch }
       snapshotRef.current = next
       setStateSyncStatus('syncing')
-      const ok = await pushAppState(next)
-      if (ok) {
+      const result = await pushAppState(next)
+      if (result.ok) {
         localDirtyRef.current = false
         setStateSyncStatus('synced')
       } else {
-        console.error('[AppData] cloud flush failed', reason)
+        console.error('[AppData] cloud flush failed', reason, result.error)
         setStateSyncStatus('error')
+        const message = result.error ?? 'סנכרון הענן נכשל'
+        setLastSyncNotice({ type: 'error', message })
       }
-      return ok
+      return result.ok
     },
     [],
   )
@@ -1143,6 +1155,65 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setFocusTracks,
     ],
   )
+
+  const clearSyncNotice = useCallback(() => setLastSyncNotice(null), [])
+
+  const syncNow = useCallback(async () => {
+    const local = snapshotRef.current
+    if (!local) {
+      const message = 'אין נתונים מקומיים לסנכרון'
+      setLastSyncNotice({ type: 'error', message })
+      window.alert(message)
+      return { ok: false, uploaded: 0, error: message }
+    }
+
+    setStateSyncStatus('syncing')
+    const remote = await pullAppState()
+    const nextFoodLogs = unionById(local.foodLogs, remote?.foodLogs)
+    const nextSavedMeals = unionById(local.savedMeals, remote?.savedMeals)
+    const nextRecipes = unionById(local.recipes, remote?.recipes)
+    const uploaded =
+      countNewById(local.foodLogs, remote?.foodLogs) +
+      countNewById(local.savedMeals, remote?.savedMeals) +
+      countNewById(local.recipes, remote?.recipes)
+    const merged = {
+      ...local,
+      foodLogs: nextFoodLogs,
+      savedMeals: nextSavedMeals,
+      recipes: nextRecipes,
+    }
+    snapshotRef.current = merged
+    skipNextPush.current = true
+    setFoodLogs(nextFoodLogs)
+    setSavedMeals(nextSavedMeals)
+    setRecipes(nextRecipes)
+
+    const result = await pushAppState(merged)
+    if (!result.ok) {
+      const message = result.error ?? 'ה-upsert לענן נכשל'
+      setStateSyncStatus('error')
+      setLastSyncNotice({ type: 'error', message })
+      window.alert(message)
+      return { ok: false, uploaded: 0, error: message }
+    }
+
+    if (!isMobileClient() && remote) {
+      applyRemoteState({
+        ...remote,
+        foodLogs: nextFoodLogs,
+        savedMeals: nextSavedMeals,
+        recipes: nextRecipes,
+      })
+    }
+
+    localDirtyRef.current = false
+    setStateSyncStatus('synced')
+    const written = result.foodLogs + result.savedMeals + result.recipes
+    const shown = Math.max(uploaded, written, nextFoodLogs.length)
+    const message = `סונכרן בהצלחה! הועלו ${shown} רשומות לענן`
+    setLastSyncNotice({ type: 'ok', message })
+    return { ok: true, uploaded: shown }
+  }, [applyRemoteState, setFoodLogs, setSavedMeals, setRecipes])
 
   const hydrateFromCloud = useCallback(
     async (reason: 'load' | 'refetch') => {
@@ -1798,6 +1869,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       recipesSyncError,
       syncRecipes,
       stateSyncStatus,
+      lastSyncNotice,
+      clearSyncNotice,
+      syncNow,
       addSetLog,
       addWeight,
       addBodyFat,
@@ -1885,6 +1959,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       recipesSyncError,
       syncRecipes,
       stateSyncStatus,
+      lastSyncNotice,
+      clearSyncNotice,
+      syncNow,
       addSetLog,
       addWeight,
       addBodyFat,

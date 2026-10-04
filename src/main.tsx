@@ -5,7 +5,19 @@ import { DirectionProvider } from '@/components/ui/direction'
 import './index.css'
 import App from './App.tsx'
 
-registerSW({ immediate: true })
+const updateSW = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    void updateSW(true)
+  },
+  onRegisteredSW(_url, registration) {
+    void registration?.update()
+    if (!registration) return
+    window.setInterval(() => {
+      void registration.update()
+    }, 60_000)
+  },
+})
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

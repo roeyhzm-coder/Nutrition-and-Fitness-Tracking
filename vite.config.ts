@@ -43,6 +43,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        cacheId: 'tn-app-sync-2026-10-04c',
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,

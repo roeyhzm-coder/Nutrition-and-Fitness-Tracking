@@ -22,8 +22,12 @@ import type { ConsistencyDayMarks } from './weeklyConsistency'
 
 const DEVICE_KEY = 'tn.deviceId'
 
-/** All devices read and write this same owner row. */
+/**
+ * Single shared cloud identity. Every device reads/writes this exact row.
+ * The live Supabase row is owner_id = 'primary' — do not invent a second id.
+ */
 export const SHARED_OWNER_ID = 'primary'
+export const SHARED_OWNER_ALIASES = ['primary', 'primary_user'] as const
 export const NUTRITION_CLOUD_ACK_KEY = 'tn.nutritionCloudAck.v1'
 
 export function markNutritionCloudAck() {
@@ -44,13 +48,41 @@ export function shouldKeepLocalList<T>(
   return false
 }
 
+/** Cloud writes always use the shared owner, never a per-device UUID. */
 export function getDeviceId() {
-  let id = localStorage.getItem(DEVICE_KEY)
-  if (!id) {
-    id = crypto.randomUUID()
-    localStorage.setItem(DEVICE_KEY, id)
-  }
-  return id
+  localStorage.setItem(DEVICE_KEY, SHARED_OWNER_ID)
+  return SHARED_OWNER_ID
+}
+
+export function unionById<T extends { id: string }>(
+  local: T[] | undefined,
+  remote: T[] | undefined,
+): T[] {
+  const byId = new Map<string, T>()
+  for (const row of remote ?? []) byId.set(row.id, row)
+  for (const row of local ?? []) byId.set(row.id, row)
+  return [...byId.values()]
+}
+
+export function countNewById<T extends { id: string }>(
+  local: T[] | undefined,
+  remote: T[] | undefined,
+): number {
+  const remoteIds = new Set((remote ?? []).map((row) => row.id))
+  return (local ?? []).filter((row) => !remoteIds.has(row.id)).length
+}
+
+export function isMobileClient() {
+  if (typeof navigator === 'undefined') return false
+  return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+}
+
+export type PushAppStateResult = {
+  ok: boolean
+  error?: string
+  foodLogs: number
+  savedMeals: number
+  recipes: number
 }
 
 export type SyncedAppState = {
@@ -295,14 +327,22 @@ async function selectRow(
 async function pullFromTable(
   table: 'app_state' | 'client_app_state',
 ): Promise<SyncedAppState | null> {
+  const ownerFilters = SHARED_OWNER_ALIASES.map((value) => ({
+    column: 'owner_id' as const,
+    value,
+  }))
+  const deviceFilters =
+    table === 'app_state'
+      ? []
+      : SHARED_OWNER_ALIASES.map((value) => ({
+          column: 'device_id' as const,
+          value,
+        }))
   const filters: Array<{ column: string; value: string } | 'latest'> = [
-    { column: 'owner_id', value: SHARED_OWNER_ID },
-    { column: 'device_id', value: SHARED_OWNER_ID },
+    ...ownerFilters,
+    ...deviceFilters,
     'latest',
   ]
-  if (table === 'app_state') {
-    filters.splice(1, 1)
-  }
 
   for (const filter of filters) {
     for (const set of COLUMN_SETS) {
@@ -315,11 +355,15 @@ async function pullFromTable(
 }
 
 async function pullFromUserProfile(): Promise<SyncedAppState | null> {
-  const data = await selectRow(
-    'user_profile',
-    'owner_id, profile, phase, goal, macro_presets, updated_at',
-    { column: 'owner_id', value: SHARED_OWNER_ID },
-  )
+  let data: Record<string, unknown> | null = null
+  for (const owner of SHARED_OWNER_ALIASES) {
+    data = await selectRow(
+      'user_profile',
+      'owner_id, profile, phase, goal, macro_presets, updated_at',
+      { column: 'owner_id', value: owner },
+    )
+    if (data) break
+  }
   if (!data) return null
   const rawGoal = (data.goal ?? {}) as Partial<GoalSettings> & {
     activePhase?: unknown
@@ -421,43 +465,58 @@ async function upsertRow(
   table: 'app_state' | 'client_app_state',
   payload: Record<string, unknown>,
   onConflict: string,
-): Promise<boolean> {
-  if (!supabase) return false
+): Promise<string | null> {
+  if (!supabase) return 'Supabase אינו מוגדר'
   const { error } = await supabase.from(table).upsert(payload, { onConflict })
   if (error) {
     logUpsertError(table, error, payload)
-    return false
+    return `${table}: ${error.message}${error.details ? ` (${error.details})` : ''}`
   }
-  return true
+  return null
 }
 
 export async function pushAppState(
   state: Omit<SyncedAppState, 'updatedAt'>,
-): Promise<boolean> {
-  if (!isSupabaseConfigured || !supabase) return false
+): Promise<PushAppStateResult> {
+  const counts = {
+    foodLogs: state.foodLogs?.length ?? 0,
+    savedMeals: state.savedMeals?.length ?? 0,
+    recipes: state.recipes?.length ?? 0,
+  }
+  if (!isSupabaseConfigured || !supabase) {
+    return { ok: false, error: 'Supabase אינו מוגדר', ...counts }
+  }
 
   const updatedAt = new Date().toISOString()
   const payloads = buildNutritionPayloads(state, updatedAt)
+  const errors: string[] = []
   let wroteNutrition = false
 
   for (const payload of payloads) {
-    const ok = await upsertRow('app_state', payload, 'owner_id')
-    if (ok) {
+    if (!('food_logs' in payload) || !('saved_meals' in payload)) {
+      errors.push('payload missing food_logs/saved_meals')
+      continue
+    }
+    const error = await upsertRow('app_state', payload, 'owner_id')
+    if (!error) {
       wroteNutrition = true
       break
     }
+    errors.push(error)
   }
 
   for (const payload of payloads) {
-    const ok = await upsertRow(
+    if (!('food_logs' in payload) || !('saved_meals' in payload)) continue
+    const error = await upsertRow(
       'client_app_state',
       { ...payload, device_id: SHARED_OWNER_ID },
       'device_id',
     )
-    if (ok) {
+    if (!error) {
       wroteNutrition = true
       break
     }
+    errors.push(error)
   }
 
   const { error: profileError } = await supabase
@@ -475,22 +534,17 @@ export async function pushAppState(
     )
   if (profileError) {
     console.error('[appStateSync] user_profile upsert failed', profileError)
+    errors.push(`user_profile: ${profileError.message}`)
   }
 
   if (!wroteNutrition) {
-    console.error(
-      '[appStateSync] food_logs/saved_meals/recipes were not written to Supabase',
-      {
-        foodLogs: state.foodLogs?.length ?? 0,
-        savedMeals: state.savedMeals?.length ?? 0,
-        recipes: state.recipes?.length ?? 0,
-      },
-    )
-    return false
+    const error = errors[0] ?? 'food_logs/saved_meals/recipes were not written'
+    console.error('[appStateSync] nutrition write failed', { errors, ...counts })
+    return { ok: false, error, ...counts }
   }
 
   markNutritionCloudAck()
-  return true
+  return { ok: true, ...counts }
 }
 
 export function subscribeSharedSync(
