@@ -21,6 +21,7 @@ import { DEFAULT_WORKOUT_DAYS, createOfficialPrograms } from './workouts'
 
 export const PLAN_SEED_VERSION = 2
 export const PLAN_SEED_KEY = 'tn.targetsSeedVersion'
+export const CATALOG_SEED_KEY = 'tn.catalogSeed.v1'
 
 export const DEFAULT_MACRO_BULK: MacroTargets = {
   calories: 2600,
@@ -89,6 +90,8 @@ export const DEFAULT_PROFILE: UserProfile = {
   allergies: '',
   supplements: '',
   injuries: '',
+  aiCheckinIntervalDays: 28,
+  lastAiExportAt: null,
 }
 
 export const SEED_WEIGHT_ENTRY: WeightEntry = {
@@ -177,17 +180,11 @@ export function normalizeSavedMeal(meal: SavedMeal): SavedMeal {
 }
 
 export function mergeSavedMeals(existing: SavedMeal[]): SavedMeal[] {
-  const list = (existing.length ? existing : []).map(normalizeSavedMeal)
-  const ids = new Set(list.map((m) => m.id))
-  const names = new Set(list.map((m) => m.name.trim()))
-  const next = [...list]
-  for (const preset of DEFAULT_SAVED_MEALS) {
-    if (ids.has(preset.id) || names.has(preset.name.trim())) continue
-    next.push(preset)
-    ids.add(preset.id)
-    names.add(preset.name.trim())
-  }
-  return next.length > 0 ? next : DEFAULT_SAVED_MEALS
+  return existing.map(normalizeSavedMeal)
+}
+
+export function seedSavedMealsIfEmpty(existing: SavedMeal[]): SavedMeal[] {
+  return existing.length > 0 ? existing.map(normalizeSavedMeal) : DEFAULT_SAVED_MEALS
 }
 
 export function savedMealsEqual(a: SavedMeal[], b: SavedMeal[]): boolean {
@@ -211,21 +208,19 @@ export function savedMealsEqual(a: SavedMeal[], b: SavedMeal[]): boolean {
 
 const PRESET_MEAL_KEYS = ['user_preset_meals', 'tn.savedMeals.v2'] as const
 
-/** Load persisted preset meals, migrating legacy keys; never returns empty. */
+/** Load persisted preset meals, migrating legacy keys. Empty lists stay empty. */
 export function loadPresetMeals(): SavedMeal[] {
   try {
     for (const key of PRESET_MEAL_KEYS) {
       const raw = localStorage.getItem(key)
       if (raw == null) continue
       const parsed = JSON.parse(raw) as SavedMeal[]
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return mergeSavedMeals(parsed)
-      }
+      if (Array.isArray(parsed)) return parsed.map(normalizeSavedMeal)
     }
   } catch {
     /* fall through */
   }
-  return DEFAULT_SAVED_MEALS
+  return []
 }
 
 export function cloneProgram(

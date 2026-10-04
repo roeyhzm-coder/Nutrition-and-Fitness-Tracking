@@ -6,15 +6,21 @@ import {
   daysUntilAiCheckin,
   LAST_AI_EXPORT_KEY,
 } from '../../lib/aiCheckin'
+import { localDateKey } from '../../lib/types'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 
 export function AiCheckinBadge() {
-  const { goal } = useAppData()
+  const { goal, profile } = useAppData()
   const [lastAiExportAt] = useLocalStorage<string | null>(
     LAST_AI_EXPORT_KEY,
     null,
   )
-  const remaining = daysUntilAiCheckin(lastAiExportAt, goal.startDate)
+  const remaining = daysUntilAiCheckin(
+    lastAiExportAt ?? profile.lastAiExportAt,
+    goal.startDate,
+    localDateKey(),
+    profile.aiCheckinIntervalDays,
+  )
   const due = remaining <= 0
 
   return (

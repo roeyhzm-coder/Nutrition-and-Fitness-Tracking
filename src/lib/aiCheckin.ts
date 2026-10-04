@@ -28,10 +28,12 @@ export function daysUntilAiCheckin(
   lastExportAt: string | null | undefined,
   phaseStartDate: string | null | undefined,
   today = localDateKey(),
+  intervalDays = AI_CHECKIN_INTERVAL_DAYS,
 ): number {
   const reference = latestDateKey(lastExportAt, phaseStartDate)
   if (!reference) return 0
-  return AI_CHECKIN_INTERVAL_DAYS - daysBetween(reference, today)
+  const interval = Math.min(365, Math.max(1, Math.round(intervalDays) || 28))
+  return interval - daysBetween(reference, today)
 }
 
 export function aiCheckinLabel(daysRemaining: number): string {

@@ -9,6 +9,7 @@ import type {
   PhaseMacroPresets,
   FocusTrack,
   Routine,
+  Recipe,
   SavedMeal,
   UserProfile,
   WeightEntry,
@@ -45,6 +46,7 @@ export type SyncedAppState = {
   foodCategories: FoodCategory[]
   /** Undefined when the remote table lacks the extended columns. */
   savedMeals?: SavedMeal[]
+  recipes?: Recipe[]
   foodLogs?: FoodLogEntry[]
   profile?: UserProfile
   activityLogs?: ActivityLog[]
@@ -66,7 +68,8 @@ const FOOD_LOG_COLUMNS = `${EXTENDED_COLUMNS}, food_logs`
 const ROUTINES_COLUMNS = `${FOOD_LOG_COLUMNS}, routines`
 const FOCUS_TRACKS_COLUMNS = `${ROUTINES_COLUMNS}, focus_tracks`
 const WEIGHT_COLUMNS = `${FOCUS_TRACKS_COLUMNS}, weight_logs`
-const APP_STATE_COLUMNS = `${WEIGHT_COLUMNS}, owner_id`
+const RECIPES_COLUMNS = `${WEIGHT_COLUMNS}, recipes`
+const APP_STATE_COLUMNS = `${RECIPES_COLUMNS}, owner_id`
 
 type ColumnSet = {
   columns: string
@@ -76,6 +79,7 @@ type ColumnSet = {
   hasRoutines: boolean
   hasFocusTracks: boolean
   hasWeightLogs: boolean
+  hasRecipes: boolean
 }
 
 const COLUMN_SETS: ColumnSet[] = [
@@ -87,6 +91,17 @@ const COLUMN_SETS: ColumnSet[] = [
     hasRoutines: true,
     hasFocusTracks: true,
     hasWeightLogs: true,
+    hasRecipes: true,
+  },
+  {
+    columns: RECIPES_COLUMNS,
+    hasTemplates: true,
+    hasExtended: true,
+    hasFoodLogs: true,
+    hasRoutines: true,
+    hasFocusTracks: true,
+    hasWeightLogs: true,
+    hasRecipes: true,
   },
   {
     columns: WEIGHT_COLUMNS,
@@ -96,6 +111,7 @@ const COLUMN_SETS: ColumnSet[] = [
     hasRoutines: true,
     hasFocusTracks: true,
     hasWeightLogs: true,
+    hasRecipes: false,
   },
   {
     columns: FOCUS_TRACKS_COLUMNS,
@@ -105,6 +121,7 @@ const COLUMN_SETS: ColumnSet[] = [
     hasRoutines: true,
     hasFocusTracks: true,
     hasWeightLogs: false,
+    hasRecipes: false,
   },
   {
     columns: ROUTINES_COLUMNS,
@@ -114,6 +131,7 @@ const COLUMN_SETS: ColumnSet[] = [
     hasRoutines: true,
     hasFocusTracks: false,
     hasWeightLogs: false,
+    hasRecipes: false,
   },
   {
     columns: FOOD_LOG_COLUMNS,
@@ -123,6 +141,7 @@ const COLUMN_SETS: ColumnSet[] = [
     hasRoutines: false,
     hasFocusTracks: false,
     hasWeightLogs: false,
+    hasRecipes: false,
   },
   {
     columns: EXTENDED_COLUMNS,
@@ -132,6 +151,7 @@ const COLUMN_SETS: ColumnSet[] = [
     hasRoutines: false,
     hasFocusTracks: false,
     hasWeightLogs: false,
+    hasRecipes: false,
   },
   {
     columns: FULL_COLUMNS,
@@ -141,6 +161,7 @@ const COLUMN_SETS: ColumnSet[] = [
     hasRoutines: false,
     hasFocusTracks: false,
     hasWeightLogs: false,
+    hasRecipes: false,
   },
   {
     columns: TEMPLATE_COLUMNS,
@@ -150,6 +171,7 @@ const COLUMN_SETS: ColumnSet[] = [
     hasRoutines: false,
     hasFocusTracks: false,
     hasWeightLogs: false,
+    hasRecipes: false,
   },
   {
     columns: BASE_COLUMNS,
@@ -159,6 +181,7 @@ const COLUMN_SETS: ColumnSet[] = [
     hasRoutines: false,
     hasFocusTracks: false,
     hasWeightLogs: false,
+    hasRecipes: false,
   },
 ]
 
@@ -212,6 +235,9 @@ function parseRow(
       : {}),
     ...(flags.hasFocusTracks
       ? { focusTracks: (data.focus_tracks as FocusTrack[] | null) ?? undefined }
+      : {}),
+    ...(flags.hasRecipes
+      ? { recipes: (data.recipes as Recipe[] | null) ?? undefined }
       : {}),
     updatedAt: (data.updated_at as string) ?? new Date().toISOString(),
   }
@@ -345,7 +371,12 @@ function buildPayloads(state: Omit<SyncedAppState, 'updatedAt'>, updatedAt: stri
     ...focusTracksPayload,
     weight_logs: state.weightLogs ?? [],
   }
+  const recipesPayload = {
+    ...weightPayload,
+    recipes: state.recipes ?? [],
+  }
   return [
+    recipesPayload,
     weightPayload,
     focusTracksPayload,
     routinesPayload,

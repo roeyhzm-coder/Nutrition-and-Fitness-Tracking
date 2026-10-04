@@ -450,19 +450,46 @@ const isObsoleteProgram = (p: WorkoutProgram) =>
 const isLegacyTemplate = (t: WorkoutTemplate) =>
   LEGACY_TEMPLATE_IDS.has(t.id) || LEGACY_TEMPLATE_NAMES.has(t.name.trim())
 
-/** True when saved state still holds the old defaults or lacks the official plan. */
+/** True when official block programs or library templates are missing. */
 export function isStalePlan(state: Omit<WorkoutPlanState, 'activeProgramId'>): boolean {
   const templateIds = new Set(state.templates.map((t) => t.id))
   return (
     state.programs.some(isObsoleteProgram) ||
-    !OFFICIAL_PROGRAM_IDS.every((id) =>
-      state.programs.some(
-        (p) => p.id === id && (p.planVersion ?? 0) >= OFFICIAL_PLAN_VERSION,
-      ),
-    ) ||
+    !OFFICIAL_PROGRAM_IDS.every((id) => state.programs.some((p) => p.id === id)) ||
     state.templates.some(isLegacyTemplate) ||
     !OFFICIAL_TEMPLATE_IDS.every((id) => templateIds.has(id))
   )
+}
+
+/** Fill missing official programs/templates without overwriting user edits. */
+export function ensureOfficialPlan(state: WorkoutPlanState): WorkoutPlanState {
+  const official = createOfficialPrograms()
+  const keptPrograms = state.programs
+    .filter((p) => !isObsoleteProgram(p))
+    .map((p) => backfillProgramMedia([p])[0])
+  const haveProgram = new Set(keptPrograms.map((p) => p.id))
+  const programs = [
+    ...official.filter((p) => !haveProgram.has(p.id)),
+    ...keptPrograms,
+  ]
+
+  const keptTemplates = state.templates
+    .filter((t) => !isLegacyTemplate(t))
+    .map((t) => ({ ...t, exercises: t.exercises.map(withSeedMedia) }))
+  const haveTemplate = new Set(keptTemplates.map((t) => t.id))
+  const templates = [
+    ...structuredClone(SEED_WORKOUT_TEMPLATES).filter((t) => !haveTemplate.has(t.id)),
+    ...keptTemplates,
+  ]
+
+  const activeStillExists = programs.some((p) => p.id === state.activeProgramId)
+  return {
+    programs,
+    templates,
+    activeProgramId: activeStillExists
+      ? state.activeProgramId
+      : programs[0]?.id ?? '',
+  }
 }
 
 /**

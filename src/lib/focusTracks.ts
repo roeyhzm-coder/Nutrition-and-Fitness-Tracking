@@ -115,37 +115,42 @@ export function sortFocusTracks(tracks: FocusTrack[]) {
 }
 
 export function mergeDefaultFocusTracks(existing: FocusTrack[]): FocusTrack[] {
-  const normalized = existing
-    .map(normalizeFocusTrack)
-    .filter((row): row is FocusTrack => Boolean(row))
-  const byId = new Map(normalized.map((row) => [row.id, row]))
-  if (!byId.has(SEED_ID)) byId.set(SEED_ID, createDefaultSplitsTrack())
-  return sortFocusTracks([...byId.values()])
+  return sortFocusTracks(
+    existing
+      .map(normalizeFocusTrack)
+      .filter((row): row is FocusTrack => Boolean(row)),
+  )
 }
 
+export function seedFocusTracksIfEmpty(existing: FocusTrack[]): FocusTrack[] {
+  const normalized = mergeDefaultFocusTracks(existing)
+  return normalized.length > 0 ? normalized : DEFAULT_FOCUS_TRACKS
+}
+
+/** Remote list is authoritative; only union completion dates on matching ids. */
 export function mergeFocusTracks(local: FocusTrack[], remote: FocusTrack[]) {
   const remoteNorm = remote
     .map(normalizeFocusTrack)
     .filter((row): row is FocusTrack => Boolean(row))
-  const localNorm = local
-    .map(normalizeFocusTrack)
-    .filter((row): row is FocusTrack => Boolean(row))
-  const byId = new Map(remoteNorm.map((row) => [row.id, row]))
-  for (const row of localNorm) {
-    const existing = byId.get(row.id)
-    if (!existing) {
-      byId.set(row.id, row)
-      continue
-    }
-    byId.set(row.id, {
-      ...row,
-      completedDates: uniqueSortedDates([
-        ...existing.completedDates,
-        ...row.completedDates,
-      ]),
-    })
-  }
-  return sortFocusTracks(mergeDefaultFocusTracks([...byId.values()]))
+  const localById = new Map(
+    local
+      .map(normalizeFocusTrack)
+      .filter((row): row is FocusTrack => Boolean(row))
+      .map((row) => [row.id, row]),
+  )
+  return sortFocusTracks(
+    remoteNorm.map((row) => {
+      const localRow = localById.get(row.id)
+      if (!localRow) return row
+      return {
+        ...row,
+        completedDates: uniqueSortedDates([
+          ...row.completedDates,
+          ...localRow.completedDates,
+        ]),
+      }
+    }),
+  )
 }
 
 export function newFocusTrack(

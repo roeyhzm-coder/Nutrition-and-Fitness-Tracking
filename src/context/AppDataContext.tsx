@@ -18,7 +18,8 @@ import {
   DEFAULT_PROFILE,
   loadPresetMeals,
   mergeSavedMeals,
-  savedMealsEqual,
+  seedSavedMealsIfEmpty,
+  CATALOG_SEED_KEY,
   PLAN_SEED_KEY,
   PLAN_SEED_VERSION,
   normalizeMacroPresets,
@@ -33,7 +34,6 @@ import {
 } from '../lib/phaseHistory'
 import {
   deleteRemoteRoutine,
-  mergeRoutines,
   normalizeRoutine,
   pullRoutines,
   pushRoutines,
@@ -41,16 +41,16 @@ import {
   toggleCompletedDate,
 } from '../lib/routines'
 import {
-  mergeDefaultFocusTracks,
   mergeFocusTracks,
   newFocusTrack,
+  seedFocusTracksIfEmpty,
   normalizeFocusTrack,
   sortFocusTracks,
 } from '../lib/focusTracks'
-import { DEFAULT_RECIPES, DEFAULT_FOOD_CATEGORIES, mergeRecipes, recipesEqual } from '../data/recipes'
+import { DEFAULT_FOOD_CATEGORIES, mergeRecipes, seedRecipesIfEmpty } from '../data/recipes'
 import {
   OFFICIAL_PLAN_VERSION,
-  applyOfficialPlan,
+  ensureOfficialPlan,
   backfillProgramMedia,
   isStalePlan,
   officialBlockForProgram,
@@ -68,6 +68,7 @@ import {
   extractRecipeCategories,
   fetchRecipesFromSupabase,
 } from '../lib/recipesApi'
+import { latestDateKey, readLastAiExportAt } from '../lib/aiCheckin'
 import { isSupabaseConfigured } from '../lib/supabase'
 import type {
   ActivityLog,
@@ -258,13 +259,6 @@ export type NewPhaseInput = {
   macros: MacroTargets
 }
 
-function mergeById<T extends { id: string }>(local: T[], remote: T[]): T[] {
-  const byId = new Map<string, T>()
-  for (const row of local) byId.set(row.id, row)
-  for (const row of remote) byId.set(row.id, row)
-  return [...byId.values()]
-}
-
 const AppDataContext = createContext<AppDataContextValue | null>(null)
 
 function updateActiveProgramDays(
@@ -308,8 +302,13 @@ function migrateStoredPlan() {
     templates: readStored<WorkoutTemplate[]>(TEMPLATES_KEY, []),
     activeProgramId: readStored<string>(ACTIVE_PROGRAM_KEY, ''),
   }
-  if (version >= OFFICIAL_PLAN_VERSION && !isStalePlan(stored)) return
-  const plan = applyOfficialPlan(stored)
+  if (!isStalePlan(stored)) {
+    if (version < OFFICIAL_PLAN_VERSION) {
+      localStorage.setItem(PLAN_VERSION_KEY, String(OFFICIAL_PLAN_VERSION))
+    }
+    return
+  }
+  const plan = ensureOfficialPlan(stored)
   localStorage.setItem(PROGRAMS_KEY, JSON.stringify(plan.programs))
   localStorage.setItem(TEMPLATES_KEY, JSON.stringify(plan.templates))
   localStorage.setItem(ACTIVE_PROGRAM_KEY, JSON.stringify(plan.activeProgramId))
@@ -324,6 +323,18 @@ function needsPlanSeed() {
 
 function markPlanSeeded() {
   localStorage.setItem(PLAN_SEED_KEY, String(PLAN_SEED_VERSION))
+}
+
+function needsCatalogSeed() {
+  return (
+    localStorage.getItem(CATALOG_SEED_KEY) == null &&
+    localStorage.getItem('user_preset_meals') == null &&
+    localStorage.getItem('tn.recipes.v3') == null
+  )
+}
+
+function markCatalogSeeded() {
+  localStorage.setItem(CATALOG_SEED_KEY, '1')
 }
 
 /** Writes Phase 1 / master-plan targets before the first React read. */
@@ -446,25 +457,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     'user_preset_meals',
     loadPresetMeals(),
   )
-
-  // Restore system meals and classify item vs meal without dropping staples.
-  useEffect(() => {
-    setSavedMeals((prev) => {
-      const next = mergeSavedMeals(prev)
-      return savedMealsEqual(prev, next) ? prev : next
-    })
-  }, [setSavedMeals])
   const [recipes, setRecipes] = useLocalStorage<Recipe[]>(
     'tn.recipes.v3',
-    DEFAULT_RECIPES,
+    [],
   )
-
-  useEffect(() => {
-    setRecipes((prev) => {
-      const next = mergeRecipes(prev)
-      return recipesEqual(prev, next) ? prev : next
-    })
-  }, [setRecipes])
   const [profileRaw, setProfileRaw] = useLocalStorage<UserProfile>(
     'tn.profile.v1',
     DEFAULT_PROFILE,
@@ -927,7 +923,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     try {
       const remote = await fetchRecipesFromSupabase()
       if (remote.length > 0) {
-        setRecipes((prev) => mergeRecipes([...remote, ...prev]))
+        setRecipes((prev) => {
+          if (prev.length === 0 && needsCatalogSeed()) {
+            markCatalogSeeded()
+            return mergeRecipes(remote)
+          }
+          const byId = new Map(remote.map((row) => [row.id, row]))
+          return prev.map((row) => byId.get(row.id) ?? row)
+        })
       }
       const fromRecipes = extractRecipeCategories(remote)
       if (fromRecipes.length > 0) {
@@ -967,7 +970,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
       const remoteStale = isStalePlan(remotePlan)
       const plan = remoteStale
-        ? applyOfficialPlan(remotePlan)
+        ? ensureOfficialPlan(remotePlan)
         : {
             ...remotePlan,
             programs: backfillProgramMedia(remotePlan.programs),
@@ -983,33 +986,56 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (remote.consistencyDayMarks) {
         setConsistencyDayMarks(remote.consistencyDayMarks)
       }
-      if (remote.foodCategories?.length) {
+      if (remote.foodCategories !== undefined && remote.foodCategories.length) {
         setFoodCategories(remote.foodCategories)
       }
-      if (remote.savedMeals?.length) {
+      if (remote.savedMeals !== undefined) {
         setSavedMeals(mergeSavedMeals(remote.savedMeals))
+        markCatalogSeeded()
+      } else if (needsCatalogSeed()) {
+        setSavedMeals((prev) => seedSavedMealsIfEmpty(prev))
+        markCatalogSeeded()
       }
-      if (remote.foodLogs?.length) {
-        setFoodLogs((local) => mergeById(local, remote.foodLogs ?? []))
+      if (remote.recipes !== undefined) {
+        setRecipes(mergeRecipes(remote.recipes))
       }
-      if (remote.weightLogs) {
+      if (remote.foodLogs !== undefined) {
+        setFoodLogs(remote.foodLogs)
+      }
+      if (remote.weightLogs !== undefined) {
         setWeightLogs(
           [...remote.weightLogs].sort((a, b) =>
             a.loggedAt.localeCompare(b.loggedAt),
           ),
         )
       }
-      if (remote.profile) setProfileRaw(remote.profile)
-      if (remote.activityLogs?.length) {
-        setActivityLogs((local) => mergeById(local, remote.activityLogs ?? []))
+      if (remote.profile) {
+        setProfileRaw(
+          normalizeProfile({
+            ...remote.profile,
+            lastAiExportAt: latestDateKey(
+              remote.profile.lastAiExportAt,
+              readLastAiExportAt(),
+            ),
+          }),
+        )
       }
-      if (remote.lifestyleLogs && Object.keys(remote.lifestyleLogs).length) {
-        setLifestyleLogs((local) => ({ ...local, ...remote.lifestyleLogs }))
+      if (remote.activityLogs !== undefined) {
+        setActivityLogs(remote.activityLogs)
       }
-      if (remote.routines) {
-        setRoutines((local) => mergeRoutines(local, remote.routines ?? []).merged)
+      if (remote.lifestyleLogs !== undefined) {
+        setLifestyleLogs(remote.lifestyleLogs)
       }
-      if (remote.focusTracks) {
+      if (remote.routines !== undefined) {
+        setRoutines(
+          sortRoutines(
+            (remote.routines ?? [])
+              .map((row) => normalizeRoutine(row))
+              .filter((row): row is Routine => Boolean(row)),
+          ),
+        )
+      }
+      if (remote.focusTracks !== undefined) {
         setFocusTracks((local) =>
           mergeFocusTracks(local, remote.focusTracks ?? []),
         )
@@ -1025,6 +1051,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setConsistencyDayMarks,
       setFoodCategories,
       setSavedMeals,
+      setRecipes,
       setFoodLogs,
       setWeightLogs,
       setProfileRaw,
@@ -1046,6 +1073,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           setProfileRaw(DEFAULT_PROFILE)
           setWeightLogs((prev) => applySeedWeightLogs(prev))
           markPlanSeeded()
+        }
+        if (reason === 'load' && needsCatalogSeed()) {
+          setSavedMeals((prev) => seedSavedMealsIfEmpty(prev))
+          setRecipes((prev) => seedRecipesIfEmpty(prev))
+          setFocusTracks((prev) => seedFocusTracksIfEmpty(prev))
+          markCatalogSeeded()
         }
         hydratedRef.current = true
         if (reason === 'load') {
@@ -1111,6 +1144,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         consistencyDayMarks,
         foodCategories,
         savedMeals,
+        recipes,
         foodLogs,
         weightLogs,
         profile,
@@ -1132,6 +1166,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     consistencyDayMarks,
     foodCategories,
     savedMeals,
+    recipes,
     foodLogs,
     weightLogs,
     profile,
@@ -1419,10 +1454,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [setRoutines],
   )
 
-  useEffect(() => {
-    setFocusTracks((prev) => mergeDefaultFocusTracks(prev))
-  }, [setFocusTracks])
-
   const addFocusTrack = useCallback(
     (
       input: Omit<FocusTrack, 'id' | 'createdAt' | 'completedDates' | 'archivedAt'> & {
@@ -1485,12 +1516,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       ),
     )
     void pullRoutines().then((remote) => {
-      if (cancelled || !remote) return
-      setRoutines((local) => {
-        const { merged, toPush } = mergeRoutines(local, remote)
-        if (toPush.length) void pushRoutines(toPush)
-        return merged
-      })
+      if (cancelled || !remote || remote.length === 0) return
+      if (hydratedRef.current) return
+      setRoutines(
+        sortRoutines(
+          remote
+            .map((row) => normalizeRoutine(row))
+            .filter((row): row is Routine => Boolean(row)),
+        ),
+      )
     })
     return () => {
       cancelled = true

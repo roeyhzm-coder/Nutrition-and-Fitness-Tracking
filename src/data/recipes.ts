@@ -134,18 +134,15 @@ export const DEFAULT_RECIPES: Recipe[] = [
 
 export function mergeRecipes(existing: Recipe[]): Recipe[] {
   const byId = new Map<string, Recipe>()
-  const names = new Set<string>()
   for (const recipe of existing) {
     if (byId.has(recipe.id)) continue
     byId.set(recipe.id, recipe)
-    names.add(recipe.name.trim())
   }
-  for (const recipe of DEFAULT_RECIPES) {
-    if (byId.has(recipe.id) || names.has(recipe.name.trim())) continue
-    byId.set(recipe.id, recipe)
-    names.add(recipe.name.trim())
-  }
-  return byId.size > 0 ? [...byId.values()] : DEFAULT_RECIPES
+  return [...byId.values()]
+}
+
+export function seedRecipesIfEmpty(existing: Recipe[]): Recipe[] {
+  return existing.length > 0 ? mergeRecipes(existing) : DEFAULT_RECIPES
 }
 
 export function recipesEqual(a: Recipe[], b: Recipe[]): boolean {

@@ -19,7 +19,6 @@ export function AiExportPanel() {
     goal,
     phase,
     workoutDays,
-    profile,
     activityLogs,
     lifestyleLogs,
     phaseHistory,
@@ -30,6 +29,8 @@ export function AiExportPanel() {
     savedMeals,
     recipes,
     workoutPrograms,
+    profile,
+    setProfile,
   } = useAppData()
   const { workoutLogs } = useWorkoutSession()
   const [copied, setCopied] = useState(false)
@@ -93,7 +94,9 @@ export function AiExportPanel() {
   async function copy() {
     try {
       await navigator.clipboard.writeText(prompt)
-      setLastAiExportAt(localDateKey())
+      const today = localDateKey()
+      setLastAiExportAt(today)
+      setProfile({ ...profile, lastAiExportAt: today })
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {

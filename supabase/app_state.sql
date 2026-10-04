@@ -13,6 +13,7 @@ create table if not exists public.app_state (
   activity_logs jsonb not null default '[]'::jsonb,
   lifestyle_logs jsonb not null default '{}'::jsonb,
   saved_meals jsonb not null default '[]'::jsonb,
+  recipes jsonb,
   food_categories jsonb not null default '[]'::jsonb,
   active_program_id text,
   workout_programs jsonb not null default '[]'::jsonb,

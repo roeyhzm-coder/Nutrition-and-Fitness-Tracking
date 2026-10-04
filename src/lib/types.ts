@@ -215,6 +215,10 @@ export type UserProfile = {
   allergies: string
   supplements: string
   injuries: string
+  /** Preferred days between AI export check-ins. */
+  aiCheckinIntervalDays: number
+  /** Last successful AI prompt copy (YYYY-MM-DD). */
+  lastAiExportAt: string | null
 }
 
 export const EMPTY_PROFILE: UserProfile = {
@@ -230,12 +234,31 @@ export const EMPTY_PROFILE: UserProfile = {
   allergies: '',
   supplements: '',
   injuries: '',
+  aiCheckinIntervalDays: 28,
+  lastAiExportAt: null,
+}
+
+function normalizeIntervalDays(value: unknown, fallback = 28): number {
+  const n = Math.round(Number(value))
+  if (!Number.isFinite(n)) return fallback
+  return Math.min(365, Math.max(1, n))
 }
 
 export function normalizeProfile(
   profile: Partial<UserProfile> | null | undefined,
 ): UserProfile {
-  return { ...EMPTY_PROFILE, ...(profile ?? {}) }
+  const next = { ...EMPTY_PROFILE, ...(profile ?? {}) }
+  return {
+    ...next,
+    aiCheckinIntervalDays: normalizeIntervalDays(
+      profile?.aiCheckinIntervalDays ?? next.aiCheckinIntervalDays,
+    ),
+    lastAiExportAt:
+      typeof next.lastAiExportAt === 'string' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(next.lastAiExportAt.slice(0, 10))
+        ? next.lastAiExportAt.slice(0, 10)
+        : null,
+  }
 }
 
 export type Intensity = 'low' | 'moderate' | 'high'

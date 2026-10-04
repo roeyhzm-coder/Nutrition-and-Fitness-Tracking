@@ -49,6 +49,9 @@ alter table public.client_app_state
   add column if not exists weight_logs jsonb not null default '[]'::jsonb;
 
 alter table public.client_app_state
+  add column if not exists recipes jsonb;
+
+alter table public.client_app_state
   drop constraint if exists client_app_state_phase_check;
 
 alter table public.client_app_state
