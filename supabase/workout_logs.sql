@@ -18,10 +18,14 @@ create table if not exists public.workout_logs (
 
 alter table public.workout_logs
   add column if not exists performed_on date,
-  add column if not exists estimated_calories integer;
+  add column if not exists estimated_calories integer,
+  add column if not exists owner_id text not null default 'primary';
 
 create index if not exists workout_logs_device_completed_idx
   on public.workout_logs (device_id, completed_at);
+
+create index if not exists workout_logs_owner_completed_idx
+  on public.workout_logs (owner_id, completed_at);
 
 alter table public.workout_logs enable row level security;
 

@@ -342,10 +342,7 @@ function fromRow(row: RoutineRow): Routine | null {
 
 export async function pullRoutines(): Promise<Routine[] | null> {
   if (!isSupabaseConfigured || !supabase) return null
-  const { data, error } = await supabase
-    .from('routines')
-    .select('*')
-    .eq('device_id', getDeviceId())
+  const { data, error } = await supabase.from('routines').select('*')
   if (error || !data) return null
   return (data as RoutineRow[])
     .map(fromRow)
@@ -373,6 +370,5 @@ export async function deleteRemoteRoutine(id: string): Promise<boolean> {
     .from('routines')
     .delete()
     .eq('id', id)
-    .eq('device_id', getDeviceId())
   return !error
 }

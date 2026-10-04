@@ -57,7 +57,7 @@ export function normalizeMacroPresets(
   return { ...DEFAULT_PHASE_MACROS, ...(presets ?? {}) }
 }
 
-export const DEFAULT_PHASE: Phase = 'bulk'
+export const DEFAULT_PHASE: Phase = 'maintain'
 
 export const DEFAULT_GOAL: GoalSettings = {
   startDate: '2026-09-26',

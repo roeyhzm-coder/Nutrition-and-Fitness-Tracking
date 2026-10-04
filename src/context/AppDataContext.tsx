@@ -57,7 +57,13 @@ import {
   officialDayFor,
 } from '../data/workouts'
 import { useLocalStorage } from '../hooks/useLocalStorage'
-import { pullAppState, pushAppState } from '../lib/appStateSync'
+import {
+  onWindowResume,
+  pullAppState,
+  pushAppState,
+  subscribeSharedSync,
+  type SyncedAppState,
+} from '../lib/appStateSync'
 import {
   extractRecipeCategories,
   fetchRecipesFromSupabase,
@@ -250,6 +256,13 @@ export type NewPhaseInput = {
   targetBodyFatPct: number | null
   startWeightKg?: number | null
   macros: MacroTargets
+}
+
+function mergeById<T extends { id: string }>(local: T[], remote: T[]): T[] {
+  const byId = new Map<string, T>()
+  for (const row of local) byId.set(row.id, row)
+  for (const row of remote) byId.set(row.id, row)
+  return [...byId.values()]
 }
 
 const AppDataContext = createContext<AppDataContextValue | null>(null)
@@ -938,31 +951,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     void syncRecipes()
   }, [syncRecipes])
 
-  useEffect(() => {
-    let cancelled = false
-    async function hydrate() {
-      const remote = await pullAppState()
-      if (cancelled || !remote) {
-        if (needsPlanSeed()) {
-          setPhaseState(DEFAULT_PHASE)
-          setGoal(DEFAULT_GOAL)
-          setMacroPresets(DEFAULT_PHASE_MACROS)
-          setProfileRaw(DEFAULT_PROFILE)
-          setWeightLogs((prev) => applySeedWeightLogs(prev))
-          markPlanSeeded()
-        }
-        hydratedRef.current = true
-        return
-      }
+  const applyRemoteState = useCallback(
+    (remote: SyncedAppState) => {
       skipNextPush.current = true
       setPhaseState(remote.phase)
       setGoal(normalizeGoal(remote.goal))
       setMacroPresets(remote.macroPresets)
       const remotePlan = {
         programs: (remote.workoutPrograms ?? []).map(normalizeWorkoutProgram),
-        // Tables without the templates column keep the local library.
         templates:
-          remote.workoutTemplates ?? readStored<WorkoutTemplate[]>(TEMPLATES_KEY, []),
+          remote.workoutTemplates ??
+          readStored<WorkoutTemplate[]>(TEMPLATES_KEY, []),
         activeProgramId: remote.activeProgramId,
       }
       const remoteStale = isStalePlan(remotePlan)
@@ -972,68 +971,125 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             ...remotePlan,
             programs: backfillProgramMedia(remotePlan.programs),
             activeProgramId:
-              remotePlan.activeProgramId || remotePlan.programs[0].id,
+              remotePlan.activeProgramId || remotePlan.programs[0]?.id || '',
           }
-      // Push the repaired plan back so Supabase stops serving the old data.
       if (remoteStale) skipNextPush.current = false
-      setWorkoutPrograms(plan.programs)
-      setActiveProgramIdState(plan.activeProgramId)
-      setWorkoutTemplates(plan.templates)
-      if (remote.consistencyDayMarks) {
-        setConsistencyDayMarks(remote.consistencyDayMarks)
+      if (plan.programs.length) {
+        setWorkoutPrograms(plan.programs)
+        setActiveProgramIdState(plan.activeProgramId)
       }
+      if (remote.workoutTemplates) setWorkoutTemplates(plan.templates)
+      setConsistencyDayMarks((local) => ({
+        ...local,
+        ...(remote.consistencyDayMarks ?? {}),
+      }))
       if (remote.foodCategories?.length) {
         setFoodCategories(remote.foodCategories)
       }
       if (remote.savedMeals?.length) {
         setSavedMeals(mergeSavedMeals(remote.savedMeals))
       }
-      if (remote.foodLogs?.length) setFoodLogs(remote.foodLogs)
+      if (remote.foodLogs?.length) {
+        setFoodLogs((local) => mergeById(local, remote.foodLogs ?? []))
+      }
+      if (remote.weightLogs?.length) {
+        setWeightLogs((local) =>
+          mergeById(local, remote.weightLogs ?? []).sort((a, b) =>
+            a.loggedAt.localeCompare(b.loggedAt),
+          ),
+        )
+      }
       if (remote.profile) setProfileRaw(remote.profile)
-      if (remote.activityLogs?.length) setActivityLogs(remote.activityLogs)
+      if (remote.activityLogs?.length) {
+        setActivityLogs((local) => mergeById(local, remote.activityLogs ?? []))
+      }
       if (remote.lifestyleLogs && Object.keys(remote.lifestyleLogs).length) {
-        setLifestyleLogs(remote.lifestyleLogs)
+        setLifestyleLogs((local) => ({ ...local, ...remote.lifestyleLogs }))
       }
       if (remote.routines) {
         setRoutines((local) => mergeRoutines(local, remote.routines ?? []).merged)
       }
       if (remote.focusTracks) {
-        setFocusTracks((local) => mergeFocusTracks(local, remote.focusTracks ?? []))
+        setFocusTracks((local) =>
+          mergeFocusTracks(local, remote.focusTracks ?? []),
+        )
       }
-      if (needsPlanSeed()) {
-        skipNextPush.current = false
-        setPhaseState(DEFAULT_PHASE)
-        setGoal(DEFAULT_GOAL)
-        setMacroPresets(DEFAULT_PHASE_MACROS)
-        setProfileRaw(DEFAULT_PROFILE)
-        setWeightLogs((prev) => applySeedWeightLogs(prev))
-        markPlanSeeded()
+    },
+    [
+      setPhaseState,
+      setGoal,
+      setMacroPresets,
+      setWorkoutPrograms,
+      setActiveProgramIdState,
+      setWorkoutTemplates,
+      setConsistencyDayMarks,
+      setFoodCategories,
+      setSavedMeals,
+      setFoodLogs,
+      setWeightLogs,
+      setProfileRaw,
+      setActivityLogs,
+      setLifestyleLogs,
+      setRoutines,
+      setFocusTracks,
+    ],
+  )
+
+  const hydrateFromCloud = useCallback(
+    async (reason: 'load' | 'refetch') => {
+      const remote = await pullAppState()
+      if (!remote) {
+        if (reason === 'load' && needsPlanSeed()) {
+          setPhaseState(DEFAULT_PHASE)
+          setGoal(DEFAULT_GOAL)
+          setMacroPresets(DEFAULT_PHASE_MACROS)
+          setProfileRaw(DEFAULT_PROFILE)
+          setWeightLogs((prev) => applySeedWeightLogs(prev))
+          markPlanSeeded()
+        }
+        hydratedRef.current = true
+        if (reason === 'load') {
+          setStateSyncStatus(isSupabaseConfigured ? 'error' : 'idle')
+        }
+        return
       }
+      applyRemoteState(remote)
+      if (needsPlanSeed()) markPlanSeeded()
       setStateSyncStatus('synced')
       hydratedRef.current = true
-    }
-    void hydrate()
+    },
+    [
+      applyRemoteState,
+      setPhaseState,
+      setGoal,
+      setMacroPresets,
+      setProfileRaw,
+      setWeightLogs,
+    ],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    void hydrateFromCloud('load').then(() => {
+      if (cancelled) return
+    })
     return () => {
       cancelled = true
     }
-  }, [
-    setPhaseState,
-    setGoal,
-    setMacroPresets,
-    setWorkoutPrograms,
-    setActiveProgramIdState,
-    setWorkoutTemplates,
-    setConsistencyDayMarks,
-    setFoodCategories,
-    setSavedMeals,
-    setFoodLogs,
-    setProfileRaw,
-    setActivityLogs,
-    setLifestyleLogs,
-    setWeightLogs,
-    setRoutines,
-    setFocusTracks,
-  ])
+  }, [hydrateFromCloud])
+
+  useEffect(() => {
+    const refetch = () => {
+      if (!hydratedRef.current) return
+      void hydrateFromCloud('refetch')
+    }
+    const stopRealtime = subscribeSharedSync(refetch, 'app-state')
+    const stopResume = onWindowResume(refetch)
+    return () => {
+      stopRealtime()
+      stopResume()
+    }
+  }, [hydrateFromCloud])
 
   useEffect(() => {
     if (!hydratedRef.current) return
@@ -1056,6 +1112,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         foodCategories,
         savedMeals,
         foodLogs,
+        weightLogs,
         profile,
         activityLogs,
         lifestyleLogs,
@@ -1076,6 +1133,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     foodCategories,
     savedMeals,
     foodLogs,
+    weightLogs,
     profile,
     activityLogs,
     lifestyleLogs,

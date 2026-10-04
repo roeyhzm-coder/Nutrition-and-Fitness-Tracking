@@ -1,4 +1,4 @@
-import { getDeviceId } from './appStateSync'
+import { getDeviceId, SHARED_OWNER_ID } from './appStateSync'
 import { isSupabaseConfigured, supabase } from './supabase'
 import type { LoggedExercise, LoggedSet, WorkoutLog } from './types'
 
@@ -102,6 +102,7 @@ export function mergeWorkoutLogs(
 type WorkoutLogRow = {
   id: string
   device_id: string
+  owner_id?: string
   program_id: string
   program_name: string
   block_number: number | null
@@ -120,6 +121,7 @@ function toRow(log: WorkoutLog, deviceId: string, withExtras = true) {
   const base = {
     id: normalized.id,
     device_id: deviceId,
+    owner_id: SHARED_OWNER_ID,
     program_id: normalized.programId,
     program_name: normalized.programName,
     block_number: normalized.blockNumber ?? null,
@@ -130,7 +132,21 @@ function toRow(log: WorkoutLog, deviceId: string, withExtras = true) {
     completed_at: normalized.completedAt,
     exercises: normalized.exercises,
   }
-  if (!withExtras) return base
+  if (!withExtras) {
+    return {
+      id: base.id,
+      device_id: base.device_id,
+      program_id: base.program_id,
+      program_name: base.program_name,
+      block_number: base.block_number,
+      day_id: base.day_id,
+      day_number: base.day_number,
+      workout_name: base.workout_name,
+      started_at: base.started_at,
+      completed_at: base.completed_at,
+      exercises: base.exercises,
+    }
+  }
   return {
     ...base,
     performed_on: normalized.performedOn ?? null,
@@ -155,21 +171,33 @@ function fromRow(row: WorkoutLogRow): WorkoutLog {
   })
 }
 
+async function fetchWorkoutLogPage(from: number, ownerOnly: boolean) {
+  if (!supabase) return { data: null, error: true }
+  let query = supabase
+    .from('workout_logs')
+    .select('*')
+    .order('completed_at', { ascending: true })
+    .range(from, from + PAGE_SIZE - 1)
+  if (ownerOnly) query = query.eq('owner_id', SHARED_OWNER_ID)
+  return query
+}
+
 /** Returns null when Supabase or the workout_logs table is unavailable. */
 export async function pullWorkoutLogs(): Promise<WorkoutLog[] | null> {
   if (!isSupabaseConfigured || !supabase) return null
-  const deviceId = getDeviceId()
   const all: WorkoutLog[] = []
   let from = 0
+  let ownerOnly = false
 
   while (true) {
-    const { data, error } = await supabase
-      .from('workout_logs')
-      .select('*')
-      .eq('device_id', deviceId)
-      .order('completed_at', { ascending: true })
-      .range(from, from + PAGE_SIZE - 1)
-    if (error || !data) return from === 0 ? null : all
+    const { data, error } = await fetchWorkoutLogPage(from, ownerOnly)
+    if (error || !data) {
+      if (from === 0 && !ownerOnly) {
+        ownerOnly = true
+        continue
+      }
+      return from === 0 ? null : all
+    }
     all.push(...(data as WorkoutLogRow[]).map(fromRow))
     if (data.length < PAGE_SIZE) break
     from += PAGE_SIZE
@@ -199,10 +227,6 @@ export async function pushWorkoutLogs(logs: WorkoutLog[]): Promise<boolean> {
 
 export async function deleteRemoteWorkoutLog(id: string): Promise<boolean> {
   if (!isSupabaseConfigured || !supabase) return false
-  const { error } = await supabase
-    .from('workout_logs')
-    .delete()
-    .eq('id', id)
-    .eq('device_id', getDeviceId())
+  const { error } = await supabase.from('workout_logs').delete().eq('id', id)
   return !error
 }

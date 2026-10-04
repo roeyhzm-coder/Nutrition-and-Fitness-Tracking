@@ -164,10 +164,7 @@ export function sortHistory(entries: PhaseHistoryEntry[]) {
 /** Returns null when Supabase or the phases_history table is unavailable. */
 export async function pullPhaseHistory(): Promise<PhaseHistoryEntry[] | null> {
   if (!isSupabaseConfigured || !supabase) return null
-  const { data, error } = await supabase
-    .from('phases_history')
-    .select('*')
-    .eq('device_id', getDeviceId())
+  const { data, error } = await supabase.from('phases_history').select('*')
   if (error || !data) return null
   return (data as PhaseHistoryRow[]).map(fromRow)
 }
@@ -192,6 +189,5 @@ export async function deleteRemotePhaseHistory(id: string): Promise<boolean> {
     .from('phases_history')
     .delete()
     .eq('id', id)
-    .eq('device_id', getDeviceId())
   return !error
 }

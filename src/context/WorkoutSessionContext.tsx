@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { onWindowResume, subscribeSharedSync } from '../lib/appStateSync'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import {
   buildSetsFromDefaults,
@@ -173,16 +174,26 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let cancelled = false
-    void pullWorkoutLogs().then((remote) => {
+    const hydrateLogs = async () => {
+      const remote = await pullWorkoutLogs()
       if (cancelled || !remote) return
       setWorkoutLogs((local) => {
         const { merged, localOnly } = mergeWorkoutLogs(local, remote)
         if (localOnly.length) void pushWorkoutLogs(localOnly)
         return merged
       })
+    }
+    void hydrateLogs()
+    const stopRealtime = subscribeSharedSync(() => {
+      void hydrateLogs()
+    }, 'workout-logs')
+    const stopResume = onWindowResume(() => {
+      void hydrateLogs()
     })
     return () => {
       cancelled = true
+      stopRealtime()
+      stopResume()
     }
   }, [setWorkoutLogs])
 
