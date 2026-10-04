@@ -15,10 +15,10 @@ export function CloudSyncButton() {
         setBusy(true)
         void syncNow().finally(() => setBusy(false))
       }}
-      className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-[11px] font-semibold text-blue-800 transition hover:bg-blue-100 disabled:opacity-60"
+      className="inline-flex min-h-8 items-center gap-1 rounded-full px-2 py-1 text-[10px] font-medium text-muted transition hover:text-text disabled:opacity-50"
     >
-      <RefreshCw className={`size-3.5 ${syncing ? 'animate-spin' : ''}`} />
-      {syncing ? 'מסנכרן…' : '🔄 סנכרן עכשיו מול הענן'}
+      <RefreshCw className={`size-3 ${syncing ? 'animate-spin' : ''}`} />
+      {syncing ? 'מסנכרן…' : 'סנכרון ענן 🔄'}
     </button>
   )
 }

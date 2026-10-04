@@ -42,7 +42,7 @@ export function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="דשבורד" action={<CloudSyncButton />} />
+      <PageHeader title="דשבורד" />
       <AiCheckinBadge />
 
       <div className="space-y-5 px-4 py-5">
@@ -120,6 +120,10 @@ export function DashboardPage() {
         <PhaseHistoryCard />
 
         <WeightFatTracker entries={weightLogs} />
+
+        <div className="flex justify-center pb-2 pt-1">
+          <CloudSyncButton />
+        </div>
       </div>
 
       <FinishPhaseModal
