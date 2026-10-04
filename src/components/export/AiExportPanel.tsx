@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
+import { LAST_AI_EXPORT_KEY } from '../../lib/aiCheckin'
 import { buildAiExportPrompt } from '../../lib/exportPrompt'
+import { localDateKey } from '../../lib/types'
 import { useAppData } from '../../context/AppDataContext'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
+import { useLocalStorage } from '../../hooks/useLocalStorage'
 import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
 
@@ -30,6 +33,10 @@ export function AiExportPanel() {
   } = useAppData()
   const { workoutLogs } = useWorkoutSession()
   const [copied, setCopied] = useState(false)
+  const [, setLastAiExportAt] = useLocalStorage<string | null>(
+    LAST_AI_EXPORT_KEY,
+    null,
+  )
 
   const prompt = useMemo(
     () =>
@@ -86,6 +93,7 @@ export function AiExportPanel() {
   async function copy() {
     try {
       await navigator.clipboard.writeText(prompt)
+      setLastAiExportAt(localDateKey())
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {

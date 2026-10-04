@@ -21,7 +21,7 @@ export default function App() {
               <Route path="routines" element={<RoutinesPage />} />
               <Route path="profile" element={<ProfilePage />} />
               <Route path="habits" element={<Navigate to="/routines" replace />} />
-              <Route path="export" element={<Navigate to="/profile" replace />} />
+              <Route path="export" element={<Navigate to="/profile#export" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

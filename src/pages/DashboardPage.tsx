@@ -2,6 +2,7 @@ import { Flame } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Card } from '../components/ui/Card'
 import { ProgressBar } from '../components/ui/ProgressBar'
+import { AiCheckinBadge } from '../components/dashboard/AiCheckinBadge'
 import { DailyWeightCard } from '../components/dashboard/DailyWeightCard'
 import { GoalPhaseCard } from '../components/dashboard/GoalPhaseCard'
 import { WeightFatTracker } from '../components/dashboard/WeightFatTracker'
@@ -41,6 +42,7 @@ export function DashboardPage() {
   return (
     <>
       <PageHeader title="דשבורד" />
+      <AiCheckinBadge />
 
       <div className="space-y-5 px-4 py-5">
         <FocusTracksStatusRow />
