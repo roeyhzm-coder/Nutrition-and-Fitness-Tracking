@@ -208,9 +208,9 @@ function parseDescription(
   return undefined
 }
 
-function roundMacro(value: number, calories: boolean) {
+function roundMacro(value: number) {
   if (!Number.isFinite(value)) return 0
-  return calories ? Math.round(value) : Math.round(value * 10) / 10
+  return roundTo(value, 2)
 }
 
 function asCategoryList(value: unknown): string[] {
@@ -236,31 +236,41 @@ export function recipeCategoryLabels(recipe: {
   categories?: string[]
   category?: string
   tags?: string[]
+  equipment?: string[]
 }): string[] {
   return [
     ...asCategoryList(recipe.categories),
     ...asCategoryList(recipe.category),
     ...asCategoryList(recipe.tags),
+    ...asCategoryList(recipe.equipment),
   ]
+}
+
+function foldLabel(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/['׳`״"]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 export function recipeMatchesCategoryTag(
   recipe: Recipe,
   tag: string,
 ): boolean {
-  const needle = tag.trim().toLowerCase()
+  const needle = foldLabel(tag)
   if (!needle) return false
   const labels = recipeCategoryLabels(recipe)
-  if (labels.some((label) => label.toLowerCase() === needle)) return true
+  if (labels.some((label) => foldLabel(label) === needle)) return true
   const category = recipe.category?.trim() ?? ''
   if (category) {
-    const hay = category.toLowerCase()
+    const hay = foldLabel(category)
     if (hay === needle || hay.includes(needle) || needle.includes(hay)) {
       return true
     }
   }
   return labels.some((label) => {
-    const hay = label.toLowerCase()
+    const hay = foldLabel(label)
     return hay.includes(needle) || needle.includes(hay)
   })
 }
@@ -316,10 +326,10 @@ export function mapSupabaseRecipe(row: SupabaseRecipeRow): Recipe {
     id: row.id,
     name: title,
     mealType: mapMealType(uniqueCategories),
-    proteinG: roundMacro(totalProtein / divisor, false),
-    calories: roundMacro(totalCalories / divisor, true),
-    carbsG: roundMacro(totalCarbs / divisor, false),
-    fatsG: roundMacro(totalFats / divisor, false),
+    proteinG: roundMacro(totalProtein / divisor),
+    calories: roundMacro(totalCalories / divisor),
+    carbsG: roundMacro(totalCarbs / divisor),
+    fatsG: roundMacro(totalFats / divisor),
     timeMin: Math.max(1, Math.round(num(macros.cookTime ?? macros.prepTime, 10))),
     tags: uniqueCategories,
     ingredients,

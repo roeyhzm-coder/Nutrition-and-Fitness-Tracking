@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Search, UtensilsCrossed, X } from 'lucide-react'
 import { MEAL_TYPE_LABELS } from '../../data/recipes'
 import { useAppData } from '../../context/AppDataContext'
-import { parsePositiveDecimal } from '../../lib/numericInput'
+import { parsePositiveDecimal, roundTo } from '../../lib/numericInput'
 import {
   mapSupabaseRecipe,
   recipeMatchesCategoryTag,
@@ -54,14 +54,25 @@ function recipeMatchesQuery(recipe: Recipe, rawQuery: string) {
   return normalizeSearch(haystack).includes(q)
 }
 
+function recipeTitleScore(recipe: Recipe, rawQuery: string): number {
+  const q = normalizeSearch(rawQuery)
+  if (!q) return 0
+  const name = normalizeSearch(recipe.name)
+  if (name.startsWith(q)) return 400 - name.length * 0.01
+  if (name.includes(` ${q}`)) return 320 - name.length * 0.01
+  if (name.includes(q)) return 260 - name.length * 0.01
+  if (recipeMatchesQuery(recipe, rawQuery)) return 80 - name.length * 0.01
+  return 0
+}
+
 function round1(n: number) {
   if (!Number.isFinite(n)) return 0
-  return Math.round(n * 10) / 10
+  return roundTo(n, 2)
 }
 
 function scaleCalories(base: number, factor: number) {
   if (!Number.isFinite(base) || !Number.isFinite(factor) || factor <= 0) return 0
-  return Math.round(base * factor)
+  return roundTo(base * factor, 2)
 }
 
 function RecipeThumb({ src, alt }: { src?: string; alt: string }) {
@@ -254,7 +265,11 @@ export function RecipeCatalog() {
   const suggestions = useMemo(() => {
     const q = query.trim()
     if (!q) return []
-    return recipes.filter((recipe) => recipeMatchesQuery(recipe, q))
+    return recipes
+      .map((recipe) => ({ recipe, score: recipeTitleScore(recipe, q) }))
+      .filter((row) => row.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .map((row) => row.recipe)
   }, [recipes, query])
 
   const list = useMemo(() => {

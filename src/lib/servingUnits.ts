@@ -261,7 +261,7 @@ export function effectiveGrams(
   if (!Number.isFinite(quantity) || quantity <= 0) return 0
   if (unitId === GRAMS_UNIT_ID) return quantity
   const found = servingUnitById(units, unitId)
-  return roundTo(quantity * (found?.grams ?? 1), 4)
+  return roundTo(quantity * (found?.grams ?? 1), 2)
 }
 
 export function convertQuantityKeepingGrams(
@@ -274,7 +274,7 @@ export function convertQuantityKeepingGrams(
   if (toId === GRAMS_UNIT_ID) return grams
   const found = servingUnitById(units, toId)
   if (!found || found.grams <= 0) return quantity
-  return roundTo(grams / found.grams, 4)
+  return roundTo(grams / found.grams, 2)
 }
 
 export const GRAMS_PRESET_ID = GRAMS_UNIT_ID

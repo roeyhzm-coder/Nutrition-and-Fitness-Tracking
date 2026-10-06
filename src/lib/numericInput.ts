@@ -1,6 +1,14 @@
+/** Hard cap for every numeric field in the app. */
+export const NUMERIC_MAX_DECIMALS = 2
+
 /** Drafts while typing a decimal, e.g. "", "7", "75.", "75.5", "75.50". */
 export const DECIMAL_DRAFT = /^\d*\.?\d{0,2}$/
 export const INTEGER_DRAFT = /^\d*$/
+
+export function clampDecimalPlaces(decimals?: number): number {
+  if (decimals == null || !Number.isFinite(decimals)) return NUMERIC_MAX_DECIMALS
+  return Math.min(NUMERIC_MAX_DECIMALS, Math.max(0, Math.round(decimals)))
+}
 
 export function safeInputValue(value: unknown): string {
   if (value == null) return ''
@@ -29,10 +37,10 @@ export function normalizeNumericDraft(raw: string): string {
 
 export function isAllowedNumericDraft(raw: string, decimals = 2): boolean {
   if (raw === '') return true
-  if (decimals <= 0) return INTEGER_DRAFT.test(raw)
-  const pattern =
-    decimals === 2 ? DECIMAL_DRAFT : new RegExp(`^\\d*\\.?\\d{0,${decimals}}$`)
-  return pattern.test(raw)
+  const places = clampDecimalPlaces(decimals)
+  if (places <= 0) return INTEGER_DRAFT.test(raw)
+  if (places === 2) return DECIMAL_DRAFT.test(raw)
+  return new RegExp(`^\\d*\\.?\\d{0,${places}}$`).test(raw)
 }
 
 export function acceptNumericInput(
@@ -40,7 +48,7 @@ export function acceptNumericInput(
   decimals = 2,
 ): string | null {
   const next = normalizeNumericDraft(raw)
-  return isAllowedNumericDraft(next, decimals) ? next : null
+  return isAllowedNumericDraft(next, clampDecimalPlaces(decimals)) ? next : null
 }
 
 export function isIncompleteNumericDraft(raw: string): boolean {
@@ -50,24 +58,27 @@ export function isIncompleteNumericDraft(raw: string): boolean {
 
 export function roundTo(value: number, digits = 2): number {
   if (!Number.isFinite(value)) return 0
-  const f = 10 ** Math.max(0, digits)
+  const places = Math.min(NUMERIC_MAX_DECIMALS, Math.max(0, digits))
+  const f = 10 ** places
   return Math.round(value * f) / f
 }
 
 /** Clean display: 0.5 not 0.50 / 0.5000001. */
 export function formatNiceNumber(value: number, maxDigits = 2): string {
   if (!Number.isFinite(value)) return ''
-  return String(roundTo(value, maxDigits))
+  return String(roundTo(value, Math.min(NUMERIC_MAX_DECIMALS, maxDigits)))
 }
 
 /** Parse only when committing to state/DB. Never returns NaN. */
 export function parseDecimal(raw: string | number | null | undefined): number | null {
-  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null
+  if (typeof raw === 'number') {
+    return Number.isFinite(raw) ? roundTo(raw, NUMERIC_MAX_DECIMALS) : null
+  }
   if (raw == null) return null
   const t = String(raw).trim().replace(/[٫,،·]/g, '.')
   if (t === '' || t === '.') return null
   const n = parseFloat(t)
-  return Number.isFinite(n) ? n : null
+  return Number.isFinite(n) ? roundTo(n, NUMERIC_MAX_DECIMALS) : null
 }
 
 export function parsePositiveDecimal(

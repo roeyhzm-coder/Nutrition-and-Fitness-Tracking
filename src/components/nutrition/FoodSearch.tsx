@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus, Star } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
-import { parseDecimal, parsePositiveDecimal } from '../../lib/numericInput'
+import { parseDecimal, parsePositiveDecimal, roundTo } from '../../lib/numericInput'
 import { gramsPerServing } from '../../lib/foodUnits'
 import {
   defaultServingUnit,
@@ -32,8 +32,8 @@ const EMPTY_CUSTOM = {
   grams: '',
 }
 
-function round1(n: number) {
-  return Math.round(n * 10) / 10
+function round2(n: number) {
+  return roundTo(n, 2)
 }
 
 function productLabel(product: FoodProduct) {
@@ -43,10 +43,10 @@ function productLabel(product: FoodProduct) {
 function macrosForGrams(product: FoodProduct, grams: number) {
   const factor = grams / 100
   return {
-    calories: Math.round((product.caloriesPer100g ?? 0) * factor),
-    protein: round1((product.proteinPer100g ?? 0) * factor),
-    carbs: round1((product.carbsPer100g ?? 0) * factor),
-    fats: round1((product.fatsPer100g ?? 0) * factor),
+    calories: round2((product.caloriesPer100g ?? 0) * factor),
+    protein: round2((product.proteinPer100g ?? 0) * factor),
+    carbs: round2((product.carbsPer100g ?? 0) * factor),
+    fats: round2((product.fatsPer100g ?? 0) * factor),
   }
 }
 
@@ -161,7 +161,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
     if (grams == null) return
     const macros = macrosForGrams(product, grams)
     const draft = qtyOf(product)
-    const notes = `${draft.quantity} · ${round1(grams)} גרם`
+    const notes = `${draft.quantity} · ${round2(grams)} גרם`
     addSavedMeal({
       name,
       ...macros,
@@ -297,7 +297,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
                   </div>
                   {grams != null ? (
                     <p className="mt-1 text-[10px] text-muted">
-                      סה״כ {round1(grams)} גרם
+                      סה״כ {round2(grams)} גרם
                     </p>
                   ) : null}
                 </div>

@@ -1,10 +1,19 @@
 import * as React from 'react'
 import { cn } from 'cn'
 
-function Input({ className, type, ...props }: React.ComponentProps<'input'>) {
+function Input({
+  className,
+  type,
+  step,
+  inputMode,
+  ...props
+}: React.ComponentProps<'input'>) {
+  const numeric = type === 'number'
   return (
     <input
       type={type}
+      inputMode={numeric ? inputMode ?? 'decimal' : inputMode}
+      step={numeric ? step ?? 0.01 : step}
       data-slot="input"
       className={cn(
         'h-11 min-h-11 max-h-[52px] w-full min-w-0 rounded-lg border border-input bg-white px-3 py-2 text-sm text-text transition-colors outline-none file:inline-flex file:h-8 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted/70 focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:bg-input/30 dark:disabled:bg-input/80 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40',

@@ -82,7 +82,7 @@ export function normalizeSearch(value: string): string {
 export function macrosFromPer100g(per100g: MacroPer100g, grams: number) {
   const f = grams / 100
   return {
-    calories: Math.round(per100g.calories * f),
+    calories: roundTo(per100g.calories * f, 2),
     protein: roundTo(per100g.protein * f, 2),
     carbs: roundTo(per100g.carbs * f, 2),
     fats: roundTo(per100g.fats * f, 2),

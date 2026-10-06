@@ -71,7 +71,7 @@ export function GoalsEditorCard() {
     )
   }
 
-  function field(key: keyof MacroTargets, label: string, decimals = 0) {
+  function field(key: keyof MacroTargets, label: string, decimals = 2) {
     return (
       <label className="block text-xs text-muted">
         {label}

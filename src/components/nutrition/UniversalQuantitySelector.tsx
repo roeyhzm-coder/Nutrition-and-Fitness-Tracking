@@ -10,7 +10,7 @@ import {
 import type { ServingUnit } from '../../lib/types'
 import { NumericInput } from '../ui/NumericInput'
 
-export const QUANTITY_DECIMALS = 4
+export const QUANTITY_DECIMALS = 2
 
 type UniversalQuantitySelectorProps = {
   units: ServingUnit[]

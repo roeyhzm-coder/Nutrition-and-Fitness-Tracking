@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pencil, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
-import { acceptNumericInput, parseDecimal } from '../../lib/numericInput'
+import { acceptNumericInput, parseDecimal, roundTo } from '../../lib/numericInput'
 import { GRAMS_UNIT_ID, resolveServingUnits } from '../../lib/servingUnits'
 import type { FoodLogEntry } from '../../lib/types'
 import { Button } from '../ui/button'
@@ -45,8 +45,8 @@ function isGramBased(entry: FoodLogEntry) {
   return entry.grams > 1
 }
 
-function round1(n: number) {
-  return Math.round(n * 10) / 10
+function round2(n: number) {
+  return roundTo(n, 2)
 }
 
 function toNum(raw: string) {
@@ -90,10 +90,10 @@ function EditFoodModal({
       quantity: raw,
       ...(nextGrams > 0
         ? {
-            calories: String(Math.round(entry.calories * factor)),
-            protein: String(round1(entry.protein * factor)),
-            carbs: String(round1(entry.carbs * factor)),
-            fats: String(round1(entry.fats * factor)),
+            calories: String(round2(entry.calories * factor)),
+            protein: String(round2(entry.protein * factor)),
+            carbs: String(round2(entry.carbs * factor)),
+            fats: String(round2(entry.fats * factor)),
           }
         : {}),
     }))
@@ -110,10 +110,10 @@ function EditFoodModal({
           updateFood(entry.id, {
             name,
             grams: grams > 0 ? grams : entry.grams,
-            calories: Math.round(toNum(form.calories)),
-            protein: round1(toNum(form.protein)),
-            carbs: round1(toNum(form.carbs)),
-            fats: round1(toNum(form.fats)),
+            calories: round2(toNum(form.calories)),
+            protein: round2(toNum(form.protein)),
+            carbs: round2(toNum(form.carbs)),
+            fats: round2(toNum(form.fats)),
           })
           onClose()
         }}
@@ -150,7 +150,7 @@ function EditFoodModal({
                 decimals={2}
                 value={form[key]}
                 onChange={(next) => {
-                  if (acceptNumericInput(next, key === 'calories' ? 0 : 2) != null) {
+                  if (acceptNumericInput(next, 2) != null) {
                     setForm((p) => ({ ...p, [key]: next }))
                   }
                 }}
