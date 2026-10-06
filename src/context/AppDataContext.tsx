@@ -47,7 +47,7 @@ import {
   normalizeFocusTrack,
   sortFocusTracks,
 } from '../lib/focusTracks'
-import { DEFAULT_FOOD_CATEGORIES, adoptRemoteRecipes, mergeRecipes, seedRecipesIfEmpty } from '../data/recipes'
+import { DEFAULT_FOOD_CATEGORIES, adoptRemoteRecipes, seedRecipesIfEmpty } from '../data/recipes'
 import {
   OFFICIAL_PLAN_VERSION,
   ensureOfficialPlan,
@@ -953,6 +953,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const ingestRemoteRecipes = useCallback(
     (remote: Recipe[]) => {
       markCatalogSeeded()
+      localDirtyRef.current = true
       setRecipes((prev) => adoptRemoteRecipes(prev, remote))
       const fromRecipes = extractRecipeCategories(remote)
       if (fromRecipes.length > 0) {
@@ -1118,7 +1119,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             localDirtyRef.current = true
             return local
           }
-          return mergeRecipes(remote.recipes ?? [])
+          return adoptRemoteRecipes(remote.recipes ?? [], local)
         })
       }
       if (remote.foodLogs !== undefined) {

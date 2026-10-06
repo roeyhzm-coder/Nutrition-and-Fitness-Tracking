@@ -165,7 +165,9 @@ export function recipesEqual(a: Recipe[], b: Recipe[]): boolean {
       r.calories === n.calories &&
       r.proteinG === n.proteinG &&
       r.carbsG === n.carbsG &&
-      r.fatsG === n.fatsG
+      r.fatsG === n.fatsG &&
+      r.servings === n.servings &&
+      r.description === n.description
     )
   })
 }

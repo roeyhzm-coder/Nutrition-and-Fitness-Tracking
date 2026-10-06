@@ -3,6 +3,11 @@ import { savedPresetKind } from '../data/defaults'
 import { savedItemServingGrams } from './foodUnits'
 import { formatNiceNumber, parsePositiveDecimal, roundTo } from './numericInput'
 import {
+  recipePortionUnits,
+  recipeServings,
+  resolveServingGrams,
+} from './recipesApi'
+import {
   defaultServingUnit,
   effectiveGrams,
   GRAMS_UNIT_ID,
@@ -143,14 +148,21 @@ export function pantryToCatalog(item: PantryItem): CatalogFood {
 }
 
 export function recipeToCatalog(recipe: Recipe): CatalogFood {
-  const servingGrams = recipe.servingGrams && recipe.servingGrams > 0 ? recipe.servingGrams : 100
+  const servingGrams = resolveServingGrams(recipe)
+  const units = recipePortionUnits(recipe)
+  const servingLabel =
+    defaultServingUnit(units)?.name ?? `מנה 1 (1 מתוך ${recipeServings(recipe)})`
   return {
     id: `recipe:${recipe.id}`,
     name: recipe.name,
     category: 'מתכון',
-    aliases: [...recipe.ingredients, ...recipe.tags],
+    aliases: [
+      ...recipe.ingredients,
+      ...recipe.tags,
+      ...(recipe.description ? [recipe.description] : []),
+    ],
     servingGrams,
-    servingLabel: 'מנה',
+    servingLabel,
     calories: recipe.calories,
     protein: recipe.proteinG,
     carbs: recipe.carbsG,
@@ -165,14 +177,7 @@ export function recipeToCatalog(recipe: Recipe): CatalogFood {
     source: 'recipe',
     kind: 'meal',
     servingFamily: 'unit',
-    ...withUnits(
-      resolveServingUnits({
-        name: recipe.name,
-        servingGrams,
-        servingLabel: 'מנה',
-        family: 'unit',
-      }),
-    ),
+    ...withUnits(units),
   }
 }
 

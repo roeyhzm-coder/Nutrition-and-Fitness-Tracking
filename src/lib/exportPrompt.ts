@@ -989,6 +989,18 @@ export function parseImportJson(raw: string): {
         r.servingGrams != null && Number.isFinite(Number(r.servingGrams))
           ? Number(r.servingGrams)
           : undefined,
+      servings:
+        r.servings != null && Number.isFinite(Number(r.servings))
+          ? Number(r.servings)
+          : undefined,
+      batchGrams:
+        r.batchGrams != null && Number.isFinite(Number(r.batchGrams))
+          ? Number(r.batchGrams)
+          : undefined,
+      description:
+        typeof r.description === 'string' && r.description.trim()
+          ? r.description.trim()
+          : undefined,
     }))
 
   if (Array.isArray(data)) {

@@ -6,6 +6,8 @@ import { parsePositiveDecimal } from '../../lib/numericInput'
 import {
   mapSupabaseRecipe,
   recipeMatchesCategoryTag,
+  recipePortionUnits,
+  recipeServings,
   resolveServingGrams,
   type SupabaseRecipeRow,
 } from '../../lib/recipesApi'
@@ -15,7 +17,6 @@ import {
   defaultServingUnit,
   effectiveGrams,
   GRAMS_UNIT_ID,
-  resolveServingUnits,
 } from '../../lib/servingUnits'
 import type { Recipe } from '../../lib/types'
 import { Button } from '../ui/button'
@@ -46,6 +47,7 @@ function recipeMatchesQuery(recipe: Recipe, rawQuery: string) {
     recipe.category ?? '',
     ...(recipe.tags ?? []),
     ...(recipe.equipment ?? []),
+    recipe.description ?? '',
   ]
     .join(' ')
     .toLowerCase()
@@ -94,17 +96,21 @@ function RecipeFoodCard({
   highlighted?: boolean
 }) {
   const { addFood } = useAppData()
+  const servings = recipeServings(recipe)
   const baseGrams = resolveServingGrams(recipe)
-  const units = resolveServingUnits({
-    name: recipe.name,
-    servingGrams: baseGrams,
-    servingLabel: 'מנה',
-    family: 'unit',
-  })
+  const units = useMemo(() => recipePortionUnits(recipe), [recipe])
   const [quantity, setQuantity] = useState('1')
   const [unitId, setUnitId] = useState(
     () => defaultServingUnit(units)?.id ?? GRAMS_UNIT_ID,
   )
+
+  useEffect(() => {
+    const nextUnits = recipePortionUnits(recipe)
+    const preferred = defaultServingUnit(nextUnits)?.id ?? GRAMS_UNIT_ID
+    setUnitId((prev) =>
+      nextUnits.some((unit) => unit.id === prev) ? prev : preferred,
+    )
+  }, [recipe])
   const [justLogged, setJustLogged] = useState(false)
   const loggedTimer = useRef<number | null>(null)
 
@@ -138,7 +144,7 @@ function RecipeFoodCard({
     setJustLogged(true)
     if (loggedTimer.current != null) window.clearTimeout(loggedTimer.current)
     loggedTimer.current = window.setTimeout(() => setJustLogged(false), 2200)
-    onLogged(`נוספו ${grams} גרם ${recipe.name} ליומן`)
+    onLogged(`נוספה מנה מ-${recipe.name} ליומן`)
   }
 
   return (
@@ -153,7 +159,11 @@ function RecipeFoodCard({
         <RecipeThumb src={recipe.image} alt={recipe.name} />
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-text">{recipe.name}</p>
-          <p className="mt-1 text-xs text-muted">מנת בסיס: {baseGrams} גרם</p>
+          <p className="mt-1 truncate text-xs text-muted">
+            מנה 1 מתוך {servings}
+            {baseGrams > 0 ? ` · ${baseGrams} גרם למנה` : ''}
+            {recipe.description ? ` · ${recipe.description}` : ''}
+          </p>
         </div>
       </div>
 

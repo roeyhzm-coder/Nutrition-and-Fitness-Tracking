@@ -72,7 +72,9 @@ export function UniversalQuantitySelector({
           aria-label="יחידת מידה"
           className="field min-h-8 min-w-0 flex-1 px-2 py-1 text-[11px] font-semibold"
         >
-          <option value={GRAMS_UNIT_ID}>גרמים (g)</option>
+          {units.some((unit) => unit.id === GRAMS_UNIT_ID) ? null : (
+            <option value={GRAMS_UNIT_ID}>גרמים (g)</option>
+          )}
           {units.map((unit) => (
             <option key={unit.id} value={unit.id}>
               {unit.name}

@@ -1,4 +1,6 @@
-import type { MealType, Recipe } from './types'
+import type { MealType, Recipe, ServingUnit } from './types'
+import { roundTo } from './numericInput'
+import { GRAMS_UNIT_ID } from './servingUnits'
 import { supabase } from './supabase'
 
 export const DEFAULT_SERVING_GRAMS = 150
@@ -13,6 +15,7 @@ export type SupabaseIngredient = {
 export type SupabaseRecipeRow = {
   id: string
   title: string
+  description?: string | null
   image?: string | null
   image_url?: string | null
   categories?: string[] | string | null
@@ -21,7 +24,9 @@ export type SupabaseRecipeRow = {
   ingredients?: SupabaseIngredient[] | string[] | null
   steps?: string[] | null
   macros?: Record<string, number | string> | null
-  base_servings?: number | null
+  servings?: number | string | null
+  base_servings?: number | string | null
+  updated_at?: string | null
 }
 
 function num(value: unknown, fallback = 0) {
@@ -85,6 +90,11 @@ function servingGramsFromMacros(
   macros: Record<string, number | string>,
 ): number {
   const candidates = [
+    macros.cooked_grams,
+    macros.cookedGrams,
+    macros.total_grams,
+    macros.totalGrams,
+    macros.batch_grams,
     macros.grams,
     macros.serving_grams,
     macros.servingGrams,
@@ -99,13 +109,108 @@ function servingGramsFromMacros(
   return 0
 }
 
+export function recipeServings(
+  recipe: Pick<Recipe, 'servings'>,
+): number {
+  const n = Number(recipe.servings)
+  if (!Number.isFinite(n) || n <= 1) return 1
+  return Math.max(1, Math.round(n))
+}
+
 export function resolveServingGrams(
-  recipe: Pick<Recipe, 'servingGrams' | 'ingredients'>,
+  recipe: Pick<Recipe, 'servingGrams' | 'batchGrams' | 'servings' | 'ingredients'>,
 ): number {
   const stored = num(recipe.servingGrams)
   if (stored > 0) return Math.round(stored)
+  const servings = recipeServings(recipe)
+  const batch = num(recipe.batchGrams)
+  if (batch > 0) return Math.max(1, Math.round(batch / servings))
   const fromIngredients = sumIngredientGrams(recipe.ingredients)
-  return fromIngredients > 0 ? Math.round(fromIngredients) : DEFAULT_SERVING_GRAMS
+  if (fromIngredients > 0) {
+    return Math.max(1, Math.round(fromIngredients / servings))
+  }
+  return DEFAULT_SERVING_GRAMS
+}
+
+/** Portion dropdown for recipes: 1 serving, full batch, half, cooked grams. */
+export function recipePortionUnits(recipe: Recipe): ServingUnit[] {
+  const servings = recipeServings(recipe)
+  const perGrams = resolveServingGrams(recipe)
+  const batchGrams =
+    num(recipe.batchGrams) > 0
+      ? Math.round(num(recipe.batchGrams))
+      : Math.round(perGrams * servings)
+  const units: ServingUnit[] = [
+    {
+      id: 'recipe-serving-1',
+      name: `מנה 1 (1 מתוך ${servings})`,
+      grams: perGrams,
+      is_default: true,
+    },
+  ]
+  if (servings > 1) {
+    units.push({
+      id: 'recipe-full-batch',
+      name: `כל המתכון השלם (${servings} מנות)`,
+      grams: batchGrams,
+    })
+  }
+  units.push({
+    id: 'recipe-half-serving',
+    name: 'חצי מנה (0.5)',
+    grams: roundTo(perGrams * 0.5, 2),
+  })
+  units.push({
+    id: GRAMS_UNIT_ID,
+    name: 'גרמים מוכנים',
+    grams: 1,
+  })
+  return units
+}
+
+function parseServings(
+  row: SupabaseRecipeRow,
+  macros: Record<string, number | string>,
+): number {
+  const candidates = [
+    row.servings,
+    row.base_servings,
+    macros.servings,
+    macros.base_servings,
+    macros.yield,
+  ]
+  for (const value of candidates) {
+    const n = num(value)
+    if (n > 0) return Math.max(1, Math.round(n))
+  }
+  return 1
+}
+
+function parseDescription(
+  row: SupabaseRecipeRow,
+  macros: Record<string, unknown>,
+): string | undefined {
+  const direct = [row.description, macros.description]
+  for (const value of direct) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  const variations = macros.variations
+  if (Array.isArray(variations)) {
+    const records = variations.filter(
+      (item): item is Record<string, unknown> =>
+        Boolean(item) && typeof item === 'object',
+    )
+    const preferred =
+      records.find((item) => item.isDefault === true) ?? records[0]
+    const text = preferred?.description
+    if (typeof text === 'string' && text.trim()) return text.trim()
+  }
+  return undefined
+}
+
+function roundMacro(value: number, calories: boolean) {
+  if (!Number.isFinite(value)) return 0
+  return calories ? Math.round(value) : Math.round(value * 10) / 10
 }
 
 function asCategoryList(value: unknown): string[] {
@@ -161,35 +266,72 @@ export function recipeMatchesCategoryTag(
 }
 
 export function mapSupabaseRecipe(row: SupabaseRecipeRow): Recipe {
-  const macros = row.macros ?? {}
-  const image = row.image_url || row.image || undefined
+  const macros = (row.macros ?? {}) as Record<string, number | string>
+  const looseMacros = (row.macros ?? {}) as Record<string, unknown>
+  const image =
+    row.image_url ||
+    row.image ||
+    (typeof macros.imageUrl === 'string' ? macros.imageUrl : undefined)
   const ingredients = (row.ingredients ?? []).map(formatIngredient)
-  const servingGrams =
-    servingGramsFromMacros(macros) ||
-    Math.round(sumIngredientGrams(row.ingredients)) ||
-    undefined
+  const servings = parseServings(row, macros)
+  const basis = String(macros.nutritionBasis ?? '').toLowerCase()
+  const isPer100 = basis === '100g' || basis === 'per100g' || basis === 'per_100g'
+  const isBatch = !isPer100 && (basis === 'recipe' || servings > 1)
+  const divisor = isBatch ? servings : 1
+  const totalCalories = num(macros.calories ?? macros['קלוריות'])
+  const totalProtein = num(macros.protein ?? macros['חלבון'])
+  const totalCarbs = num(macros.carbs ?? macros['פחמימות'])
+  const totalFats = num(macros.fat ?? macros['שומן'])
+  const listedGrams = servingGramsFromMacros(macros)
+  const ingredientGrams = Math.round(sumIngredientGrams(row.ingredients))
+  const cookedTotal = listedGrams || ingredientGrams
+  let servingGrams: number
+  let batchGrams: number
+  if (isPer100) {
+    servingGrams = listedGrams || 100
+    batchGrams = Math.round(servingGrams * servings)
+  } else if (cookedTotal > 0) {
+    const looksLikeBatch = servings > 1 && cookedTotal >= 80 * servings
+    if (isBatch && looksLikeBatch) {
+      batchGrams = cookedTotal
+      servingGrams = Math.max(1, Math.round(cookedTotal / servings))
+    } else if (isBatch) {
+      servingGrams = cookedTotal
+      batchGrams = Math.round(cookedTotal * servings)
+    } else {
+      servingGrams = cookedTotal
+      batchGrams = cookedTotal
+    }
+  } else {
+    servingGrams = DEFAULT_SERVING_GRAMS
+    batchGrams = Math.round(DEFAULT_SERVING_GRAMS * servings)
+  }
   const categories = [
     ...asCategoryList(row.categories),
     ...asCategoryList(row.category),
   ]
   const uniqueCategories = [...new Set(categories.filter(Boolean))]
+  const title = String(row.title ?? '').trim()
   return {
     id: row.id,
-    name: row.title,
+    name: title,
     mealType: mapMealType(uniqueCategories),
-    proteinG: num(macros.protein ?? macros['חלבון']),
-    calories: num(macros.calories ?? macros['קלוריות']),
-    carbsG: num(macros.carbs ?? macros['פחמימות']),
-    fatsG: num(macros.fat ?? macros['שומן']),
-    timeMin: 10,
+    proteinG: roundMacro(totalProtein / divisor, false),
+    calories: roundMacro(totalCalories / divisor, true),
+    carbsG: roundMacro(totalCarbs / divisor, false),
+    fatsG: roundMacro(totalFats / divisor, false),
+    timeMin: Math.max(1, Math.round(num(macros.cookTime ?? macros.prepTime, 10))),
     tags: uniqueCategories,
     ingredients,
     steps: row.steps ?? [],
-    image: image ?? undefined,
+    image: image || undefined,
     categories: uniqueCategories,
     category: row.category?.trim() || uniqueCategories[0],
     equipment: row.equipment ?? [],
     servingGrams,
+    servings,
+    batchGrams,
+    description: parseDescription(row, looseMacros),
   }
 }
 

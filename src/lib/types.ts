@@ -559,8 +559,14 @@ export type Recipe = {
   /** Legacy/single-label category from some recipe sources. */
   category?: string
   equipment?: string[]
-  /** Base serving weight the stored macros belong to. */
+  /** Grams for one serving; stored macros are per this weight. */
   servingGrams?: number
+  /** Recipe yield. Macros on the row are divided by this when > 1. */
+  servings?: number
+  /** Total cooked weight of the full batch. */
+  batchGrams?: number
+  /** Optional blurb from the recipe source. */
+  description?: string
 }
 
 export function todayKey(d = new Date()) {
