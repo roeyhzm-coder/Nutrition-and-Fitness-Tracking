@@ -240,6 +240,9 @@ export type UserProfile = {
   heightCm: number | null
   sex: Sex | null
   startWeightKg: number | null
+  waistCircumferenceCm: number | null
+  neckCircumferenceCm: number | null
+  /** Stored Navy-formula result. Never a manual input — derived from waist, neck, height. */
   estimatedBodyFatPct: number | null
   activityLevel: ActivityLevel | null
   avgSleepHours: number | null
@@ -259,6 +262,8 @@ export const EMPTY_PROFILE: UserProfile = {
   heightCm: null,
   sex: null,
   startWeightKg: null,
+  waistCircumferenceCm: null,
+  neckCircumferenceCm: null,
   estimatedBodyFatPct: null,
   activityLevel: null,
   avgSleepHours: null,
@@ -277,12 +282,30 @@ function normalizeIntervalDays(value: unknown, fallback = 28): number {
   return Math.min(365, Math.max(1, n))
 }
 
+function nullablePositiveNumber(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 export function normalizeProfile(
   profile: Partial<UserProfile> | null | undefined,
 ): UserProfile {
   const next = { ...EMPTY_PROFILE, ...(profile ?? {}) }
+  const heightCm = nullablePositiveNumber(next.heightCm)
+  const waistCircumferenceCm = nullablePositiveNumber(next.waistCircumferenceCm)
+  const neckCircumferenceCm = nullablePositiveNumber(next.neckCircumferenceCm)
+  const computedFat = calcMaleNavyBodyFatPct(
+    waistCircumferenceCm,
+    neckCircumferenceCm,
+    heightCm,
+  )
   return {
     ...next,
+    heightCm,
+    waistCircumferenceCm,
+    neckCircumferenceCm,
+    estimatedBodyFatPct:
+      computedFat ?? nullablePositiveNumber(next.estimatedBodyFatPct),
     aiCheckinIntervalDays: normalizeIntervalDays(
       profile?.aiCheckinIntervalDays ?? next.aiCheckinIntervalDays,
     ),
@@ -291,6 +314,40 @@ export function normalizeProfile(
       /^\d{4}-\d{2}-\d{2}$/.test(next.lastAiExportAt.slice(0, 10))
         ? next.lastAiExportAt.slice(0, 10)
         : null,
+  }
+}
+
+export type UserProfileMeasurementColumns = {
+  waist_circumference?: unknown
+  neck_circumference?: unknown
+  body_fat_percentage?: unknown
+}
+
+/** Overlay dedicated user_profile columns onto the JSON profile (columns win). */
+export function mergeProfileMeasurementColumns(
+  profile: Partial<UserProfile> | null | undefined,
+  columns: UserProfileMeasurementColumns | null | undefined,
+): UserProfile {
+  return normalizeProfile({
+    ...profile,
+    waistCircumferenceCm:
+      nullablePositiveNumber(columns?.waist_circumference) ??
+      profile?.waistCircumferenceCm,
+    neckCircumferenceCm:
+      nullablePositiveNumber(columns?.neck_circumference) ??
+      profile?.neckCircumferenceCm,
+    estimatedBodyFatPct:
+      nullablePositiveNumber(columns?.body_fat_percentage) ??
+      profile?.estimatedBodyFatPct,
+  })
+}
+
+export function profileMeasurementColumns(profile: UserProfile | null | undefined) {
+  const p = normalizeProfile(profile)
+  return {
+    waist_circumference: p.waistCircumferenceCm,
+    neck_circumference: p.neckCircumferenceCm,
+    body_fat_percentage: p.estimatedBodyFatPct,
   }
 }
 
@@ -546,6 +603,62 @@ export function normalizeGoal(goal: Partial<GoalSettings> | null | undefined): G
     totalPhases: Math.max(1, Math.round(finitePositive(goal?.totalPhases, 6))),
     startWeightKg: goal?.startWeightKg ?? 69.5,
   }
+}
+
+/** US Navy / Hodgdon male formula using centimeters. */
+export function calcMaleNavyBodyFatPct(
+  waistCm: number | null | undefined,
+  neckCm: number | null | undefined,
+  heightCm: number | null | undefined,
+): number | null {
+  if (
+    waistCm == null ||
+    neckCm == null ||
+    heightCm == null ||
+    !Number.isFinite(waistCm) ||
+    !Number.isFinite(neckCm) ||
+    !Number.isFinite(heightCm) ||
+    waistCm <= 0 ||
+    neckCm <= 0 ||
+    heightCm <= 0 ||
+    waistCm <= neckCm
+  ) {
+    return null
+  }
+  const denom =
+    1.0324 -
+    0.19077 * Math.log10(waistCm - neckCm) +
+    0.15456 * Math.log10(heightCm)
+  if (!Number.isFinite(denom) || denom === 0) return null
+  const pct = 495 / denom - 450
+  if (!Number.isFinite(pct) || pct <= 0 || pct >= 75) return null
+  return Math.round(pct * 100) / 100
+}
+
+export function navyBodyFatValidationMessage(
+  waistCm: number | null | undefined,
+  neckCm: number | null | undefined,
+  heightCm: number | null | undefined,
+): string | null {
+  const waistFilled = waistCm != null
+  const neckFilled = neckCm != null
+  if (!waistFilled && !neckFilled) return null
+  if (!waistFilled || !neckFilled) {
+    return 'יש להזין היקף מותניים והיקף צוואר.'
+  }
+  if (waistCm! <= 0 || neckCm! <= 0) {
+    return 'ההיקפים חייבים להיות מספרים חיוביים.'
+  }
+  if (waistCm! <= neckCm!) {
+    return 'היקף המותניים חייב להיות גדול מהיקף הצוואר.'
+  }
+  if (heightCm == null || heightCm <= 0) {
+    return 'חסר גובה בפרופיל — לא ניתן לחשב אחוז שומן.'
+  }
+  if (calcMaleNavyBodyFatPct(waistCm, neckCm, heightCm) == null) {
+    return 'לא ניתן לחשב אחוז שומן מהמדידות שהוזנו.'
+  }
+  return null
 }
 
 export function calcBmi(

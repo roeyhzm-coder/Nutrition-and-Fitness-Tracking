@@ -1,17 +1,6 @@
--- Shared user profile + current phase/goals (companion to app_state)
-
-create table if not exists public.user_profile (
-  owner_id text primary key default 'primary',
-  profile jsonb not null default '{}'::jsonb,
-  waist_circumference numeric,
-  neck_circumference numeric,
-  body_fat_percentage numeric,
-  phase text not null default 'maintain'
-    check (phase in ('bulk', 'cut', 'maintain')),
-  goal jsonb not null default '{}'::jsonb,
-  macro_presets jsonb not null default '{}'::jsonb,
-  updated_at timestamptz not null default now()
-);
+-- Dedicated measurement columns on user_profile (no duplicate tables).
+-- Body fat is stored as the Navy-formula result from waist and neck.
+-- Height stays inside the existing profile JSON (single source of truth).
 
 alter table public.user_profile
   add column if not exists waist_circumference numeric,
@@ -41,10 +30,17 @@ alter table public.user_profile
     or waist_circumference > neck_circumference
   );
 
-alter table public.user_profile enable row level security;
-
-drop policy if exists "user_profile_all" on public.user_profile;
-create policy "user_profile_all"
-  on public.user_profile for all
-  using (true)
-  with check (true);
+update public.user_profile
+set
+  waist_circumference = coalesce(
+    waist_circumference,
+    nullif(profile ->> 'waistCircumferenceCm', '')::numeric
+  ),
+  neck_circumference = coalesce(
+    neck_circumference,
+    nullif(profile ->> 'neckCircumferenceCm', '')::numeric
+  ),
+  body_fat_percentage = coalesce(
+    body_fat_percentage,
+    nullif(profile ->> 'estimatedBodyFatPct', '')::numeric
+  );

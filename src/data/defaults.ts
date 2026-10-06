@@ -82,6 +82,8 @@ export const DEFAULT_PROFILE: UserProfile = {
   heightCm: 182,
   sex: 'male',
   startWeightKg: 69.5,
+  waistCircumferenceCm: null,
+  neckCircumferenceCm: null,
   estimatedBodyFatPct: 14,
   activityLevel: 'sedentary',
   avgSleepHours: 8,

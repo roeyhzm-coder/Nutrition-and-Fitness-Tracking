@@ -3,11 +3,14 @@ import { useAppData } from '../../context/AppDataContext'
 import {
   displayDecimal,
   formatKg,
+  formatNiceNumber,
   parseInteger,
   parsePositiveDecimal,
 } from '../../lib/numericInput'
 import {
   calcBmi,
+  calcMaleNavyBodyFatPct,
+  navyBodyFatValidationMessage,
   SEX_LABELS,
   type Sex,
   type UserProfile,
@@ -21,7 +24,8 @@ type NumericKey =
   | 'heightCm'
   | 'startWeightKg'
   | 'targetWeightKg'
-  | 'estimatedBodyFatPct'
+  | 'waistCircumferenceCm'
+  | 'neckCircumferenceCm'
 type TextKey = 'avoidFoods' | 'allergies' | 'supplements' | 'injuries'
 
 const NUMERIC_FIELDS: ReadonlyArray<[NumericKey, string, number]> = [
@@ -29,7 +33,8 @@ const NUMERIC_FIELDS: ReadonlyArray<[NumericKey, string, number]> = [
   ['heightCm', 'גובה (ס״מ)', 2],
   ['startWeightKg', 'משקל התחלתי (ק״ג)', 2],
   ['targetWeightKg', 'משקל יעד (ק״ג)', 2],
-  ['estimatedBodyFatPct', 'אחוז שומן מוערך', 2],
+  ['waistCircumferenceCm', 'היקף מותניים (ס״מ)', 2],
+  ['neckCircumferenceCm', 'היקף צוואר (ס״מ)', 2],
 ]
 
 const TEXT_FIELDS: ReadonlyArray<[TextKey, string, string]> = [
@@ -52,7 +57,8 @@ function toForm(
     heightCm: displayDecimal(p.heightCm),
     startWeightKg: displayDecimal(p.startWeightKg),
     targetWeightKg: displayDecimal(targetWeightKg),
-    estimatedBodyFatPct: displayDecimal(p.estimatedBodyFatPct),
+    waistCircumferenceCm: displayDecimal(p.waistCircumferenceCm),
+    neckCircumferenceCm: displayDecimal(p.neckCircumferenceCm),
     sex: p.sex ?? '',
     avoidFoods: p.avoidFoods,
     allergies: p.allergies,
@@ -74,6 +80,7 @@ export function ProfileCard() {
     target: goal.masterTargetWeightKg,
   })
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   if (
     source.profile !== profile ||
@@ -83,9 +90,19 @@ export function ProfileCard() {
     setForm(toForm(profile, goal.masterTargetWeightKg))
   }
 
+  const heightCm = parsePositiveDecimal(form.heightCm)
+  const waistCm = parsePositiveDecimal(form.waistCircumferenceCm)
+  const neckCm = parsePositiveDecimal(form.neckCircumferenceCm)
+  const estimatedBodyFatPct = calcMaleNavyBodyFatPct(waistCm, neckCm, heightCm)
+  const measurementError = navyBodyFatValidationMessage(
+    waistCm,
+    neckCm,
+    heightCm,
+  )
+
   const bmi = calcBmi(
     latestWeight ?? parsePositiveDecimal(form.startWeightKg),
-    parsePositiveDecimal(form.heightCm),
+    heightCm,
   )
 
   return (
@@ -94,13 +111,21 @@ export function ProfileCard() {
         className="space-y-3"
         onSubmit={(e) => {
           e.preventDefault()
+          if (measurementError) {
+            setError(measurementError)
+            setSaved(false)
+            return
+          }
+          setError(null)
           setProfile({
             ...profile,
             age: parseInteger(form.age),
-            heightCm: parsePositiveDecimal(form.heightCm),
+            heightCm,
             sex: form.sex || null,
             startWeightKg: parsePositiveDecimal(form.startWeightKg),
-            estimatedBodyFatPct: parsePositiveDecimal(form.estimatedBodyFatPct),
+            waistCircumferenceCm: waistCm,
+            neckCircumferenceCm: neckCm,
+            estimatedBodyFatPct,
             avoidFoods: form.avoidFoods.trim(),
             allergies: form.allergies.trim(),
             supplements: form.supplements.trim(),
@@ -121,7 +146,10 @@ export function ProfileCard() {
               <NumericInput
                 decimals={decimals}
                 value={form[key]}
-                onChange={(next) => setForm((p) => ({ ...p, [key]: next }))}
+                onChange={(next) => {
+                  setError(null)
+                  setForm((p) => ({ ...p, [key]: next }))
+                }}
                 placeholder="לא צוין"
               />
             </label>
@@ -163,6 +191,25 @@ export function ProfileCard() {
             {latestWeight != null ? ` (${formatKg(latestWeight)} ק״ג)` : ''} וגובה.
           </p>
         </div>
+
+        <div className="rounded-2xl bg-slate-50 px-4 py-3">
+          <p className="font-display text-lg font-extrabold tabular-nums text-text">
+            אחוז שומן מוערך:{' '}
+            {estimatedBodyFatPct != null
+              ? `${formatNiceNumber(estimatedBodyFatPct, 2)}%`
+              : '—'}
+          </p>
+          <p className="mt-1 text-[11px] text-muted">
+            מחושב בזמן אמת לפי נוסחת חיל הים לגברים (מותניים, צוואר וגובה
+            מהפרופיל). לא ניתן לעריכה ידנית.
+          </p>
+        </div>
+
+        {measurementError || error ? (
+          <p className="text-xs text-red-600" role="alert">
+            {measurementError || error}
+          </p>
+        ) : null}
 
         <p className="text-[10px] text-muted">
           מדדים נשמרים מיידית ב-localStorage וב-Supabase. משקל עדכני נשלף

@@ -16,7 +16,13 @@ import type {
   WorkoutProgram,
   WorkoutTemplate,
 } from './types'
-import { isPhase, normalizeGoal, normalizeProfile } from './types'
+import {
+  isPhase,
+  mergeProfileMeasurementColumns,
+  normalizeGoal,
+  normalizeProfile,
+  profileMeasurementColumns,
+} from './types'
 import { normalizeMacroPresets } from '../data/defaults'
 import type { ConsistencyDayMarks } from './weeklyConsistency'
 
@@ -359,7 +365,7 @@ async function pullFromUserProfile(): Promise<SyncedAppState | null> {
   for (const owner of SHARED_OWNER_ALIASES) {
     data = await selectRow(
       'user_profile',
-      'owner_id, profile, phase, goal, macro_presets, updated_at',
+      'owner_id, profile, phase, goal, macro_presets, updated_at, waist_circumference, neck_circumference, body_fat_percentage',
       { column: 'owner_id', value: owner },
     )
     if (data) break
@@ -383,9 +389,10 @@ async function pullFromUserProfile(): Promise<SyncedAppState | null> {
     workoutPrograms: [],
     consistencyDayMarks: {},
     foodCategories: [],
-    profile: data.profile
-      ? normalizeProfile(data.profile as Partial<UserProfile>)
-      : undefined,
+    profile: mergeProfileMeasurementColumns(
+      data.profile as Partial<UserProfile> | null,
+      data,
+    ),
     updatedAt: (data.updated_at as string) ?? new Date().toISOString(),
   }
 }
@@ -525,6 +532,7 @@ export async function pushAppState(
       {
         owner_id: SHARED_OWNER_ID,
         profile: state.profile ?? {},
+        ...profileMeasurementColumns(state.profile),
         phase: state.phase,
         goal: { ...state.goal, activePhase: state.phase },
         macro_presets: state.macroPresets,
