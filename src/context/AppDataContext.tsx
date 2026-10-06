@@ -47,7 +47,7 @@ import {
   normalizeFocusTrack,
   sortFocusTracks,
 } from '../lib/focusTracks'
-import { DEFAULT_FOOD_CATEGORIES, mergeRecipes, seedRecipesIfEmpty } from '../data/recipes'
+import { DEFAULT_FOOD_CATEGORIES, adoptRemoteRecipes, mergeRecipes, seedRecipesIfEmpty } from '../data/recipes'
 import {
   OFFICIAL_PLAN_VERSION,
   ensureOfficialPlan,
@@ -239,7 +239,8 @@ type AppDataContextValue = {
   ) => void
   recipesSyncStatus: RecipesSyncStatus
   recipesSyncError: string | null
-  syncRecipes: () => Promise<void>
+  ingestRemoteRecipes: (remote: Recipe[]) => void
+  syncRecipes: () => Promise<{ ok: boolean; count: number; error?: string }>
   stateSyncStatus: 'idle' | 'syncing' | 'synced' | 'error'
   lastSyncNotice: { type: 'ok' | 'error'; message: string } | null
   clearSyncNotice: () => void
@@ -949,27 +950,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [setConsistencyDayMarks],
   )
 
-  const syncRecipes = useCallback(async () => {
-    if (!isSupabaseConfigured) {
-      setRecipesSyncStatus('error')
-      setRecipesSyncError('חסרים משתני סביבה של Supabase')
-      return
-    }
-
-    setRecipesSyncStatus('loading')
-    setRecipesSyncError(null)
-    try {
-      const remote = await fetchRecipesFromSupabase()
-      if (remote.length > 0) {
-        setRecipes((prev) => {
-          if (prev.length === 0 && needsCatalogSeed()) {
-            markCatalogSeeded()
-            return mergeRecipes(remote)
-          }
-          const byId = new Map(remote.map((row) => [row.id, row]))
-          return prev.map((row) => byId.get(row.id) ?? row)
-        })
-      }
+  const ingestRemoteRecipes = useCallback(
+    (remote: Recipe[]) => {
+      markCatalogSeeded()
+      setRecipes((prev) => adoptRemoteRecipes(prev, remote))
       const fromRecipes = extractRecipeCategories(remote)
       if (fromRecipes.length > 0) {
         setFoodCategories((prev) => {
@@ -981,13 +965,35 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         })
       }
       setRecipesSyncStatus('synced')
-    } catch (err) {
+      setRecipesSyncError(null)
+    },
+    [setRecipes, setFoodCategories],
+  )
+
+  const syncRecipes = useCallback(async () => {
+    if (!isSupabaseConfigured) {
+      const error = 'חסרים משתני סביבה של Supabase'
       setRecipesSyncStatus('error')
-      setRecipesSyncError(
-        err instanceof Error ? err.message : 'סנכרון המתכונים נכשל',
-      )
+      setRecipesSyncError(error)
+      console.error('[recipes] sync failed', error)
+      return { ok: false, count: 0, error }
     }
-  }, [setRecipes, setFoodCategories])
+
+    setRecipesSyncStatus('loading')
+    setRecipesSyncError(null)
+    try {
+      const remote = await fetchRecipesFromSupabase()
+      ingestRemoteRecipes(remote)
+      return { ok: true, count: remote.length }
+    } catch (err) {
+      const error =
+        err instanceof Error ? err.message : 'סנכרון המתכונים נכשל'
+      console.error('[recipes] sync failed', err)
+      setRecipesSyncStatus('error')
+      setRecipesSyncError(error)
+      return { ok: false, count: 0, error }
+    }
+  }, [ingestRemoteRecipes])
 
   useEffect(() => {
     void syncRecipes()
@@ -1981,6 +1987,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       importMealsAndRecipes,
       recipesSyncStatus,
       recipesSyncError,
+      ingestRemoteRecipes,
       syncRecipes,
       stateSyncStatus,
       lastSyncNotice,
@@ -2074,6 +2081,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       importMealsAndRecipes,
       recipesSyncStatus,
       recipesSyncError,
+      ingestRemoteRecipes,
       syncRecipes,
       stateSyncStatus,
       lastSyncNotice,

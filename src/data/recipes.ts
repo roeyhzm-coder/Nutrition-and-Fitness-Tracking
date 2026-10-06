@@ -141,6 +141,14 @@ export function mergeRecipes(existing: Recipe[]): Recipe[] {
   return [...byId.values()]
 }
 
+/** Remote rows win on id so a live Supabase pull replaces stale local copies. */
+export function adoptRemoteRecipes(local: Recipe[], remote: Recipe[]): Recipe[] {
+  const byId = new Map<string, Recipe>()
+  for (const recipe of local) byId.set(recipe.id, recipe)
+  for (const recipe of remote) byId.set(recipe.id, recipe)
+  return [...byId.values()]
+}
+
 export function seedRecipesIfEmpty(existing: Recipe[]): Recipe[] {
   return existing.length > 0 ? mergeRecipes(existing) : DEFAULT_RECIPES
 }

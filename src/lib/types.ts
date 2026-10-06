@@ -556,6 +556,8 @@ export type Recipe = {
   steps: string[]
   image?: string
   categories?: string[]
+  /** Legacy/single-label category from some recipe sources. */
+  category?: string
   equipment?: string[]
   /** Base serving weight the stored macros belong to. */
   servingGrams?: number

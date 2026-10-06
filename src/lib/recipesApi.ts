@@ -15,7 +15,8 @@ export type SupabaseRecipeRow = {
   title: string
   image?: string | null
   image_url?: string | null
-  categories?: string[] | null
+  categories?: string[] | string | null
+  category?: string | null
   equipment?: string[] | null
   ingredients?: SupabaseIngredient[] | string[] | null
   steps?: string[] | null
@@ -107,6 +108,58 @@ export function resolveServingGrams(
   return fromIngredients > 0 ? Math.round(fromIngredients) : DEFAULT_SERVING_GRAMS
 }
 
+function asCategoryList(value: unknown): string[] {
+  if (value == null || value === '') return []
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => asCategoryList(item))
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return []
+    if (/[,|/]/.test(trimmed) && !trimmed.startsWith('[')) {
+      return trimmed
+        .split(/[,|/]/)
+        .map((part) => part.trim())
+        .filter(Boolean)
+    }
+    return [trimmed]
+  }
+  return []
+}
+
+export function recipeCategoryLabels(recipe: {
+  categories?: string[]
+  category?: string
+  tags?: string[]
+}): string[] {
+  return [
+    ...asCategoryList(recipe.categories),
+    ...asCategoryList(recipe.category),
+    ...asCategoryList(recipe.tags),
+  ]
+}
+
+export function recipeMatchesCategoryTag(
+  recipe: Recipe,
+  tag: string,
+): boolean {
+  const needle = tag.trim().toLowerCase()
+  if (!needle) return false
+  const labels = recipeCategoryLabels(recipe)
+  if (labels.some((label) => label.toLowerCase() === needle)) return true
+  const category = recipe.category?.trim() ?? ''
+  if (category) {
+    const hay = category.toLowerCase()
+    if (hay === needle || hay.includes(needle) || needle.includes(hay)) {
+      return true
+    }
+  }
+  return labels.some((label) => {
+    const hay = label.toLowerCase()
+    return hay.includes(needle) || needle.includes(hay)
+  })
+}
+
 export function mapSupabaseRecipe(row: SupabaseRecipeRow): Recipe {
   const macros = row.macros ?? {}
   const image = row.image_url || row.image || undefined
@@ -115,65 +168,48 @@ export function mapSupabaseRecipe(row: SupabaseRecipeRow): Recipe {
     servingGramsFromMacros(macros) ||
     Math.round(sumIngredientGrams(row.ingredients)) ||
     undefined
+  const categories = [
+    ...asCategoryList(row.categories),
+    ...asCategoryList(row.category),
+  ]
+  const uniqueCategories = [...new Set(categories.filter(Boolean))]
   return {
     id: row.id,
     name: row.title,
-    mealType: mapMealType(row.categories ?? []),
+    mealType: mapMealType(uniqueCategories),
     proteinG: num(macros.protein ?? macros['חלבון']),
     calories: num(macros.calories ?? macros['קלוריות']),
     carbsG: num(macros.carbs ?? macros['פחמימות']),
     fatsG: num(macros.fat ?? macros['שומן']),
     timeMin: 10,
-    tags: row.categories ?? [],
+    tags: uniqueCategories,
     ingredients,
     steps: row.steps ?? [],
     image: image ?? undefined,
-    categories: row.categories ?? [],
+    categories: uniqueCategories,
+    category: row.category?.trim() || uniqueCategories[0],
     equipment: row.equipment ?? [],
     servingGrams,
   }
 }
-
-const SELECT_WITH_URL =
-  'id, title, image, image_url, categories, equipment, ingredients, steps, macros, base_servings'
-const SELECT_BASIC =
-  'id, title, image, categories, equipment, ingredients, steps, macros, base_servings'
 
 export async function fetchRecipesFromSupabase(): Promise<Recipe[]> {
   if (!supabase) {
     throw new Error('Supabase אינו מוגדר')
   }
 
-  const full = await supabase
-    .from('recipes')
-    .select(SELECT_WITH_URL)
-    .order('title', { ascending: true })
-
-  if (!full.error) {
-    return (full.data as SupabaseRecipeRow[] | null)?.map(mapSupabaseRecipe) ?? []
-  }
-
-  const basic = await supabase
-    .from('recipes')
-    .select(SELECT_BASIC)
-    .order('title', { ascending: true })
-
-  if (basic.error) throw basic.error
-
-  return (basic.data as SupabaseRecipeRow[] | null)?.map(mapSupabaseRecipe) ?? []
+  const { data, error } = await supabase.from('recipes').select('*')
+  if (error) throw error
+  return (data as SupabaseRecipeRow[] | null)?.map(mapSupabaseRecipe) ?? []
 }
 
 /** Unique category labels from synced recipes. */
 export function extractRecipeCategories(recipes: Recipe[]): string[] {
   const set = new Set<string>()
   for (const r of recipes) {
-    for (const c of r.categories ?? []) {
+    for (const c of recipeCategoryLabels(r)) {
       const t = c.trim()
       if (t) set.add(t)
-    }
-    for (const t of r.tags ?? []) {
-      const x = t.trim()
-      if (x) set.add(x)
     }
   }
   return [...set].sort((a, b) => a.localeCompare(b, 'he'))

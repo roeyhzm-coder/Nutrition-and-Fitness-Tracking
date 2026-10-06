@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, UtensilsCrossed } from 'lucide-react'
+import { Check, Search, UtensilsCrossed, X } from 'lucide-react'
 import { MEAL_TYPE_LABELS } from '../../data/recipes'
 import { useAppData } from '../../context/AppDataContext'
 import { parsePositiveDecimal } from '../../lib/numericInput'
-import { resolveServingGrams } from '../../lib/recipesApi'
+import {
+  mapSupabaseRecipe,
+  recipeMatchesCategoryTag,
+  resolveServingGrams,
+  type SupabaseRecipeRow,
+} from '../../lib/recipesApi'
+import { normalizeSearch } from '../../lib/foodCatalog'
+import { supabase } from '../../lib/supabase'
 import {
   defaultServingUnit,
   effectiveGrams,
@@ -23,13 +30,26 @@ const MACRO_BADGES = [
 ] as const
 
 function recipeMatchesCategory(recipe: Recipe, categoryLabel: string) {
-  const labels = [
+  if (recipeMatchesCategoryTag(recipe, categoryLabel)) return true
+  const meal = MEAL_TYPE_LABELS[recipe.mealType]?.toLowerCase() ?? ''
+  const q = categoryLabel.trim().toLowerCase()
+  return Boolean(q) && (meal === q || meal.includes(q) || q.includes(meal))
+}
+
+function recipeMatchesQuery(recipe: Recipe, rawQuery: string) {
+  const q = normalizeSearch(rawQuery)
+  if (!q) return true
+  const haystack = [
+    recipe.name,
+    ...(recipe.ingredients ?? []),
     ...(recipe.categories ?? []),
+    recipe.category ?? '',
     ...(recipe.tags ?? []),
-    MEAL_TYPE_LABELS[recipe.mealType],
-  ].map((s) => s.toLowerCase())
-  const q = categoryLabel.toLowerCase()
-  return labels.some((l) => l.includes(q) || q.includes(l))
+    ...(recipe.equipment ?? []),
+  ]
+    .join(' ')
+    .toLowerCase()
+  return normalizeSearch(haystack).includes(q)
 }
 
 function round1(n: number) {
@@ -67,9 +87,11 @@ function RecipeThumb({ src, alt }: { src?: string; alt: string }) {
 function RecipeFoodCard({
   recipe,
   onLogged,
+  highlighted,
 }: {
   recipe: Recipe
   onLogged: (message: string) => void
+  highlighted?: boolean
 }) {
   const { addFood } = useAppData()
   const baseGrams = resolveServingGrams(recipe)
@@ -120,7 +142,13 @@ function RecipeFoodCard({
   }
 
   return (
-    <li className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    <li
+      id={`recipe-card-${recipe.id}`}
+      className={[
+        'rounded-2xl border bg-slate-50 p-4',
+        highlighted ? 'border-orange-400 ring-2 ring-orange-200' : 'border-slate-200',
+      ].join(' ')}
+    >
       <div className="flex items-start gap-3">
         <RecipeThumb src={recipe.image} alt={recipe.name} />
         <div className="min-w-0 flex-1">
@@ -182,11 +210,20 @@ export function RecipeCatalog() {
     foodCategories,
     recipesSyncStatus,
     recipesSyncError,
-    syncRecipes,
+    ingestRemoteRecipes,
   } = useAppData()
   const [filter, setFilter] = useState<string | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [suggestOpen, setSuggestOpen] = useState(false)
+  const [focusedId, setFocusedId] = useState<string | null>(null)
+  const [buttonSyncing, setButtonSyncing] = useState(false)
+  const [toast, setToast] = useState<{
+    message: string
+    tone: 'ok' | 'error'
+  } | null>(null)
   const toastTimer = useRef<number | null>(null)
+  const searchBoxRef = useRef<HTMLDivElement | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     return () => {
@@ -194,23 +231,97 @@ export function RecipeCatalog() {
     }
   }, [])
 
+  useEffect(() => {
+    function onPointerDown(event: PointerEvent) {
+      if (!searchBoxRef.current?.contains(event.target as Node)) {
+        setSuggestOpen(false)
+      }
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [])
+
+  const suggestions = useMemo(() => {
+    const q = query.trim()
+    if (!q) return []
+    return recipes.filter((recipe) => recipeMatchesQuery(recipe, q))
+  }, [recipes, query])
+
   const list = useMemo(() => {
+    const searched = query.trim()
+      ? recipes.filter((recipe) => recipeMatchesQuery(recipe, query))
+      : recipes
+    if (searched.length && query.trim() && filter == null) return searched
     if (filter == null) return []
-    if (filter === 'all') return recipes
+    if (filter === 'all') return searched
     const cat = foodCategories.find((c) => c.id === filter)
     if (!cat) return []
-    return recipes.filter((r) => recipeMatchesCategory(r, cat.label))
-  }, [recipes, foodCategories, filter])
+    return searched.filter((r) => recipeMatchesCategory(r, cat.label))
+  }, [recipes, foodCategories, filter, query])
 
-  function showToast(message: string) {
-    setToast(message)
+  function showToast(message: string, tone: 'ok' | 'error' = 'ok') {
+    setToast({ message, tone })
     if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => setToast(null), 2800)
+    toastTimer.current = window.setTimeout(() => setToast(null), 3200)
   }
 
   function toggleFilter(id: string) {
     setFilter((prev) => (prev === id ? null : id))
   }
+
+  function focusRecipe(recipe: Recipe) {
+    setQuery(recipe.name)
+    setFilter('all')
+    setFocusedId(recipe.id)
+    setSuggestOpen(false)
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById(`recipe-card-${recipe.id}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }
+
+  function clearQuery() {
+    setQuery('')
+    setSuggestOpen(false)
+    setFocusedId(null)
+    inputRef.current?.focus()
+  }
+
+  async function handleSync() {
+    if (!supabase) {
+      const error = 'Supabase אינו מוגדר'
+      console.error('[RecipeCatalog] sync failed', error)
+      showToast(error, 'error')
+      return
+    }
+    setButtonSyncing(true)
+    try {
+      const { data, error } = await supabase.from('recipes').select('*')
+      if (error) {
+        console.error('[RecipeCatalog] sync failed', error)
+        showToast(error.message, 'error')
+        return
+      }
+      const mapped = ((data ?? []) as SupabaseRecipeRow[]).map(mapSupabaseRecipe)
+      ingestRemoteRecipes(mapped)
+      showToast(`סונכרנו ${mapped.length} מתכונים בהצלחה`, 'ok')
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'סנכרון המתכונים נכשל'
+      console.error('[RecipeCatalog] sync failed', err)
+      showToast(message, 'error')
+    } finally {
+      setButtonSyncing(false)
+    }
+  }
+
+  const emptyMessage =
+    query.trim()
+      ? 'אין מתכונים שתואמים לחיפוש'
+      : filter == null
+        ? 'בחר קטגוריה כדי להציג מתכונים'
+        : 'אין מתכונים בקטגוריה זו'
 
   return (
     <Card
@@ -219,10 +330,10 @@ export function RecipeCatalog() {
         <button
           type="button"
           className="min-h-11 text-sm font-medium text-blue-600 disabled:opacity-50"
-          disabled={recipesSyncStatus === 'loading'}
-          onClick={() => void syncRecipes()}
+          disabled={buttonSyncing || recipesSyncStatus === 'loading'}
+          onClick={() => void handleSync()}
         >
-          {recipesSyncStatus === 'loading' ? 'מסנכרן…' : 'סנכרן'}
+          {buttonSyncing || recipesSyncStatus === 'loading' ? 'מסנכרן…' : 'סנכרן'}
         </button>
       }
     >
@@ -239,11 +350,81 @@ export function RecipeCatalog() {
       {toast ? (
         <p
           role="status"
-          className="mb-3 rounded-2xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800"
+          className={[
+            'mb-3 rounded-2xl px-3 py-2 text-sm font-medium',
+            toast.tone === 'error'
+              ? 'bg-red-50 text-red-800'
+              : 'bg-emerald-50 text-emerald-800',
+          ].join(' ')}
         >
-          {toast}
+          {toast.message}
         </p>
       ) : null}
+
+      <div ref={searchBoxRef} className="relative mb-3">
+        <Search
+          className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted"
+          strokeWidth={1.75}
+          aria-hidden
+        />
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          dir="rtl"
+          autoComplete="off"
+          spellCheck={false}
+          placeholder="חיפוש מתכון או מאכל חופשי (למשל: שניצל, בטטה...)"
+          className="field min-h-11 w-full pe-10 ps-9"
+          onFocus={() => {
+            if (query.trim()) setSuggestOpen(true)
+          }}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setFocusedId(null)
+            setSuggestOpen(e.target.value.trim().length > 0)
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setSuggestOpen(false)
+              return
+            }
+            if (e.key === 'Enter' && suggestions[0]) {
+              e.preventDefault()
+              focusRecipe(suggestions[0])
+            }
+          }}
+        />
+        {query ? (
+          <button
+            type="button"
+            aria-label="נקה חיפוש"
+            className="absolute end-2 top-1/2 inline-flex size-8 -translate-y-1/2 items-center justify-center rounded-xl text-muted hover:bg-slate-100 hover:text-text"
+            onClick={clearQuery}
+          >
+            <X className="size-4" strokeWidth={2} />
+          </button>
+        ) : null}
+        {suggestOpen && suggestions.length > 0 ? (
+          <ul
+            role="listbox"
+            className="absolute z-30 mt-1 max-h-64 w-full overflow-auto rounded-2xl border border-slate-200 bg-white py-1 shadow-lg shadow-slate-200/80"
+          >
+            {suggestions.map((recipe) => (
+              <li key={recipe.id}>
+                <button
+                  type="button"
+                  role="option"
+                  className="flex min-h-11 w-full items-center px-3 text-start text-sm text-text hover:bg-orange-50"
+                  onClick={() => focusRecipe(recipe)}
+                >
+                  {recipe.name}
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
 
       <div className="mb-3 flex flex-wrap gap-2">
         <button
@@ -275,13 +456,9 @@ export function RecipeCatalog() {
         ))}
       </div>
 
-      {filter == null ? (
+      {list.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-muted">
-          בחר קטגוריה כדי להציג מתכונים
-        </p>
-      ) : list.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-muted">
-          אין מתכונים בקטגוריה זו
+          {emptyMessage}
         </p>
       ) : (
         <ul className="space-y-3">
@@ -289,7 +466,8 @@ export function RecipeCatalog() {
             <RecipeFoodCard
               key={recipe.id}
               recipe={recipe}
-              onLogged={showToast}
+              highlighted={focusedId === recipe.id}
+              onLogged={(message) => showToast(message)}
             />
           ))}
         </ul>
