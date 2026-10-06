@@ -4,10 +4,12 @@ import { MEAL_TYPE_LABELS } from '../../data/recipes'
 import { useAppData } from '../../context/AppDataContext'
 import { parsePositiveDecimal, roundTo } from '../../lib/numericInput'
 import {
+  defaultRecipeVariation,
   mapSupabaseRecipe,
   recipeMatchesCategoryTag,
   recipePortionUnits,
   recipeServings,
+  recipeWithVariation,
   resolveServingGrams,
   type SupabaseRecipeRow,
 } from '../../lib/recipesApi'
@@ -48,6 +50,7 @@ function recipeMatchesQuery(recipe: Recipe, rawQuery: string) {
     ...(recipe.tags ?? []),
     ...(recipe.equipment ?? []),
     recipe.description ?? '',
+    ...(recipe.variations ?? []).flatMap((item) => [item.name, item.description ?? '']),
   ]
     .join(' ')
     .toLowerCase()
@@ -107,21 +110,41 @@ function RecipeFoodCard({
   highlighted?: boolean
 }) {
   const { addFood } = useAppData()
-  const servings = recipeServings(recipe)
-  const baseGrams = resolveServingGrams(recipe)
-  const units = useMemo(() => recipePortionUnits(recipe), [recipe])
+  const variations = recipe.variations ?? []
+  const hasVariations = variations.length > 0
+  const [variationId, setVariationId] = useState(
+    () => defaultRecipeVariation(recipe)?.id ?? '',
+  )
+  const active = useMemo(
+    () => recipeWithVariation(recipe, variationId || undefined),
+    [recipe, variationId],
+  )
+  const selectedVariation =
+    variations.find((item) => item.id === variationId) ??
+    defaultRecipeVariation(recipe)
+  const servings = recipeServings(active)
+  const baseGrams = resolveServingGrams(active)
+  const units = useMemo(() => recipePortionUnits(active), [active])
   const [quantity, setQuantity] = useState('1')
   const [unitId, setUnitId] = useState(
     () => defaultServingUnit(units)?.id ?? GRAMS_UNIT_ID,
   )
 
   useEffect(() => {
-    const nextUnits = recipePortionUnits(recipe)
+    const list = recipe.variations ?? []
+    const nextDefault = defaultRecipeVariation(recipe)?.id ?? ''
+    setVariationId((prev) =>
+      list.some((item) => item.id === prev) ? prev : nextDefault,
+    )
+  }, [recipe])
+
+  useEffect(() => {
+    const nextUnits = recipePortionUnits(active)
     const preferred = defaultServingUnit(nextUnits)?.id ?? GRAMS_UNIT_ID
     setUnitId((prev) =>
       nextUnits.some((unit) => unit.id === prev) ? prev : preferred,
     )
-  }, [recipe])
+  }, [active])
   const [justLogged, setJustLogged] = useState(false)
   const loggedTimer = useRef<number | null>(null)
 
@@ -135,16 +158,20 @@ function RecipeFoodCard({
   const grams = parsed != null ? effectiveGrams(parsed, unitId, units) : null
   const factor = grams != null && baseGrams > 0 ? grams / baseGrams : 0
   const macros = {
-    calories: scaleCalories(recipe.calories, factor),
-    protein: round1(recipe.proteinG * factor),
-    carbs: round1(recipe.carbsG * factor),
-    fats: round1(recipe.fatsG * factor),
+    calories: scaleCalories(active.calories, factor),
+    protein: round1(active.proteinG * factor),
+    carbs: round1(active.carbsG * factor),
+    fats: round1(active.fatsG * factor),
   }
 
   function logScaled() {
     if (grams == null) return
+    const label =
+      selectedVariation && hasVariations
+        ? `${recipe.name} (${selectedVariation.name})`
+        : recipe.name
     addFood({
-      name: recipe.name,
+      name: label,
       grams,
       calories: macros.calories,
       protein: macros.protein,
@@ -155,7 +182,7 @@ function RecipeFoodCard({
     setJustLogged(true)
     if (loggedTimer.current != null) window.clearTimeout(loggedTimer.current)
     loggedTimer.current = window.setTimeout(() => setJustLogged(false), 2200)
-    onLogged(`נוספה מנה מ-${recipe.name} ליומן`)
+    onLogged(`נוספה מנה מ-${label} ליומן`)
   }
 
   return (
@@ -173,10 +200,53 @@ function RecipeFoodCard({
           <p className="mt-1 truncate text-xs text-muted">
             מנה 1 מתוך {servings}
             {baseGrams > 0 ? ` · ${baseGrams} גרם למנה` : ''}
-            {recipe.description ? ` · ${recipe.description}` : ''}
+            {active.description ? ` · ${active.description}` : ''}
           </p>
         </div>
       </div>
+
+      {hasVariations ? (
+        <div className="mt-3">
+          <p className="mb-1 text-[10px] font-semibold text-muted">גרסה / שדרוג</p>
+          {variations.length > 3 ? (
+            <select
+              value={selectedVariation?.id ?? variationId}
+              onChange={(e) => setVariationId(e.target.value)}
+              aria-label={`גרסת ${recipe.name}`}
+              className="field min-h-11 w-full px-3 text-xs font-medium"
+            >
+              {variations.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="גרסאות המתכון">
+              {variations.map((item) => {
+                const selected = item.id === (selectedVariation?.id ?? variationId)
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setVariationId(item.id)}
+                    className={[
+                      'min-h-11 rounded-2xl px-3 text-xs font-medium transition',
+                      selected
+                        ? 'bg-orange-500 text-white'
+                        : 'bg-white text-muted ring-1 ring-slate-200 hover:text-text',
+                    ].join(' ')}
+                  >
+                    {item.name}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       <div className="mt-3 grid grid-cols-4 gap-1.5">
         {MACRO_BADGES.map((badge) => (

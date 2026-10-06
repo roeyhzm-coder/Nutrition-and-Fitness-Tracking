@@ -1,4 +1,4 @@
-import type { MealType, Recipe, ServingUnit } from './types'
+import type { MealType, Recipe, RecipeVariation, ServingUnit } from './types'
 import { roundTo } from './numericInput'
 import { GRAMS_UNIT_ID } from './servingUnits'
 import { supabase } from './supabase'
@@ -168,6 +168,138 @@ export function recipePortionUnits(recipe: Recipe): ServingUnit[] {
   return units
 }
 
+function resolveCookedYield(opts: {
+  listedGrams: number
+  ingredientGrams: number
+  servings: number
+  isPer100: boolean
+  isBatch: boolean
+}): { servingGrams: number; batchGrams: number } {
+  const { listedGrams, ingredientGrams, servings, isPer100, isBatch } = opts
+  const cookedTotal = listedGrams || ingredientGrams
+  if (isPer100) {
+    const servingGrams = listedGrams || 100
+    return { servingGrams, batchGrams: Math.round(servingGrams * servings) }
+  }
+  if (cookedTotal > 0) {
+    const looksLikeBatch = servings > 1 && cookedTotal >= 80 * servings
+    if (isBatch && looksLikeBatch) {
+      return {
+        batchGrams: cookedTotal,
+        servingGrams: Math.max(1, Math.round(cookedTotal / servings)),
+      }
+    }
+    if (isBatch) {
+      return {
+        servingGrams: cookedTotal,
+        batchGrams: Math.round(cookedTotal * servings),
+      }
+    }
+    return { servingGrams: cookedTotal, batchGrams: cookedTotal }
+  }
+  return {
+    servingGrams: DEFAULT_SERVING_GRAMS,
+    batchGrams: Math.round(DEFAULT_SERVING_GRAMS * servings),
+  }
+}
+
+export function defaultRecipeVariation(
+  recipe: Pick<Recipe, 'variations'>,
+): RecipeVariation | undefined {
+  const list = recipe.variations ?? []
+  if (list.length === 0) return undefined
+  return list.find((item) => item.isDefault) ?? list[0]
+}
+
+/** Overlay a variation's per-serving macros onto the base recipe. */
+export function recipeWithVariation(
+  recipe: Recipe,
+  variationId?: string | null,
+): Recipe {
+  const list = recipe.variations ?? []
+  if (list.length === 0) return recipe
+  const selected =
+    list.find((item) => item.id === variationId) ?? defaultRecipeVariation(recipe)
+  if (!selected) return recipe
+  return {
+    ...recipe,
+    calories: selected.calories,
+    proteinG: selected.proteinG,
+    carbsG: selected.carbsG,
+    fatsG: selected.fatsG,
+    servingGrams: selected.servingGrams ?? recipe.servingGrams,
+    batchGrams: selected.batchGrams ?? recipe.batchGrams,
+    ingredients:
+      selected.ingredients && selected.ingredients.length > 0
+        ? selected.ingredients
+        : recipe.ingredients,
+    description: selected.description ?? recipe.description,
+  }
+}
+
+function parseVariations(
+  loose: Record<string, unknown>,
+  servings: number,
+  divisor: number,
+  isPer100: boolean,
+  isBatch: boolean,
+  fallback: { servingGrams: number; batchGrams: number },
+): RecipeVariation[] {
+  const raw = loose.variations
+  if (!Array.isArray(raw)) return []
+  return raw.flatMap((item, index) => {
+    if (!item || typeof item !== 'object') return []
+    const rec = item as Record<string, unknown>
+    const name = String(rec.name ?? rec.title ?? '').trim()
+    if (!name) return []
+    const nested =
+      rec.macros && typeof rec.macros === 'object'
+        ? (rec.macros as Record<string, unknown>)
+        : rec
+    const calories = roundMacro(num(nested.calories ?? nested['קלוריות']) / divisor)
+    const proteinG = roundMacro(num(nested.protein ?? nested['חלבון']) / divisor)
+    const carbsG = roundMacro(num(nested.carbs ?? nested['פחמימות']) / divisor)
+    const fatsG = roundMacro(num(nested.fat ?? nested.fats ?? nested['שומן']) / divisor)
+    const ingredients = Array.isArray(rec.ingredients)
+      ? rec.ingredients.map((ing) =>
+          formatIngredient(ing as Parameters<typeof formatIngredient>[0]),
+        )
+      : undefined
+    const listedGrams = servingGramsFromMacros(
+      nested as Record<string, number | string>,
+    )
+    const ingredientGrams = ingredients
+      ? Math.round(sumIngredientGrams(ingredients))
+      : 0
+    const yieldGrams = resolveCookedYield({
+      listedGrams,
+      ingredientGrams,
+      servings,
+      isPer100,
+      isBatch,
+    })
+    const description =
+      typeof rec.description === 'string' && rec.description.trim()
+        ? rec.description.trim()
+        : undefined
+    return [
+      {
+        id: String(rec.id ?? `var-${index}`),
+        name,
+        isDefault: rec.isDefault === true,
+        description,
+        calories: calories || 0,
+        proteinG,
+        carbsG,
+        fatsG,
+        servingGrams: yieldGrams.servingGrams || fallback.servingGrams,
+        batchGrams: yieldGrams.batchGrams || fallback.batchGrams,
+        ingredients,
+      },
+    ]
+  })
+}
+
 function parseServings(
   row: SupabaseRecipeRow,
   macros: Record<string, number | string>,
@@ -294,34 +426,27 @@ export function mapSupabaseRecipe(row: SupabaseRecipeRow): Recipe {
   const totalFats = num(macros.fat ?? macros['שומן'])
   const listedGrams = servingGramsFromMacros(macros)
   const ingredientGrams = Math.round(sumIngredientGrams(row.ingredients))
-  const cookedTotal = listedGrams || ingredientGrams
-  let servingGrams: number
-  let batchGrams: number
-  if (isPer100) {
-    servingGrams = listedGrams || 100
-    batchGrams = Math.round(servingGrams * servings)
-  } else if (cookedTotal > 0) {
-    const looksLikeBatch = servings > 1 && cookedTotal >= 80 * servings
-    if (isBatch && looksLikeBatch) {
-      batchGrams = cookedTotal
-      servingGrams = Math.max(1, Math.round(cookedTotal / servings))
-    } else if (isBatch) {
-      servingGrams = cookedTotal
-      batchGrams = Math.round(cookedTotal * servings)
-    } else {
-      servingGrams = cookedTotal
-      batchGrams = cookedTotal
-    }
-  } else {
-    servingGrams = DEFAULT_SERVING_GRAMS
-    batchGrams = Math.round(DEFAULT_SERVING_GRAMS * servings)
-  }
+  const { servingGrams, batchGrams } = resolveCookedYield({
+    listedGrams,
+    ingredientGrams,
+    servings,
+    isPer100,
+    isBatch,
+  })
   const categories = [
     ...asCategoryList(row.categories),
     ...asCategoryList(row.category),
   ]
   const uniqueCategories = [...new Set(categories.filter(Boolean))]
   const title = String(row.title ?? '').trim()
+  const variations = parseVariations(
+    looseMacros,
+    servings,
+    divisor,
+    isPer100,
+    isBatch,
+    { servingGrams, batchGrams },
+  )
   return {
     id: row.id,
     name: title,
@@ -342,6 +467,7 @@ export function mapSupabaseRecipe(row: SupabaseRecipeRow): Recipe {
     servings,
     batchGrams,
     description: parseDescription(row, looseMacros),
+    variations: variations.length > 0 ? variations : undefined,
   }
 }
 

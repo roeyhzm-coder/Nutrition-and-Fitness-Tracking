@@ -5,6 +5,7 @@ import { formatNiceNumber, parsePositiveDecimal, roundTo } from './numericInput'
 import {
   recipePortionUnits,
   recipeServings,
+  recipeWithVariation,
   resolveServingGrams,
 } from './recipesApi'
 import {
@@ -148,30 +149,32 @@ export function pantryToCatalog(item: PantryItem): CatalogFood {
 }
 
 export function recipeToCatalog(recipe: Recipe): CatalogFood {
-  const servingGrams = resolveServingGrams(recipe)
-  const units = recipePortionUnits(recipe)
+  const profile = recipeWithVariation(recipe)
+  const servingGrams = resolveServingGrams(profile)
+  const units = recipePortionUnits(profile)
   const servingLabel =
-    defaultServingUnit(units)?.name ?? `מנה 1 (1 מתוך ${recipeServings(recipe)})`
+    defaultServingUnit(units)?.name ?? `מנה 1 (1 מתוך ${recipeServings(profile)})`
   return {
     id: `recipe:${recipe.id}`,
     name: recipe.name,
     category: 'מתכון',
     aliases: [
-      ...recipe.ingredients,
+      ...profile.ingredients,
       ...recipe.tags,
       ...(recipe.description ? [recipe.description] : []),
+      ...(recipe.variations ?? []).map((item) => item.name),
     ],
     servingGrams,
     servingLabel,
-    calories: recipe.calories,
-    protein: recipe.proteinG,
-    carbs: recipe.carbsG,
-    fats: recipe.fatsG,
+    calories: profile.calories,
+    protein: profile.proteinG,
+    carbs: profile.carbsG,
+    fats: profile.fatsG,
     per100g: per100gFromServing(
-      recipe.calories,
-      recipe.proteinG,
-      recipe.carbsG,
-      recipe.fatsG,
+      profile.calories,
+      profile.proteinG,
+      profile.carbsG,
+      profile.fatsG,
       servingGrams,
     ),
     source: 'recipe',

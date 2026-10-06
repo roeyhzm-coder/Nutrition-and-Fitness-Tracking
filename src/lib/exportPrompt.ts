@@ -1001,6 +1001,7 @@ export function parseImportJson(raw: string): {
         typeof r.description === 'string' && r.description.trim()
           ? r.description.trim()
           : undefined,
+      variations: Array.isArray(r.variations) ? r.variations : undefined,
     }))
 
   if (Array.isArray(data)) {

@@ -542,6 +542,20 @@ export type FoodCategory = {
   label: string
 }
 
+export type RecipeVariation = {
+  id: string
+  name: string
+  isDefault?: boolean
+  description?: string
+  calories: number
+  proteinG: number
+  carbsG: number
+  fatsG: number
+  servingGrams?: number
+  batchGrams?: number
+  ingredients?: string[]
+}
+
 export type Recipe = {
   id: string
   name: string
@@ -567,6 +581,8 @@ export type Recipe = {
   batchGrams?: number
   /** Optional blurb from the recipe source. */
   description?: string
+  /** Optional upgrades / alternate versions from the recipe source. */
+  variations?: RecipeVariation[]
 }
 
 export function todayKey(d = new Date()) {
