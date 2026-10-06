@@ -68,7 +68,8 @@ function toForm(
 }
 
 export function ProfileCard() {
-  const { profile, setProfile, goal, setGoal, weightLogs } = useAppData()
+  const { profile, setProfile, goal, setGoal, weightLogs, recordBodyMeasurement } =
+    useAppData()
   const latestWeight = [...weightLogs]
     .reverse()
     .find((e) => e.weightKg > 0)?.weightKg
@@ -134,6 +135,13 @@ export function ProfileCard() {
           setGoal({
             ...goal,
             masterTargetWeightKg: parsePositiveDecimal(form.targetWeightKg),
+          })
+          recordBodyMeasurement({
+            weightKg:
+              latestWeight ?? parsePositiveDecimal(form.startWeightKg),
+            waistCircumferenceCm: waistCm,
+            neckCircumferenceCm: neckCm,
+            bodyFatPercentage: estimatedBodyFatPct,
           })
           setSaved(true)
           window.setTimeout(() => setSaved(false), 2000)

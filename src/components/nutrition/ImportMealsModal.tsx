@@ -65,10 +65,14 @@ export function ImportMealsModal() {
               onClick={() => {
                 try {
                   const parsed = parseImportJson(raw)
-                  importMealsAndRecipes(parsed.savedMeals, parsed.recipes)
+                  importMealsAndRecipes(
+                    parsed.savedMeals,
+                    parsed.recipes,
+                    parsed.bodyMeasurements,
+                  )
                   setError(null)
                   setOk(
-                    `יובאו ${parsed.savedMeals.length} ארוחות ו-${parsed.recipes.length} מתכונים`,
+                    `יובאו ${parsed.savedMeals.length} ארוחות, ${parsed.recipes.length} מתכונים ו-${parsed.bodyMeasurements.length} מדידות גוף`,
                   )
                   setRaw('')
                 } catch {

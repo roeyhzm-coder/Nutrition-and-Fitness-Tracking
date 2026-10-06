@@ -72,6 +72,14 @@ import {
   extractRecipeCategories,
   fetchRecipesFromSupabase,
 } from '../lib/recipesApi'
+import {
+  createBodyMeasurement,
+  pullBodyMeasurements,
+  pushBodyMeasurements,
+  sortBodyMeasurements,
+  unionBodyMeasurements,
+  type BodyMeasurement,
+} from '../lib/bodyMeasurements'
 import { latestDateKey, readLastAiExportAt } from '../lib/aiCheckin'
 import { hydrateServingPresets } from '../lib/servingPresets'
 import { isSupabaseConfigured } from '../lib/supabase'
@@ -137,6 +145,14 @@ type AppDataContextValue = {
   setConsistencyDayMark: (date: string, mark: ConsistencyDayAssignment) => void
   setWeekConsistencyCount: (weekStart: Date, count: number) => void
   weightLogs: WeightEntry[]
+  bodyMeasurements: BodyMeasurement[]
+  recordBodyMeasurement: (input: {
+    weightKg?: number | null
+    waistCircumferenceCm?: number | null
+    neckCircumferenceCm?: number | null
+    bodyFatPercentage?: number | null
+  }) => void
+  importBodyMeasurementsHistory: (rows: BodyMeasurement[]) => number
   foodLogs: FoodLogEntry[]
   habitChecks: HabitChecks
   habits: CustomHabit[]
@@ -216,7 +232,11 @@ type AppDataContextValue = {
   recipes: Recipe[]
   setRecipes: (recipes: Recipe[]) => void
   addRecipe: (recipe: Omit<Recipe, 'id'>) => void
-  importMealsAndRecipes: (meals: SavedMeal[], recipes: Recipe[]) => void
+  importMealsAndRecipes: (
+    meals: SavedMeal[],
+    recipes: Recipe[],
+    bodyMeasurements?: BodyMeasurement[],
+  ) => void
   recipesSyncStatus: RecipesSyncStatus
   recipesSyncError: string | null
   syncRecipes: () => Promise<void>
@@ -443,6 +463,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     'tn.weightLogs',
     [],
   )
+  const [bodyMeasurements, setBodyMeasurements] = useLocalStorage<
+    BodyMeasurement[]
+  >('tn.bodyMeasurements.v1', [])
   const [foodLogs, setFoodLogs] = useLocalStorage<FoodLogEntry[]>(
     'tn.foodLogs',
     [],
@@ -987,6 +1010,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     recipes,
     foodLogs,
     weightLogs,
+    bodyMeasurements,
     profile,
     activityLogs,
     lifestyleLogs,
@@ -1108,6 +1132,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           ),
         )
       }
+      if (remote.bodyMeasurements !== undefined) {
+        setBodyMeasurements((local) =>
+          unionBodyMeasurements(local, remote.bodyMeasurements),
+        )
+      }
       if (remote.profile) {
         setProfileRaw(
           normalizeProfile({
@@ -1153,6 +1182,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setRecipes,
       setFoodLogs,
       setWeightLogs,
+      setBodyMeasurements,
       setProfileRaw,
       setActivityLogs,
       setLifestyleLogs,
@@ -1177,6 +1207,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const nextFoodLogs = unionById(local.foodLogs, remote?.foodLogs)
     const nextSavedMeals = unionById(local.savedMeals, remote?.savedMeals)
     const nextRecipes = unionById(local.recipes, remote?.recipes)
+    const nextBodyMeasurements = unionBodyMeasurements(
+      local.bodyMeasurements,
+      remote?.bodyMeasurements,
+    )
     const uploaded =
       countNewById(local.foodLogs, remote?.foodLogs) +
       countNewById(local.savedMeals, remote?.savedMeals) +
@@ -1186,12 +1220,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       foodLogs: nextFoodLogs,
       savedMeals: nextSavedMeals,
       recipes: nextRecipes,
+      bodyMeasurements: nextBodyMeasurements,
     }
     snapshotRef.current = merged
     skipNextPush.current = true
     setFoodLogs(nextFoodLogs)
     setSavedMeals(nextSavedMeals)
     setRecipes(nextRecipes)
+    setBodyMeasurements(nextBodyMeasurements)
 
     const result = await pushAppState(merged)
     if (!result.ok) {
@@ -1208,6 +1244,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         foodLogs: nextFoodLogs,
         savedMeals: nextSavedMeals,
         recipes: nextRecipes,
+        bodyMeasurements: nextBodyMeasurements,
       })
     }
 
@@ -1218,7 +1255,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const message = `סונכרן בהצלחה! הועלו ${shown} רשומות לענן`
     setLastSyncNotice({ type: 'ok', message })
     return { ok: true, uploaded: shown }
-  }, [applyRemoteState, setFoodLogs, setSavedMeals, setRecipes])
+  }, [applyRemoteState, setFoodLogs, setSavedMeals, setRecipes, setBodyMeasurements])
 
   const hydrateFromCloud = useCallback(
     async (reason: 'load' | 'refetch') => {
@@ -1310,6 +1347,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     recipes,
     foodLogs,
     weightLogs,
+    bodyMeasurements,
     profile,
     activityLogs,
     lifestyleLogs,
@@ -1347,6 +1385,45 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       ])
     },
     [setWeightLogs],
+  )
+
+  const recordBodyMeasurement = useCallback(
+    (input: {
+      weightKg?: number | null
+      waistCircumferenceCm?: number | null
+      neckCircumferenceCm?: number | null
+      bodyFatPercentage?: number | null
+    }) => {
+      const entry = createBodyMeasurement(input)
+      if (!entry) return
+      setBodyMeasurements((prev) => {
+        const next = unionBodyMeasurements(prev, [entry])
+        snapshotRef.current = snapshotRef.current
+          ? { ...snapshotRef.current, bodyMeasurements: next }
+          : snapshotRef.current
+        scheduleFlush('bodyMeasurement', { bodyMeasurements: next })
+        return next
+      })
+      void pushBodyMeasurements([entry])
+    },
+    [setBodyMeasurements, scheduleFlush],
+  )
+
+  const importBodyMeasurementsHistory = useCallback(
+    (rows: BodyMeasurement[]) => {
+      let added = 0
+      setBodyMeasurements((prev) => {
+        const next = unionBodyMeasurements(prev, rows)
+        added = Math.max(0, next.length - prev.length)
+        if (added > 0) {
+          scheduleFlush('importBodyMeasurements', { bodyMeasurements: next })
+          void pushBodyMeasurements(next)
+        }
+        return next
+      })
+      return added
+    },
+    [setBodyMeasurements, scheduleFlush],
   )
 
   const addBodyFat = useCallback(
@@ -1465,7 +1542,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   )
 
   const importMealsAndRecipes = useCallback(
-    (meals: SavedMeal[], nextRecipes: Recipe[]) => {
+    (
+      meals: SavedMeal[],
+      nextRecipes: Recipe[],
+      measurements?: BodyMeasurement[],
+    ) => {
       if (meals.length) {
         setSavedMeals((prev) => {
           const next: SavedMeal[] = [
@@ -1486,8 +1567,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
           return next
         })
       }
+      if (measurements?.length) {
+        importBodyMeasurementsHistory(measurements)
+      }
     },
-    [setSavedMeals, setRecipes, scheduleFlush],
+    [
+      setSavedMeals,
+      setRecipes,
+      scheduleFlush,
+      importBodyMeasurementsHistory,
+    ],
   )
 
   const logSavedMeal = useCallback(
@@ -1726,6 +1815,23 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     }
   }, [setPhaseHistory])
 
+  useEffect(() => {
+    let cancelled = false
+    void pullBodyMeasurements().then((remote) => {
+      if (cancelled || !remote) return
+      setBodyMeasurements((local) => {
+        const merged = unionBodyMeasurements(local, remote)
+        const remoteIds = new Set(remote.map((e) => e.id))
+        const localOnly = local.filter((e) => !remoteIds.has(e.id))
+        if (localOnly.length) void pushBodyMeasurements(localOnly)
+        return sortBodyMeasurements(merged)
+      })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [setBodyMeasurements])
+
   const finishPhase = useCallback(
     (next: NewPhaseInput) => {
       const entry = createHistoryEntry(
@@ -1824,6 +1930,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setConsistencyDayMark,
       setWeekConsistencyCount,
       weightLogs,
+      bodyMeasurements,
+      recordBodyMeasurement,
+      importBodyMeasurementsHistory,
       foodLogs,
       habitChecks,
       habits,
@@ -1914,6 +2023,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setConsistencyDayMark,
       setWeekConsistencyCount,
       weightLogs,
+      bodyMeasurements,
+      recordBodyMeasurement,
+      importBodyMeasurementsHistory,
       foodLogs,
       habitChecks,
       habits,

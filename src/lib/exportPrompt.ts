@@ -20,6 +20,8 @@ import type {
   WorkoutLog,
   WorkoutProgram,
 } from './types'
+import type { BodyMeasurement } from './bodyMeasurements'
+import { extractBodyMeasurementsHistory } from './bodyMeasurements'
 import {
   ACTIVITY_LEVEL_LABELS,
   calcBmi,
@@ -680,6 +682,7 @@ export function buildAiExportPrompt(input: {
   savedMeals?: SavedMeal[]
   recipes?: Recipe[]
   workoutPrograms?: WorkoutProgram[]
+  bodyMeasurements?: BodyMeasurement[]
 }): string {
   const phaseStart = input.goal.startDate
   const { profile, goal, macroTargets } = input
@@ -742,6 +745,21 @@ export function buildAiExportPrompt(input: {
             const type = PHASE_LABELS[h.phase]
             const name = h.name?.trim() || type
             return `- שלב ${i + 1} (${name}, ${type}): ${h.startDate} עד ${h.endDate} | משקל התחלה: ${fmtNum(h.startWeightKg, 2)} ק״ג -> משקל סיום: ${fmtNum(h.endWeightKg, 2)} ק״ג (יעד היה ${fmtNum(h.targetWeightKg, 2)} ק״ג) | שומן: ${fmtNum(h.endBodyFatPct, 2)}% | ממוצע צריכה בפועל: ${fmtNum(h.avgCalories)} קק״ל`
+          })
+          .join('\n'),
+      ].join('\n')
+    : ''
+
+  const measurementHistory = [...(input.bodyMeasurements ?? [])].sort((a, b) =>
+    a.recordedAt.localeCompare(b.recordedAt),
+  )
+  const measurementHistorySection = measurementHistory.length
+    ? [
+        '## היסטוריית מדידות גוף (מותניים / צוואר / שומן)',
+        measurementHistory
+          .map((row) => {
+            const day = row.recordedAt.slice(0, 10)
+            return `- ${day} | משקל: ${fmtNum(row.weightKg, 2)} ק״ג | מותן: ${fmtNum(row.waistCircumferenceCm, 1)} ס״מ | צוואר: ${fmtNum(row.neckCircumferenceCm, 1)} ס״מ | שומן: ${fmtNum(row.bodyFatPercentage, 2)}%`
           })
           .join('\n'),
       ].join('\n')
@@ -871,6 +889,7 @@ ${PHASE_BLUEPRINT.join('\n')}
 - יעד משקל לשלב: ${fmtNum(goal.targetWeightKg, 2)} ק״ג | יעד שומן: עד ${fmtNum(goal.targetBodyFatPct, 2)}%
 - יעדי מאקרו יומיים: ${fmtNum(macroTargets.calories)} קק״ל | חלבון: ${fmtNum(macroTargets.protein)}ג׳ | שומן: ${fmtNum(macroTargets.fats)}ג׳ | פחמימות: ${fmtNum(macroTargets.carbs)}ג׳`,
     historySection,
+    measurementHistorySection,
     pastBlocksSection,
     adherenceLines.length || splitSummary !== NA || activitiesSummary !== NA
       ? [
@@ -911,13 +930,19 @@ ${PHASE_BLUEPRINT.join('\n')}
 export type ImportPayload = {
   savedMeals?: Array<Partial<SavedMeal> & { name: string }>
   recipes?: Array<Partial<Recipe> & { name: string }>
+  body_measurements_history?: unknown
+  entities?: Record<string, unknown>
 }
 
 export function parseImportJson(raw: string): {
   savedMeals: SavedMeal[]
   recipes: Recipe[]
+  bodyMeasurements: BodyMeasurement[]
 } {
   const data = JSON.parse(raw) as ImportPayload | SavedMeal[] | Recipe[]
+  const bodyMeasurements = Array.isArray(data)
+    ? []
+    : extractBodyMeasurementsHistory(data)
 
   const asMeals = (items: Array<Partial<SavedMeal> & { name: string }>) =>
     items.map((m) => ({
@@ -971,16 +996,18 @@ export function parseImportJson(raw: string): {
       (item) => 'mealType' in item || 'ingredients' in item || 'steps' in item,
     )
     if (looksLikeRecipe) {
-      return { savedMeals: [], recipes: asRecipes(data as Recipe[]) }
+      return { savedMeals: [], recipes: asRecipes(data as Recipe[]), bodyMeasurements }
     }
     return {
       savedMeals: asMeals(data as SavedMeal[]),
       recipes: [],
+      bodyMeasurements,
     }
   }
 
   return {
     savedMeals: asMeals(data.savedMeals ?? []),
     recipes: asRecipes(data.recipes ?? []),
+    bodyMeasurements,
   }
 }

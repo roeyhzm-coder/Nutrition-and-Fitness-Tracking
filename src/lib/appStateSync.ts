@@ -25,6 +25,12 @@ import {
 } from './types'
 import { normalizeMacroPresets } from '../data/defaults'
 import type { ConsistencyDayMarks } from './weeklyConsistency'
+import {
+  pullBodyMeasurements,
+  pushBodyMeasurements,
+  unionBodyMeasurements,
+  type BodyMeasurement,
+} from './bodyMeasurements'
 
 const DEVICE_KEY = 'tn.deviceId'
 
@@ -109,6 +115,7 @@ export type SyncedAppState = {
   activityLogs?: ActivityLog[]
   lifestyleLogs?: LifestyleLogs
   weightLogs?: WeightEntry[]
+  bodyMeasurements?: BodyMeasurement[]
   /** Undefined when the remote table lacks the routines column. */
   routines?: Routine[]
   /** Undefined when the remote table lacks the focus_tracks column. */
@@ -401,12 +408,14 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
   if (!isSupabaseConfigured || !supabase) return null
 
   const fromApp = await pullFromTable('app_state')
-  if (fromApp) return fromApp
-
-  const fromClient = await pullFromTable('client_app_state')
-  if (fromClient) return fromClient
-
-  return pullFromUserProfile()
+  const base = fromApp ?? (await pullFromTable('client_app_state')) ?? (await pullFromUserProfile())
+  if (!base) return null
+  const measurements = await pullBodyMeasurements()
+  if (measurements == null) return base
+  return {
+    ...base,
+    bodyMeasurements: unionBodyMeasurements(measurements, base.bodyMeasurements),
+  }
 }
 
 function nutritionSnapshot(state: Omit<SyncedAppState, 'updatedAt'>) {
@@ -545,6 +554,11 @@ export async function pushAppState(
     errors.push(`user_profile: ${profileError.message}`)
   }
 
+  if (state.bodyMeasurements?.length) {
+    const wroteHistory = await pushBodyMeasurements(state.bodyMeasurements)
+    if (!wroteHistory) errors.push('body_measurements: upsert failed')
+  }
+
   if (!wroteNutrition) {
     const error = errors[0] ?? 'food_logs/saved_meals/recipes were not written'
     console.error('[appStateSync] nutrition write failed', { errors, ...counts })
@@ -582,6 +596,11 @@ export function subscribeSharedSync(
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'user_profile' },
+      fire,
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'body_measurements' },
       fire,
     )
     .on(

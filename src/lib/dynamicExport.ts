@@ -1,3 +1,5 @@
+import type { BodyMeasurement } from './bodyMeasurements'
+import { toBodyMeasurementExportRow } from './bodyMeasurements'
 import type {
   ActivityLog,
   CustomHabit,
@@ -25,6 +27,8 @@ export type DynamicExportInput = {
   setLogs?: SetLog[]
   foodLogs?: FoodLogEntry[]
   weightLogs?: WeightEntry[]
+  bodyMeasurements?: BodyMeasurement[]
+  body_measurements_history?: unknown
   habits?: CustomHabit[]
   habitChecks?: HabitChecks
   lifestyleLogs?: LifestyleLogs
@@ -145,6 +149,9 @@ export function collectExportEntities(
     setLogs: asRecords(input.setLogs),
     foodLogs: asRecords(input.foodLogs),
     weightLogs: asRecords(input.weightLogs),
+    body_measurements_history: (
+      input.bodyMeasurements ?? []
+    ).map((row) => toBodyMeasurementExportRow(row)),
     habits: asRecords(input.habits),
     habitChecks: explodeHabitChecks(input.habits ?? [], input.habitChecks ?? {}),
     lifestyleLogs: explodeLifestyle(input.lifestyleLogs ?? {}),
@@ -155,6 +162,8 @@ export function collectExportEntities(
     'generatedAt',
     'habitChecks',
     'lifestyleLogs',
+    'bodyMeasurements',
+    'body_measurements_history',
   ])
   for (const [key, value] of Object.entries(input)) {
     if (reserved.has(key) || known[key]) continue
@@ -266,7 +275,15 @@ export function buildExportCsv(input: DynamicExportInput): string {
 export function buildExportJson(input: DynamicExportInput): string {
   const generatedAt = input.generatedAt ?? new Date().toISOString()
   const entities = collectExportEntities(input)
-  return JSON.stringify({ generatedAt, entities }, null, 2)
+  return JSON.stringify(
+    {
+      generatedAt,
+      body_measurements_history: entities.body_measurements_history ?? [],
+      entities,
+    },
+    null,
+    2,
+  )
 }
 
 export function downloadTextFile(
