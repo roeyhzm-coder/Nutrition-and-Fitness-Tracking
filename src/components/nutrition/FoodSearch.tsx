@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Search } from 'lucide-react'
+import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
 import {
   defaultIsraeliPortion,
+  deleteIsraeliFood,
+  isCustomIsraeliFood,
   israeliFoodLabel,
   israeliFoodMacros,
   searchIsraeliFoods,
@@ -19,9 +21,11 @@ import type { FoodLogEntry, SavedMeal } from '../../lib/types'
 import { useAppData } from '../../context/AppDataContext'
 import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
+import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
 import { AddCustomIsraeliFoodModal } from './AddCustomIsraeliFoodModal'
+import { ManageCustomFoodsModal } from './ManageCustomFoodsModal'
 
 type FoodSearchProps = {
   onAdd: (entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) => void
@@ -52,6 +56,8 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
   const [freeGrams, setFreeGrams] = useState(false)
   const [gramsDraft, setGramsDraft] = useState('100')
   const [catalogOpen, setCatalogOpen] = useState(false)
+  const [manageOpen, setManageOpen] = useState(false)
+  const [editingFood, setEditingFood] = useState<IsraeliFood | null>(null)
   const [customOpen, setCustomOpen] = useState(false)
   const [custom, setCustom] = useState(EMPTY_CUSTOM)
   const [saveCustom, setSaveCustom] = useState(false)
@@ -191,6 +197,13 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
       <Button
         variant="surface"
         className="mt-2 w-full"
+        onClick={() => setManageOpen(true)}
+      >
+        הפריטים שהוספתי למאגר
+      </Button>
+      <Button
+        variant="surface"
+        className="mt-2 w-full"
         onClick={() => setCustomOpen(true)}
       >
         <Plus className="size-3.5" strokeWidth={2} />
@@ -212,26 +225,69 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
       ) : null}
 
       <ul className="mt-3 max-h-72 overflow-y-auto">
-        {results.map((food) => (
-          <li key={food.id}>
-            <button
-              type="button"
-              onClick={() => openFood(food)}
-              className="flex min-h-11 w-full items-center gap-2 border-b border-slate-100 px-1 py-2 text-right last:border-b-0 hover:bg-slate-50"
+        {results.map((food) => {
+          const custom = isCustomIsraeliFood(food)
+          return (
+            <li
+              key={food.id}
+              className="flex min-h-11 items-center gap-0.5 border-b border-slate-100 last:border-b-0"
             >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-semibold text-text">
-                  {food.name}
+              <button
+                type="button"
+                onClick={() => openFood(food)}
+                className="flex min-h-11 min-w-0 flex-1 items-center gap-2 px-1 py-1.5 text-right hover:bg-slate-50"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-text">
+                    {food.name}
+                    {custom ? (
+                      <span className="ms-1 text-[10px] font-medium text-cyan-700">
+                        אישי
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="block truncate text-[11px] text-muted">
+                    {food.brand ?? food.category} ·{' '}
+                    {Math.round(Number(food.calories_per_100g))} קק״ל/100ג׳
+                  </span>
                 </span>
-                <span className="block truncate text-[11px] text-muted">
-                  {food.brand ?? food.category} · {Math.round(Number(food.calories_per_100g))}{' '}
-                  קק״ל/100ג׳
-                </span>
-              </span>
-              <Plus className="size-4 shrink-0 text-accent" strokeWidth={2} />
-            </button>
-          </li>
-        ))}
+                <Plus className="size-4 shrink-0 text-accent" strokeWidth={2} />
+              </button>
+              {custom ? (
+                <>
+                  <IconButton
+                    label="עריכה"
+                    className="size-8"
+                    onClick={() => {
+                      setEditingFood(food)
+                      setCatalogOpen(true)
+                    }}
+                  >
+                    <Pencil className="size-3.5" strokeWidth={1.75} />
+                  </IconButton>
+                  <IconButton
+                    label="מחיקה"
+                    tone="danger"
+                    className="size-8 text-danger"
+                    onClick={() => {
+                      if (!window.confirm('למחוק את הפריט מהמאגר?')) return
+                      void deleteIsraeliFood(food.id).then((result) => {
+                        if (result.error) {
+                          setError(result.error)
+                          return
+                        }
+                        setResults((prev) => prev.filter((item) => item.id !== food.id))
+                        showToast(`נמחק "${food.name}" מהמאגר`)
+                      })
+                    }}
+                  >
+                    <Trash2 className="size-3.5" strokeWidth={1.75} />
+                  </IconButton>
+                </>
+              ) : null}
+            </li>
+          )
+        })}
       </ul>
 
       <Modal
@@ -344,12 +400,29 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
 
       <AddCustomIsraeliFoodModal
         open={catalogOpen}
-        onClose={() => setCatalogOpen(false)}
+        editing={editingFood}
+        onClose={() => {
+          setCatalogOpen(false)
+          setEditingFood(null)
+        }}
         onSaved={(food) => {
-          showToast(`"${food.name}" נוסף למאגר`)
+          showToast(
+            editingFood
+              ? `"${food.name}" עודכן במאגר`
+              : `"${food.name}" נוסף למאגר`,
+          )
           if (query.trim()) {
             void searchIsraeliFoods(query.trim()).then(setResults)
           }
+        }}
+      />
+      <ManageCustomFoodsModal
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+        onEdit={(food) => {
+          setManageOpen(false)
+          setEditingFood(food)
+          setCatalogOpen(true)
         }}
       />
 

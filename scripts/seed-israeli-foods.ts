@@ -31,7 +31,11 @@ for (const food of foodsList) {
 console.log(JSON.stringify({ total: foodsList.length, byCategory }, null, 2))
 
 const supabase = createClient(url, anon)
-const foods = foodsList.map((food) => ({ ...food, is_system: true }))
+const foods = foodsList.map((food) => ({
+  ...food,
+  is_system: true,
+  is_custom: false,
+}))
 const chunkSize = 120
 let upserted = 0
 for (let i = 0; i < foods.length; i += chunkSize) {

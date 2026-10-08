@@ -14,6 +14,7 @@ create table if not exists public.israeli_foods (
   fat_per_100g numeric not null,
   portions jsonb not null default '[]'::jsonb,
   is_system boolean not null default true,
+  is_custom boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -56,4 +57,9 @@ create policy "israeli_foods_custom_update"
   using (is_system = false)
   with check (is_system = false);
 
-grant select, insert, update on public.israeli_foods to anon, authenticated;
+drop policy if exists "israeli_foods_custom_delete" on public.israeli_foods;
+create policy "israeli_foods_custom_delete"
+  on public.israeli_foods for delete
+  using (is_system = false);
+
+grant select, insert, update, delete on public.israeli_foods to anon, authenticated;

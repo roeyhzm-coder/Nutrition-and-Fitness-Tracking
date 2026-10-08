@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Plus, Star, Trash2 } from 'lucide-react'
 import { ISRAELI_FOOD_CATEGORIES, type FoodPortion } from '../../data/foods'
 import {
   insertIsraeliFood,
+  updateIsraeliFood,
   type IsraeliFood,
 } from '../../lib/israeliFoods'
 import { parseDecimal, parsePositiveDecimal } from '../../lib/numericInput'
@@ -12,6 +13,7 @@ import { NumericInput } from '../ui/NumericInput'
 
 type AddCustomIsraeliFoodModalProps = {
   open: boolean
+  editing?: IsraeliFood | null
   onClose: () => void
   onSaved: (food: IsraeliFood) => void
 }
@@ -40,11 +42,13 @@ function newPortion(name: string, grams: string, isDefault = false): PortionDraf
 
 export function AddCustomIsraeliFoodModal({
   open,
+  editing,
   onClose,
   onSaved,
 }: AddCustomIsraeliFoodModalProps) {
   const [name, setName] = useState('')
   const [category, setCategory] = useState<string>(ISRAELI_FOOD_CATEGORIES[0])
+  const [brand, setBrand] = useState('')
   const [calories, setCalories] = useState('')
   const [protein, setProtein] = useState('')
   const [carbs, setCarbs] = useState('')
@@ -54,10 +58,15 @@ export function AddCustomIsraeliFoodModal({
   ])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const categories = editing?.category &&
+    !(ISRAELI_FOOD_CATEGORIES as readonly string[]).includes(editing.category)
+    ? [...ISRAELI_FOOD_CATEGORIES, editing.category]
+    : ISRAELI_FOOD_CATEGORIES
 
   function reset() {
     setName('')
     setCategory(ISRAELI_FOOD_CATEGORIES[0])
+    setBrand('')
     setCalories('')
     setProtein('')
     setCarbs('')
@@ -66,6 +75,28 @@ export function AddCustomIsraeliFoodModal({
     setSaving(false)
     setError(null)
   }
+
+  useEffect(() => {
+    if (!open) return
+    if (!editing) {
+      reset()
+      return
+    }
+    setName(editing.name)
+    setCategory(editing.category)
+    setBrand(editing.brand ?? '')
+    setCalories(String(editing.calories_per_100g))
+    setProtein(String(editing.protein_per_100g))
+    setCarbs(String(editing.carbs_per_100g))
+    setFat(String(editing.fat_per_100g))
+    setPortions(
+      editing.portions.map((portion) =>
+        newPortion(portion.name, String(portion.grams), Boolean(portion.isDefault)),
+      ),
+    )
+    setSaving(false)
+    setError(null)
+  }, [open, editing])
 
   function close() {
     reset()
@@ -126,15 +157,19 @@ export function AddCustomIsraeliFoodModal({
     }
     setSaving(true)
     setError(null)
-    const result = await insertIsraeliFood({
+    const payload = {
       name: trimmed,
       category,
+      brand: brand.trim() || null,
       calories_per_100g: parseDecimal(calories) ?? 0,
       protein_per_100g: parseDecimal(protein) ?? 0,
       carbs_per_100g: parseDecimal(carbs) ?? 0,
       fat_per_100g: parseDecimal(fat) ?? 0,
       portions: parsedPortions,
-    })
+    }
+    const result = editing
+      ? await updateIsraeliFood({ ...editing, ...payload })
+      : await insertIsraeliFood(payload)
     setSaving(false)
     if (result.error && !result.food) {
       setError(result.error)
@@ -145,7 +180,11 @@ export function AddCustomIsraeliFoodModal({
   }
 
   return (
-    <Modal open={open} title="הוספת פריט חדש למאגר" onClose={close}>
+    <Modal
+      open={open}
+      title={editing ? 'עריכת פריט במאגר' : 'הוספת פריט חדש למאגר'}
+      onClose={close}
+    >
       <form
         className="space-y-3"
         onSubmit={(e) => {
@@ -170,12 +209,21 @@ export function AddCustomIsraeliFoodModal({
             onChange={(e) => setCategory(e.target.value)}
             className="mt-1 field"
           >
-            {ISRAELI_FOOD_CATEGORIES.map((item) => (
+            {categories.map((item) => (
               <option key={item} value={item}>
                 {item}
               </option>
             ))}
           </select>
+        </label>
+        <label className="block text-xs text-muted">
+          מותג (אופציונלי)
+          <input
+            value={brand}
+            onChange={(e) => setBrand(e.target.value)}
+            placeholder="למשל B&D"
+            className="mt-1 field"
+          />
         </label>
 
         <p className="text-xs font-semibold text-text">ערכים ל-100 גרם</p>
@@ -284,7 +332,7 @@ export function AddCustomIsraeliFoodModal({
           disabled={saving || !name.trim()}
         >
           <Plus className="size-3.5" strokeWidth={2} />
-          {saving ? 'שומר…' : 'שמור למאגר'}
+          {saving ? 'שומר…' : editing ? 'עדכן במאגר' : 'שמור למאגר'}
         </Button>
       </form>
     </Modal>

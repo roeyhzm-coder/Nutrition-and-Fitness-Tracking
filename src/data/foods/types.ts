@@ -14,8 +14,11 @@ export type IsraeliFood = {
   carbs_per_100g: number
   fat_per_100g: number
   portions: FoodPortion[]
+  is_custom?: boolean
+  is_system?: boolean
 }
 
 export type IsraeliFoodRow = IsraeliFood & {
   is_system?: boolean
+  is_custom?: boolean
 }

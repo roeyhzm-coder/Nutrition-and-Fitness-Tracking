@@ -59,12 +59,40 @@ export function useCustomIsraeliFoods() {
   )
 }
 
+export function isCustomIsraeliFood(food: Pick<IsraeliFood, 'id' | 'is_custom' | 'is_system'>) {
+  if (food.is_custom === true) return true
+  if (food.is_system === false) return true
+  return food.id.startsWith('il-custom-')
+}
+
 export function rememberCustomIsraeliFood(food: IsraeliFood) {
+  const marked: IsraeliFood = {
+    ...food,
+    is_custom: true,
+    is_system: false,
+  }
   const current = loadCustomIsraeliFoods()
   persistCustomIsraeliFoods([
-    food,
-    ...current.filter((item) => item.id !== food.id),
+    marked,
+    ...current.filter((item) => item.id !== marked.id),
   ])
+}
+
+export function forgetCustomIsraeliFood(id: string) {
+  persistCustomIsraeliFoods(
+    loadCustomIsraeliFoods().filter((item) => item.id !== id),
+  )
+}
+
+function mergeRemoteCustomFoods(remote: IsraeliFood[]) {
+  const byId = new Map(
+    loadCustomIsraeliFoods().map((item) => [item.id, item] as const),
+  )
+  for (const food of remote) {
+    if (!isCustomIsraeliFood(food)) continue
+    byId.set(food.id, { ...food, is_custom: true, is_system: false })
+  }
+  persistCustomIsraeliFoods([...byId.values()])
 }
 
 export function catalogIsraeliFoods(): IsraeliFood[] {
@@ -177,7 +205,7 @@ export async function searchIsraeliFoods(
     let request = supabase
       .from('israeli_foods')
       .select(
-        'id,name,category,brand,calories_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,portions',
+        'id,name,category,brand,calories_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,portions,is_system,is_custom',
       )
       .or(`name.ilike.%${q}%,brand.ilike.%${q}%,category.ilike.%${q}%`)
       .limit(20)
@@ -185,9 +213,7 @@ export async function searchIsraeliFoods(
     const { data, error } = await request
     if (!error && data?.length) {
       const remote = data.map(normalizeRow)
-      const customHits = searchIsraeliFoodsLocal(query, 8).filter(
-        (food) => food.id.startsWith('il-custom-'),
-      )
+      const customHits = searchIsraeliFoodsLocal(query, 8).filter(isCustomIsraeliFood)
       const seen = new Set(remote.map((food) => food.id))
       return [...customHits.filter((food) => !seen.has(food.id)), ...remote]
     }
@@ -197,8 +223,13 @@ export async function searchIsraeliFoods(
 
 function normalizeRow(row: Record<string, unknown>): IsraeliFood {
   const portions = Array.isArray(row.portions) ? row.portions : []
+  const id = String(row.id)
+  const is_system =
+    row.is_system === undefined ? !id.startsWith('il-custom-') : Boolean(row.is_system)
+  const is_custom =
+    row.is_custom === true || is_system === false || id.startsWith('il-custom-')
   return {
-    id: String(row.id),
+    id,
     name: String(row.name),
     category: String(row.category),
     brand: row.brand == null ? null : String(row.brand),
@@ -214,6 +245,41 @@ function normalizeRow(row: Record<string, unknown>): IsraeliFood {
         isDefault: Boolean(item.isDefault),
       }
     }),
+    is_system,
+    is_custom,
+  }
+}
+
+const CUSTOM_SELECT =
+  'id,name,category,brand,calories_per_100g,protein_per_100g,carbs_per_100g,fat_per_100g,portions,is_system,is_custom'
+
+export async function fetchCustomIsraeliFoods(): Promise<IsraeliFood[]> {
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('israeli_foods')
+      .select(CUSTOM_SELECT)
+      .eq('is_system', false)
+      .order('created_at', { ascending: false })
+    if (!error && data) {
+      mergeRemoteCustomFoods(data.map(normalizeRow))
+    }
+  }
+  return loadCustomIsraeliFoods()
+}
+
+function customPayload(food: IsraeliFood) {
+  return {
+    id: food.id,
+    name: food.name,
+    category: food.category,
+    brand: food.brand,
+    calories_per_100g: food.calories_per_100g,
+    protein_per_100g: food.protein_per_100g,
+    carbs_per_100g: food.carbs_per_100g,
+    fat_per_100g: food.fat_per_100g,
+    portions: food.portions,
+    is_system: false,
+    is_custom: true,
   }
 }
 
@@ -237,22 +303,133 @@ export async function insertIsraeliFood(input: {
     carbs_per_100g: input.carbs_per_100g,
     fat_per_100g: input.fat_per_100g,
     portions: input.portions,
+    is_custom: true,
+    is_system: false,
   }
   rememberCustomIsraeliFood(food)
   if (!supabase) {
     return { food, error: 'Supabase אינו מוגדר — נשמר במכשיר בלבד' }
   }
-  const { error } = await supabase.from('israeli_foods').insert({
-    ...food,
-    is_system: false,
-  })
+  const { error } = await supabase.from('israeli_foods').insert(customPayload(food))
   if (error) return { food, error: error.message }
   return { food }
+}
+
+export async function updateIsraeliFood(
+  food: IsraeliFood,
+): Promise<{ food: IsraeliFood; error?: string }> {
+  if (!isCustomIsraeliFood(food)) {
+    return { food, error: 'לא ניתן לערוך פריט מערכת' }
+  }
+  const next: IsraeliFood = {
+    ...food,
+    name: food.name.trim(),
+    brand: food.brand?.trim() || null,
+    is_custom: true,
+    is_system: false,
+  }
+  rememberCustomIsraeliFood(next)
+  if (!supabase) {
+    return { food: next, error: 'Supabase אינו מוגדר — נשמר במכשיר בלבד' }
+  }
+  const payload = customPayload(next)
+  const { error } = await supabase
+    .from('israeli_foods')
+    .update({
+      name: payload.name,
+      category: payload.category,
+      brand: payload.brand,
+      calories_per_100g: payload.calories_per_100g,
+      protein_per_100g: payload.protein_per_100g,
+      carbs_per_100g: payload.carbs_per_100g,
+      fat_per_100g: payload.fat_per_100g,
+      portions: payload.portions,
+      is_custom: true,
+      is_system: false,
+    })
+    .eq('id', next.id)
+    .eq('is_system', false)
+  if (error) return { food: next, error: error.message }
+  return { food: next }
+}
+
+export async function deleteIsraeliFood(id: string): Promise<{ error?: string }> {
+  const local = loadCustomIsraeliFoods().find((item) => item.id === id)
+  if (local && !isCustomIsraeliFood(local)) {
+    return { error: 'לא ניתן למחוק פריט מערכת' }
+  }
+  if (!id.startsWith('il-custom-') && !local) {
+    return { error: 'לא ניתן למחוק פריט מערכת' }
+  }
+  forgetCustomIsraeliFood(id)
+  if (!supabase) return {}
+  const { error } = await supabase
+    .from('israeli_foods')
+    .delete()
+    .eq('id', id)
+    .eq('is_system', false)
+  if (error) return { error: error.message }
+  return {}
+}
+
+function customDedupeKey(food: IsraeliFood) {
+  return `${normalizeSearch(food.name)}|${normalizeSearch(food.brand ?? '')}`
+}
+
+export function customIsraeliFoodDuplicateCount(foods = loadCustomIsraeliFoods()) {
+  const seen = new Map<string, number>()
+  let extras = 0
+  for (const food of foods) {
+    const key = customDedupeKey(food)
+    const count = (seen.get(key) ?? 0) + 1
+    seen.set(key, count)
+    if (count > 1) extras += 1
+  }
+  return extras
+}
+
+export async function dedupeCustomIsraeliFoods(): Promise<{ removed: number }> {
+  const foods = loadCustomIsraeliFoods()
+  const kept = new Set<string>()
+  const remove: IsraeliFood[] = []
+  for (const food of foods) {
+    const key = customDedupeKey(food)
+    if (kept.has(key)) {
+      remove.push(food)
+      continue
+    }
+    kept.add(key)
+  }
+  for (const food of remove) {
+    await deleteIsraeliFood(food.id)
+  }
+  return { removed: remove.length }
+}
+
+const CANONICAL_WHEY_NAME = normalizeSearch('אבקת חלבון')
+
+export async function cleanupDuplicateProteinPowder(): Promise<{ removed: number }> {
+  const custom = loadCustomIsraeliFoods().filter((food) => {
+    const name = normalizeSearch(food.name)
+    return name === CANONICAL_WHEY_NAME || name.includes('בדיקה')
+  })
+  for (const food of custom) {
+    await deleteIsraeliFood(food.id)
+  }
+  if (supabase) {
+    await supabase
+      .from('israeli_foods')
+      .delete()
+      .eq('is_system', false)
+      .eq('name', 'אבקת חלבון')
+  }
+  return { removed: custom.length }
 }
 
 export async function seedIsraeliFoodsOnce() {
   try {
     if (localStorage.getItem(SEED_FLAG) === String(allIsraeliFoods().length)) {
+      await cleanupDuplicateProteinPowder()
       return
     }
   } catch {
@@ -266,5 +443,6 @@ export async function seedIsraeliFoodsOnce() {
       /* ignore */
     }
   }
+  await cleanupDuplicateProteinPowder()
   return result
 }

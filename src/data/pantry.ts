@@ -272,12 +272,13 @@ export const PANTRY_ITEMS: PantryItem[] = [
       servingFamily: 'scoop',
     },
   ),
-  p('pantry-whey-generic', 'אבקת חלבון', 'protein', 400, 80, 5, 5, 30, 'סקופ', {
+  p('pantry-whey-generic', 'אבקת חלבון', 'protein', 390, 78, 6, 5, 30, 'סקופ', {
     aliases: ['אבקת', 'חלבון', 'whey', 'protein'],
     servingFamily: 'scoop',
     serving_units: [
       { id: 'scoop-30', name: 'סקופ (30g)', grams: 30, is_default: true },
-      { id: 'scoop-25', name: 'סקופ (25g)', grams: 25 },
+      { id: 'scoop-15', name: 'חצי סקופ (15g)', grams: 15 },
+      { id: 'g-100', name: '100 גרם', grams: 100 },
     ],
   }),
   p('pantry-tuna-water', 'טונה במים', 'protein', 116, 26, 0, 1, 112, 'קופסה מסוננת', {

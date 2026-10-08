@@ -30,6 +30,7 @@ export async function seedIsraeliFoods(): Promise<{
     const chunk = foods.slice(i, i + CHUNK).map((food) => ({
       ...food,
       is_system: true,
+      is_custom: false,
     }))
     const { error } = await supabase.from('israeli_foods').upsert(chunk, {
       onConflict: 'id',
