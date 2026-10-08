@@ -16,6 +16,15 @@ export const PHASE_RESULT_LABELS: Record<PhaseResult, string> = {
   aborted: 'הופסק',
 }
 
+export const DEFAULT_GOAL_START_DATE = '2026-10-08'
+export const DEFAULT_PHASE_DAYS = 210
+export const DEFAULT_MASTER_DAYS = 480
+export const DEFAULT_PHASE_TARGET_KG = 77
+export const DEFAULT_PHASE_START_KG = 71
+export const DEFAULT_PHASE_NAME = 'מסה נקייה ומואצת'
+export const DEFAULT_MASTER_NAME = 'גוף אל יווני'
+export const DEFAULT_TOTAL_PHASES = 3
+
 export type GoalSettings = {
   /** Short-term phase tracker */
   startDate: string
@@ -623,24 +632,24 @@ function finitePositive(value: unknown, fallback: number): number {
 }
 
 export function normalizeGoal(goal: Partial<GoalSettings> | null | undefined): GoalSettings {
-  const start = goal?.startDate || '2026-10-01'
+  const start = goal?.startDate || DEFAULT_GOAL_START_DATE
   const weekly = Number(goal?.weeklyWorkoutTarget)
   return {
     startDate: start,
-    totalDays: finitePositive(goal?.totalDays, 196),
-    targetWeightKg: goal?.targetWeightKg ?? 75.5,
+    totalDays: finitePositive(goal?.totalDays, DEFAULT_PHASE_DAYS),
+    targetWeightKg: goal?.targetWeightKg ?? DEFAULT_PHASE_TARGET_KG,
     targetBodyFatPct: goal?.targetBodyFatPct ?? 15,
     weeklyWorkoutTarget:
       Number.isFinite(weekly) && weekly > 0 ? Math.round(weekly) : 5,
     masterStartDate: goal?.masterStartDate || start,
-    masterTotalDays: finitePositive(goal?.masterTotalDays, 1100),
+    masterTotalDays: finitePositive(goal?.masterTotalDays, DEFAULT_MASTER_DAYS),
     masterTargetWeightKg: goal?.masterTargetWeightKg ?? 80,
     masterTargetBodyFatPct: goal?.masterTargetBodyFatPct ?? 9,
-    masterName: goal?.masterName?.trim() || 'גוף אל יווני',
-    phaseName: goal?.phaseName?.trim() || 'מסה מבוססת הרגלים',
+    masterName: goal?.masterName?.trim() || DEFAULT_MASTER_NAME,
+    phaseName: goal?.phaseName?.trim() || DEFAULT_PHASE_NAME,
     phaseNumber: Math.max(1, Math.round(finitePositive(goal?.phaseNumber, 1))),
-    totalPhases: Math.max(1, Math.round(finitePositive(goal?.totalPhases, 6))),
-    startWeightKg: goal?.startWeightKg ?? 69.5,
+    totalPhases: Math.max(1, Math.round(finitePositive(goal?.totalPhases, DEFAULT_TOTAL_PHASES))),
+    startWeightKg: goal?.startWeightKg ?? DEFAULT_PHASE_START_KG,
   }
 }
 

@@ -26,6 +26,9 @@ import {
   ACTIVITY_LEVEL_LABELS,
   calcBmi,
   calcProcessDay,
+  DEFAULT_MASTER_NAME,
+  DEFAULT_PHASE_NAME,
+  DEFAULT_TOTAL_PHASES,
   localDateKey,
   PHASE_LABELS,
   ROUTINE_TIME_LABELS,
@@ -40,7 +43,9 @@ import {
 } from './weeklyConsistency'
 import { workoutPerformedOn } from './caloriesBurned'
 import {
+  buildActiveBlockStrengthRows,
   buildStrengthRowsFromLogs,
+  collectProgramExerciseSlots,
   formatBlockStrengthMarkdown,
   formatStrengthDelta,
   logsForActiveBlock,
@@ -81,12 +86,9 @@ function isInRelativeWeek(iso: string, phaseStartDate: string) {
 const NA = 'לא צוין'
 
 export const PHASE_BLUEPRINT = [
-  '1. שלב 1: מסה מבוססת הרגלים (יעד מקורי: 69.5 -> 75.5 ק״ג)',
-  '2. שלב 2: מיני-חיטוב ומחיקת שומן (יעד מקורי: 75.5 -> 73.0 ק״ג)',
-  '3. שלב 3: תחזוקה והסתגלות מבנית (יעד מקורי: 73.0 -> 73.5 ק״ג)',
-  '4. שלב 4: מסה מרכזית - צפיפות שריר (יעד מקורי: 73.5 -> 80.0 ק״ג)',
-  '5. שלב 5: חיטוב ביניים ואיפוס (יעד מקורי: 80.0 -> 76.5 ק״ג)',
-  '6. שלב 6: מסת פריצה וחיטוב סופי (יעד סופי: 80.0 ק״ג ו-9% שומן)',
+  '1. שלב 1: מסה נקייה ומואצת (71.0 -> 77.0 ק״ג | 210 ימים | עד 15% שומן)',
+  '2. שלב 2: פריצה למשקל שיא (77.0 -> 82.0 ק״ג | 150 ימים | צפיפות שריר מקסימלית)',
+  '3. שלב 3: חיטוב מהודק לגוף אל יווני (82.0 -> 80.0 ק״ג ב-9% שומן | 120 ימים)',
 ] as const
 
 const RECENT_WORKOUT_DAYS = 14
@@ -296,26 +298,40 @@ function summarizeSets(
   return tokens.join('/')
 }
 
-function formatRecentWorkouts(logs: WorkoutLog[]): string {
+function formatRecentWorkouts(
+  logs: WorkoutLog[],
+  days?: WorkoutDay[],
+): string {
   const today = startOfDay()
   const recent = [...logs]
     .filter((log) =>
       isInLastDays(workoutPerformedOn(log), RECENT_WORKOUT_DAYS, today),
     )
     .sort((a, b) => workoutPerformedOn(a).localeCompare(workoutPerformedOn(b)))
-  if (!recent.length) return ''
-  return recent
-    .map((log) => {
-      const exercises = (log.exercises ?? [])
-        .map((ex) => {
-          const sets = summarizeSets(ex.sets ?? [])
-          return sets ? `${ex.name} ${sets}` : ex.name
-        })
-        .filter(Boolean)
-        .join('; ')
-      return `- ${workoutPerformedOn(log)} · ${log.workoutName}${exercises ? `: ${exercises}` : ''}`
-    })
-    .join('\n')
+  if (recent.length) {
+    return recent
+      .map((log) => {
+        const session = log.workoutName.trim() || 'אימון'
+        const exercises = (log.exercises ?? [])
+          .map((ex) => {
+            const sets = summarizeSets(ex.sets ?? [])
+            return sets ? `${ex.name} ${sets}` : ex.name
+          })
+          .filter(Boolean)
+          .join('; ')
+        return `- ${workoutPerformedOn(log)} · ${session}${exercises ? `: ${exercises}` : ''}`
+      })
+      .join('\n')
+  }
+  const planned = [
+    ...new Set(
+      collectProgramExerciseSlots(days)
+        .map((slot) => slot.sessionName || slot.focus)
+        .filter(Boolean),
+    ),
+  ]
+  if (!planned.length) return ''
+  return `- אין אימונים מתועדים ב-${RECENT_WORKOUT_DAYS} הימים האחרונים. סוגי אימון פעילים בבלוק: ${planned.join(' · ')}`
 }
 
 function findCatalogMatch(
@@ -730,12 +746,12 @@ export function buildAiExportPrompt(input: {
     (masterDay / Math.max(1, goal.masterTotalDays)) *
     100
   ).toFixed(1)
-  const masterName = goal.masterName || 'גוף אל יווני'
+  const masterName = goal.masterName || DEFAULT_MASTER_NAME
   const masterWeight = goal.masterTargetWeightKg ?? 80
   const masterFat = goal.masterTargetBodyFatPct ?? 9
-  const phaseName = goal.phaseName || PHASE_LABELS[input.phase]
+  const phaseName = goal.phaseName || DEFAULT_PHASE_NAME
   const phaseNumber = goal.phaseNumber || 1
-  const totalPhases = goal.totalPhases || 6
+  const totalPhases = goal.totalPhases || DEFAULT_TOTAL_PHASES
 
   const historySection = input.phaseHistory.length
     ? [
@@ -767,12 +783,21 @@ export function buildAiExportPrompt(input: {
 
   let activeProgramId = input.activeProgramId ?? ''
   let activeProgramName = input.activeProgramName?.trim() ?? ''
+  const activeProgram =
+    input.workoutPrograms?.find((program) => program.id === activeProgramId) ??
+    input.workoutPrograms?.find(
+      (program) => program.name.trim() === activeProgramName,
+    )
+  const activeDays = activeProgram?.days?.length
+    ? activeProgram.days
+    : input.workoutDays
   let activeLogs = logsForActiveBlock(
     workoutLogs,
     activeProgramId,
     activeProgramName,
+    activeDays,
   )
-  if (!activeLogs.length && workoutLogs.length) {
+  if (!activeLogs.length && workoutLogs.length && !activeDays.length) {
     const latest = [...workoutLogs].sort((a, b) =>
       b.completedAt.localeCompare(a.completedAt),
     )[0]
@@ -783,10 +808,17 @@ export function buildAiExportPrompt(input: {
         workoutLogs,
         activeProgramId,
         activeProgramName,
+        activeDays,
       )
     }
   }
-  const strengthRows = buildStrengthRowsFromLogs(activeLogs)
+  const strengthRows = buildActiveBlockStrengthRows({
+    logs: workoutLogs,
+    days: activeDays,
+    setLogs: input.setLogs,
+    activeProgramId,
+    activeProgramName,
+  })
   const strengthSection = strengthRows.length
     ? formatBlockStrengthMarkdown(
         strengthRows,
@@ -804,7 +836,7 @@ export function buildAiExportPrompt(input: {
 
   const routinesSection = formatRoutinesDump(input.routines ?? [])
   const tracksSection = formatFocusTracksDump(input.focusTracks ?? [])
-  const workoutLogsSection = formatRecentWorkouts(activeLogs)
+  const workoutLogsSection = formatRecentWorkouts(workoutLogs, activeDays)
   const foodLogsSection = formatFoodLogs(input.foodLogs, savedMeals, recipes)
   const splitSummary = formatSplitSummary(input.workoutDays)
 
@@ -876,11 +908,11 @@ export function buildAiExportPrompt(input: {
 - שעות שינה ממוצעות: ${fmtNum(profile.avgSleepHours, 1)} ש׳ | רמת פעילות: ${profile.activityLevel ? ACTIVITY_LEVEL_LABELS[profile.activityLevel] : NA} | עבודה: ${profile.workStyle ? WORK_STYLE_LABELS[profile.workStyle] : NA}
 
 ## מטרת על ארוכת טווח (Master Plan)
-- יעד: ${masterName} (${fmtNum(masterWeight, 0)} ק״ג ו-${fmtNum(masterFat, 0)}% שומן)
+- יעד: ${masterName} (${fmtNum(masterWeight, 1)} ק״ג ו-${fmtNum(masterFat, 0)}% שומן)
 - התקדמות: יום ${masterDay} מתוך ${goal.masterTotalDays} (${masterPercent}%)
 - תאריך התחלה: ${goal.masterStartDate}
 
-## שלד התוכנית המקורית (6-Phase Blueprint Reference)
+## שלד התוכנית המקורית (3-Phase Blueprint Reference)
 ${PHASE_BLUEPRINT.join('\n')}
 
 ## שלב פעיל נוכחי (Current Phase)

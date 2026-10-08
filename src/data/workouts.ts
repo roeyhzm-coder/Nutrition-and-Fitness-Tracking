@@ -275,12 +275,13 @@ export const SEED_WORKOUT_TEMPLATES: WorkoutTemplate[] = [
       notes: 'ניתוק מקסימלי בכל קפיצה ונחיתה רכה ישר לתוך סקוואט.',
     },
     {
-      name: 'וול סיט רגל אחת (Single Leg Wall Sit)',
+      name: 'סקוואט בולגרי (Bulgarian Split Squat)',
       sets: 2,
-      reps: '12 שניות לכל רגל',
-      rest: '2 דקות',
+      reps: '8–10',
+      rest: '1.5–2 דקות',
       weight: BW,
-      notes: 'גב צמוד לקיר, זווית 90 מעלות.',
+      notes:
+        '2 סטים לכל רגל. ירידה מבוקרת (2–3 שניות) ועלייה יציבה, טווח תנועה מלא. התחלה ממשקל גוף והעלאת עומס הדרגתית.',
     },
   ]),
   template('tpl-b2-combo', 'משולב 2', [
@@ -358,7 +359,7 @@ const OFFICIAL_TEMPLATE_IDS = [
 ]
 
 /** Bump to force the official plan onto existing local + Supabase state again. */
-export const OFFICIAL_PLAN_VERSION = 5
+export const OFFICIAL_PLAN_VERSION = 6
 
 /** Same exercise name always maps to the same demo across the PDFs. */
 const SEED_MEDIA_BY_NAME = new Map(
@@ -372,6 +373,83 @@ function withSeedMedia(ex: Exercise): Exercise {
   const media = SEED_MEDIA_BY_NAME.get(ex.name.trim())
   if (!media) return ex
   return { ...ex, imageUrl: media.imageUrl, mediaUrl: ex.mediaUrl ?? media.mediaUrl }
+}
+
+const SINGLE_LEG_WALL_SIT_RE = /וול סיט רגל אחת|single leg wall sit/i
+
+const BULGARIAN_SPLIT_SQUAT: Omit<Exercise, 'id'> = {
+  name: 'סקוואט בולגרי (Bulgarian Split Squat)',
+  sets: 2,
+  reps: '8–10',
+  rest: '1.5–2 דקות',
+  weight: BW,
+  notes:
+    '2 סטים לכל רגל. ירידה מבוקרת (2–3 שניות) ועלייה יציבה, טווח תנועה מלא. התחלה ממשקל גוף והעלאת עומס הדרגתית.',
+}
+
+function patchWallSitExercise(ex: Exercise): { exercise: Exercise; changed: boolean } {
+  if (!SINGLE_LEG_WALL_SIT_RE.test(ex.name)) return { exercise: ex, changed: false }
+  return {
+    exercise: {
+      ...ex,
+      ...BULGARIAN_SPLIT_SQUAT,
+      id: ex.id,
+      imageUrl: undefined,
+      mediaUrl: undefined,
+    },
+    changed: true,
+  }
+}
+
+function patchExerciseList(exercises: Exercise[]): { exercises: Exercise[]; changed: boolean } {
+  let changed = false
+  const next = exercises.map((ex) => {
+    const patched = patchWallSitExercise(ex)
+    if (patched.changed) changed = true
+    return patched.exercise
+  })
+  return { exercises: next, changed }
+}
+
+/** Swap Single-Leg Wall Sit for Bulgarian Split Squat. Idempotent. */
+export function replaceSingleLegWallSitInPlan(
+  state: WorkoutPlanState,
+): WorkoutPlanState & { changed: boolean } {
+  let changed = false
+  const programs = state.programs.map((program) => {
+    let programChanged = false
+    const days = program.days.map((day) => {
+      const sessions = (day.sessions ?? []).map((session) => {
+        const patched = patchExerciseList(session.exercises)
+        if (patched.changed) programChanged = true
+        return { ...session, exercises: patched.exercises }
+      })
+      const standalone = patchExerciseList(day.exercises ?? [])
+      if (standalone.changed) programChanged = true
+      return { ...day, sessions, exercises: standalone.exercises }
+    })
+    if (!programChanged) return program
+    changed = true
+    return {
+      ...program,
+      days,
+      updatedAt: new Date().toISOString(),
+      planVersion: Math.max(program.planVersion ?? 0, OFFICIAL_PLAN_VERSION),
+    }
+  })
+
+  const templates = state.templates.map((template) => {
+    const patched = patchExerciseList(template.exercises)
+    if (!patched.changed) return template
+    changed = true
+    return {
+      ...template,
+      exercises: patched.exercises,
+      updatedAt: new Date().toISOString(),
+    }
+  })
+
+  return { ...state, programs, templates, changed }
 }
 
 function sessionFromSeed(templateId: string): DaySession {

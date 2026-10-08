@@ -65,7 +65,7 @@ export function FinishPhaseModal({ open, onClose }: FinishPhaseModalProps) {
     return {
       phase: next,
       phaseName: '',
-      totalDays: String(goal.totalDays || 196),
+      totalDays: String(goal.totalDays || 210),
       targetWeightKg: '',
       targetBodyFatPct: '',
       calories: String(m.calories),
@@ -115,7 +115,7 @@ export function FinishPhaseModal({ open, onClose }: FinishPhaseModalProps) {
           finishPhase({
             phase: form.phase,
             phaseName: form.phaseName.trim() || undefined,
-            totalDays: parseInteger(form.totalDays) || 196,
+            totalDays: parseInteger(form.totalDays) || 210,
             targetWeightKg: parseOptional(form.targetWeightKg),
             targetBodyFatPct: parseOptional(form.targetBodyFatPct),
             macros: {
@@ -258,7 +258,7 @@ export function FinishPhaseModal({ open, onClose }: FinishPhaseModalProps) {
         </section>
 
         <p className="text-[11px] text-muted">
-          אישור יאפס את מונה השלב ל-יום 1 מתוך {parseInteger(form.totalDays) || 196},
+          אישור יאפס את מונה השלב ל-יום 1 מתוך {parseInteger(form.totalDays) || 210},
           ישמור על רצף מטרת העל (יום{' '}
           {calcProcessDay(goal.masterStartDate, goal.masterTotalDays)} מתוך{' '}
           {goal.masterTotalDays}) ויעדכן את יעדי המאקרו.

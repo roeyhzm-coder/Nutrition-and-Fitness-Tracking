@@ -93,9 +93,9 @@ export function GoalPhaseCard({
       masterTargetWeightKg: parseDecimal(form.masterTargetWeightKg),
       masterTargetBodyFatPct: parseDecimal(form.masterTargetBodyFatPct),
       masterName: form.masterName.trim() || 'גוף אל יווני',
-      phaseName: form.phaseName.trim() || 'מסה מבוססת הרגלים',
+      phaseName: form.phaseName.trim() || 'מסה נקייה ומואצת',
       phaseNumber: Math.max(1, parseInteger(form.phaseNumber) ?? 1),
-      totalPhases: Math.max(1, parseInteger(form.totalPhases) ?? 6),
+      totalPhases: Math.max(1, parseInteger(form.totalPhases) ?? 3),
       startWeightKg: parseDecimal(form.startWeightKg),
     })
     setOpen(null)

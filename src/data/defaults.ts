@@ -11,24 +11,53 @@ import type {
   WorkoutProgram,
 } from '../lib/types'
 import {
+  DEFAULT_GOAL_START_DATE,
+  DEFAULT_MASTER_DAYS,
+  DEFAULT_MASTER_NAME,
+  DEFAULT_PHASE_DAYS,
+  DEFAULT_PHASE_NAME,
+  DEFAULT_PHASE_START_KG,
+  DEFAULT_PHASE_TARGET_KG,
+  DEFAULT_TOTAL_PHASES,
   isSavedPresetKind,
   normalizeWorkoutDay,
-  todayKey,
-  toLoggedAt,
   uid,
 } from '../lib/types'
 import { mergeRestoredSavedMeals } from './pinnedSavedMeals'
 import { DEFAULT_WORKOUT_DAYS, createOfficialPrograms } from './workouts'
 
-export const PLAN_SEED_VERSION = 2
+export const PLAN_SEED_VERSION = 4
 export const PLAN_SEED_KEY = 'tn.targetsSeedVersion'
+
+/** Old 6-phase / 1100-day calibration that this seed replaces. */
+export function isStaleMasterPlanGoal(
+  goal: Partial<GoalSettings> | null | undefined,
+) {
+  if (!goal) return true
+  return (
+    Number(goal.masterTotalDays) === 1100 ||
+    Number(goal.totalDays) === 196 ||
+    goal.startDate === '2026-10-01' ||
+    goal.masterStartDate === '2026-09-26' ||
+    goal.phaseName?.trim() === 'מסה מבוססת הרגלים' ||
+    Number(goal.totalPhases) === 6
+  )
+}
+
+export function isStaleBulkMacros(
+  presets: Partial<PhaseMacroPresets> | null | undefined,
+) {
+  const calories = Number(presets?.bulk?.calories)
+  const protein = Number(presets?.bulk?.protein)
+  return calories === 2600 || (calories === 2600 && protein === 155)
+}
 export const CATALOG_SEED_KEY = 'tn.catalogSeed.v1'
 
 export const DEFAULT_MACRO_BULK: MacroTargets = {
-  calories: 2600,
-  protein: 155,
-  carbs: 350,
-  fats: 65,
+  calories: 2650,
+  protein: 160,
+  carbs: 330,
+  fats: 70,
 }
 
 export const DEFAULT_MACRO_CUT: MacroTargets = {
@@ -62,27 +91,27 @@ export function normalizeMacroPresets(
 export const DEFAULT_PHASE: Phase = 'bulk'
 
 export const DEFAULT_GOAL: GoalSettings = {
-  startDate: '2026-10-01',
-  totalDays: 196,
-  targetWeightKg: 75.5,
+  startDate: DEFAULT_GOAL_START_DATE,
+  totalDays: DEFAULT_PHASE_DAYS,
+  targetWeightKg: DEFAULT_PHASE_TARGET_KG,
   targetBodyFatPct: 15,
   weeklyWorkoutTarget: 5,
-  masterStartDate: '2026-09-26',
-  masterTotalDays: 1100,
+  masterStartDate: DEFAULT_GOAL_START_DATE,
+  masterTotalDays: DEFAULT_MASTER_DAYS,
   masterTargetWeightKg: 80,
   masterTargetBodyFatPct: 9,
-  masterName: 'גוף אל יווני',
-  phaseName: 'מסה מבוססת הרגלים',
+  masterName: DEFAULT_MASTER_NAME,
+  phaseName: DEFAULT_PHASE_NAME,
   phaseNumber: 1,
-  totalPhases: 6,
-  startWeightKg: 69.5,
+  totalPhases: DEFAULT_TOTAL_PHASES,
+  startWeightKg: DEFAULT_PHASE_START_KG,
 }
 
 export const DEFAULT_PROFILE: UserProfile = {
   age: 26,
   heightCm: 182,
   sex: 'male',
-  startWeightKg: 69.5,
+  startWeightKg: DEFAULT_PHASE_START_KG,
   waistCircumferenceCm: null,
   neckCircumferenceCm: null,
   estimatedBodyFatPct: 14,
@@ -98,36 +127,25 @@ export const DEFAULT_PROFILE: UserProfile = {
 }
 
 export const SEED_WEIGHT_ENTRY: WeightEntry = {
-  id: 'seed-weight-phase1-2026-10-01',
-  weightKg: 69.5,
+  id: 'seed-weight-phase1-2026-10-08',
+  weightKg: DEFAULT_PHASE_START_KG,
   bodyFatPct: 14,
-  loggedAt: '2026-10-01T12:00:00',
+  loggedAt: `${DEFAULT_GOAL_START_DATE}T12:00:00`,
   note: 'התחלת שלב 1',
 }
 
 const LEGACY_SEED_WEIGHT_IDS = new Set([
   'seed-weight-phase1-2026-09-26',
   'seed-weight-phase1-2026-10-01',
+  'seed-weight-phase1-2026-10-08',
   'seed-weight-current',
 ])
 
+/** Seed only empty histories. Never overwrite real weigh-ins. */
 export function applySeedWeightLogs(prev: WeightEntry[]): WeightEntry[] {
   const withoutSeed = prev.filter((w) => !LEGACY_SEED_WEIGHT_IDS.has(w.id))
-  const next = [...withoutSeed, SEED_WEIGHT_ENTRY].sort((a, b) =>
-    a.loggedAt.localeCompare(b.loggedAt),
-  )
-  const latest = next.at(-1)
-  if (latest && latest.weightKg === 69.5) return next
-  return [
-    ...next,
-    {
-      id: 'seed-weight-current',
-      weightKg: 69.5,
-      bodyFatPct: 14,
-      loggedAt: toLoggedAt(todayKey()),
-      note: 'משקל עדכני',
-    },
-  ]
+  if (withoutSeed.length > 0) return withoutSeed
+  return [SEED_WEIGHT_ENTRY]
 }
 
 /** @deprecated */

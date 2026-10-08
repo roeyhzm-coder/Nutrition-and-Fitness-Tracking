@@ -11,7 +11,6 @@ import {
 import {
   cloneProgram,
   createDefaultPrograms,
-  applySeedWeightLogs,
   DEFAULT_GOAL,
   DEFAULT_PHASE,
   DEFAULT_PHASE_MACROS,
@@ -22,6 +21,8 @@ import {
   CATALOG_SEED_KEY,
   PLAN_SEED_KEY,
   PLAN_SEED_VERSION,
+  isStaleBulkMacros,
+  isStaleMasterPlanGoal,
   normalizeMacroPresets,
 } from '../data/defaults'
 import {
@@ -55,6 +56,7 @@ import {
   isStalePlan,
   officialBlockForProgram,
   officialDayFor,
+  replaceSingleLegWallSitInPlan,
 } from '../data/workouts'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import {
@@ -331,19 +333,17 @@ function migrateStoredPlan() {
     templates: readStored<WorkoutTemplate[]>(TEMPLATES_KEY, []),
     activeProgramId: readStored<string>(ACTIVE_PROGRAM_KEY, ''),
   }
-  if (!isStalePlan(stored)) {
-    if (version < OFFICIAL_PLAN_VERSION) {
-      localStorage.setItem(PLAN_VERSION_KEY, String(OFFICIAL_PLAN_VERSION))
-    }
-    return
+  const ensured = isStalePlan(stored) ? ensureOfficialPlan(stored) : stored
+  const plan = replaceSingleLegWallSitInPlan(ensured)
+  const shouldWrite = isStalePlan(stored) || plan.changed || version < OFFICIAL_PLAN_VERSION
+  if (shouldWrite) {
+    localStorage.setItem(PROGRAMS_KEY, JSON.stringify(plan.programs))
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(plan.templates))
+    localStorage.setItem(ACTIVE_PROGRAM_KEY, JSON.stringify(plan.activeProgramId))
+    localStorage.setItem(PLAN_VERSION_KEY, String(OFFICIAL_PLAN_VERSION))
+    localStorage.removeItem('tn.librarySeeded.v1')
+    localStorage.removeItem('tn.librarySeedVersion.v1')
   }
-  const plan = ensureOfficialPlan(stored)
-  localStorage.setItem(PROGRAMS_KEY, JSON.stringify(plan.programs))
-  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(plan.templates))
-  localStorage.setItem(ACTIVE_PROGRAM_KEY, JSON.stringify(plan.activeProgramId))
-  localStorage.setItem(PLAN_VERSION_KEY, String(OFFICIAL_PLAN_VERSION))
-  localStorage.removeItem('tn.librarySeeded.v1')
-  localStorage.removeItem('tn.librarySeedVersion.v1')
 }
 
 function needsPlanSeed() {
@@ -368,19 +368,23 @@ function markCatalogSeeded() {
 
 /** Writes Phase 1 / master-plan targets before the first React read. */
 function migratePlanTargets() {
-  if (!needsPlanSeed()) return
+  const storedGoal = readStored<GoalSettings>('tn.goal.v2', DEFAULT_GOAL)
+  const storedMacros = readStored<PhaseMacroPresets>(
+    'tn.macroPresets.v1',
+    DEFAULT_PHASE_MACROS,
+  )
+  if (
+    !needsPlanSeed() &&
+    !isStaleMasterPlanGoal(storedGoal) &&
+    !isStaleBulkMacros(storedMacros)
+  ) {
+    return
+  }
   localStorage.setItem('tn.goal.v2', JSON.stringify(DEFAULT_GOAL))
   localStorage.setItem('tn.phase', JSON.stringify(DEFAULT_PHASE))
   localStorage.setItem(
     'tn.macroPresets.v1',
     JSON.stringify(DEFAULT_PHASE_MACROS),
-  )
-  localStorage.setItem('tn.profile.v1', JSON.stringify(DEFAULT_PROFILE))
-  localStorage.setItem('tn.consistencyDayMarks.v1', JSON.stringify({}))
-  const weights = readStored<WeightEntry[]>('tn.weightLogs', [])
-  localStorage.setItem(
-    'tn.weightLogs',
-    JSON.stringify(applySeedWeightLogs(weights)),
   )
 }
 
@@ -1067,9 +1071,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const applyRemoteState = useCallback(
     (remote: SyncedAppState) => {
       skipNextPush.current = true
-      setPhaseState(remote.phase)
-      setGoal(normalizeGoal(remote.goal))
-      setMacroPresets(remote.macroPresets)
+      const seedGoals =
+        needsPlanSeed() ||
+        isStaleMasterPlanGoal(remote.goal) ||
+        isStaleBulkMacros(remote.macroPresets)
+      setPhaseState(seedGoals ? DEFAULT_PHASE : remote.phase)
+      setGoal(normalizeGoal(seedGoals ? DEFAULT_GOAL : remote.goal))
+      setMacroPresets(seedGoals ? DEFAULT_PHASE_MACROS : remote.macroPresets)
+      if (seedGoals) skipNextPush.current = false
       const remotePlan = {
         programs: (remote.workoutPrograms ?? []).map(normalizeWorkoutProgram),
         templates:
@@ -1078,7 +1087,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         activeProgramId: remote.activeProgramId,
       }
       const remoteStale = isStalePlan(remotePlan)
-      const plan = remoteStale
+      const basePlan = remoteStale
         ? ensureOfficialPlan(remotePlan)
         : {
             ...remotePlan,
@@ -1086,12 +1095,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             activeProgramId:
               remotePlan.activeProgramId || remotePlan.programs[0]?.id || '',
           }
-      if (remoteStale) skipNextPush.current = false
+      const plan = replaceSingleLegWallSitInPlan(basePlan)
+      if (remoteStale || plan.changed) skipNextPush.current = false
       if (plan.programs.length) {
         setWorkoutPrograms(plan.programs)
         setActiveProgramIdState(plan.activeProgramId)
       }
-      if (remote.workoutTemplates) setWorkoutTemplates(plan.templates)
+      if (remote.workoutTemplates || plan.changed) {
+        setWorkoutTemplates(plan.templates)
+      }
       if (remote.consistencyDayMarks) {
         setConsistencyDayMarks(remote.consistencyDayMarks)
       }
@@ -1276,12 +1288,17 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
       const remote = await pullAppState()
       if (!remote) {
-        if (reason === 'load' && needsPlanSeed()) {
+        if (
+          reason === 'load' &&
+          (needsPlanSeed() ||
+            isStaleMasterPlanGoal(readStored<GoalSettings>('tn.goal.v2', DEFAULT_GOAL)) ||
+            isStaleBulkMacros(
+              readStored<PhaseMacroPresets>('tn.macroPresets.v1', DEFAULT_PHASE_MACROS),
+            ))
+        ) {
           setPhaseState(DEFAULT_PHASE)
           setGoal(DEFAULT_GOAL)
           setMacroPresets(DEFAULT_PHASE_MACROS)
-          setProfileRaw(DEFAULT_PROFILE)
-          setWeightLogs((prev) => applySeedWeightLogs(prev))
           markPlanSeeded()
         }
         if (reason === 'load' && needsCatalogSeed()) {
@@ -1297,7 +1314,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         return
       }
       applyRemoteState(remote)
-      if (needsPlanSeed()) markPlanSeeded()
+      if (
+        needsPlanSeed() ||
+        isStaleMasterPlanGoal(remote.goal) ||
+        isStaleBulkMacros(remote.macroPresets)
+      ) {
+        markPlanSeeded()
+      }
       hydratedRef.current = true
       if (localDirtyRef.current) {
         await flushCloud('hydrate-adopt-local-nutrition')
