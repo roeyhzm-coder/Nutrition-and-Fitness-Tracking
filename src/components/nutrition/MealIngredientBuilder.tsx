@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react'
 import { X } from 'lucide-react'
 import {
   applyLineQuantity,
@@ -7,24 +8,30 @@ import {
   type CatalogFood,
   type MealIngredientLine,
 } from '../../lib/foodCatalog'
+import { israeliFoodCatalogCount } from '../../lib/israeliFoods'
 import { formatNiceNumber } from '../../lib/numericInput'
 import { uid } from '../../lib/types'
 import { CatalogPicker } from './CatalogPicker'
 import { UniversalQuantitySelector } from './UniversalQuantitySelector'
 
+type IngredientSource = 'israeli' | 'recipes'
+
 type MealIngredientBuilderProps = {
-  catalog: CatalogFood[]
+  israeliCatalog: CatalogFood[]
+  recipeCatalog: CatalogFood[]
   lines: MealIngredientLine[]
   onChange: (lines: MealIngredientLine[]) => void
 }
 
 export function MealIngredientBuilder({
-  catalog,
+  israeliCatalog,
+  recipeCatalog,
   lines,
   onChange,
 }: MealIngredientBuilderProps) {
-  const items = catalog.filter((item) => item.kind === 'item')
-  const recipes = catalog.filter((item) => item.kind === 'meal')
+  const [source, setSource] = useState<IngredientSource>('israeli')
+  const catalogCount = useMemo(() => israeliFoodCatalogCount(), [israeliCatalog])
+  const activeCatalog = source === 'israeli' ? israeliCatalog : recipeCatalog
 
   function updateLine(id: string, next: MealIngredientLine) {
     onChange(lines.map((line) => (line.id === id ? next : line)))
@@ -40,32 +47,45 @@ export function MealIngredientBuilder({
 
   return (
     <div className="space-y-2">
-      <div className="space-y-1.5">
-        <label className="block text-xs text-muted">
-          הוסף רכיב מהמאגר
-          <div className="mt-1">
-            <CatalogPicker
-              items={items}
-              placeholder="קוטג, לחם, במבה, טונה, ביצים…"
-              onSelect={addItem}
-            />
-          </div>
-        </label>
-        <label className="block text-xs text-muted">
-          הוסף מתכון / ארוחה שמורה
-          <div className="mt-1">
-            <CatalogPicker
-              items={recipes}
-              placeholder="חיפוש חביתה, שייק או ארוחה קבועה…"
-              onSelect={addItem}
-            />
-          </div>
-        </label>
+      <div className="grid grid-cols-2 gap-1 rounded-xl bg-cyan-50 p-1">
+        {(
+          [
+            [
+              'israeli',
+              `מאגר מזון ישראלי (${catalogCount.toLocaleString('he-IL')} פריטים)`,
+            ],
+            ['recipes', 'ספר המתכונים שלי'],
+          ] as const
+        ).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setSource(id)}
+            className={[
+              'min-h-11 rounded-lg px-2 text-[11px] font-bold leading-tight transition',
+              source === id
+                ? 'bg-white text-cyan-900 shadow-sm'
+                : 'text-cyan-800/70 hover:text-cyan-950',
+            ].join(' ')}
+          >
+            {label}
+          </button>
+        ))}
       </div>
+
+      <CatalogPicker
+        items={activeCatalog}
+        placeholder={
+          source === 'israeli'
+            ? 'תות שדה, בננה, חמאת בוטנים, אבקת חלבון…'
+            : 'טוסט מותאם, שייק, שניצל דק ביתי…'
+        }
+        onSelect={addItem}
+      />
 
       {lines.length === 0 ? (
         <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-muted">
-          הוסף כמה רכיבים או מתכונים — המאקרו יתעדכן מיד.
+          בחר רכיבים מהמאגר או מספר המתכונים — המאקרו יתעדכן מיד.
         </p>
       ) : (
         <ul className="space-y-1.5">

@@ -17,11 +17,18 @@ import {
   formatIngredientNotes,
   lineToComponent,
   macrosFromPer100g,
+  recipeToCatalog,
+  savedToCatalog,
   suggestMealName,
   sumIngredientLines,
   type CatalogFood,
   type MealIngredientLine,
 } from '../../lib/foodCatalog'
+import { allIsraeliFoods } from '../../data/foods'
+import {
+  israeliToCatalog,
+  useCustomIsraeliFoods,
+} from '../../lib/israeliFoods'
 import { formatNiceNumber, parseDecimal, parsePositiveDecimal } from '../../lib/numericInput'
 import { defaultServingUnit, effectiveGrams, GRAMS_UNIT_ID } from '../../lib/servingUnits'
 import { uid, type SavedMeal, type SavedPresetKind } from '../../lib/types'
@@ -262,6 +269,7 @@ export function SavedMeals() {
     [savedMeals, q],
   )
 
+  const customIsraeliFoods = useCustomIsraeliFoods()
   const catalog = useMemo(
     () => buildFoodCatalog(recipes, savedMeals, editing?.id),
     [recipes, savedMeals, editing?.id],
@@ -270,6 +278,22 @@ export function SavedMeals() {
     () => catalog.filter((item) => item.kind === 'item'),
     [catalog],
   )
+  const israeliCatalog = useMemo(() => {
+    const seen = new Set(customIsraeliFoods.map((food) => food.id))
+    return [
+      ...customIsraeliFoods,
+      ...allIsraeliFoods().filter((food) => !seen.has(food.id)),
+    ].map(israeliToCatalog)
+  }, [customIsraeliFoods])
+  const recipeCatalog = useMemo(() => {
+    const items = recipes.map(recipeToCatalog)
+    for (const meal of savedMeals) {
+      if (meal.id === editing?.id) continue
+      if (savedPresetKind(meal) !== 'meal') continue
+      items.push(savedToCatalog(meal))
+    }
+    return items
+  }, [recipes, savedMeals, editing?.id])
 
   const namedLines = useMemo(
     () => lines.filter((line) => line.name.trim()),
@@ -548,37 +572,6 @@ export function SavedMeals() {
             submitForm()
           }}
         >
-          <div className="grid grid-cols-2 gap-1 rounded-xl bg-slate-50 p-1">
-            {(
-              [
-                ['item', 'פריט בודד'],
-                ['meal', 'ארוחה / מתכון'],
-              ] as const
-            ).map(([kind, label]) => (
-              <button
-                key={kind}
-                type="button"
-                onClick={() => {
-                  setForm((p) => ({ ...p, kind }))
-                  if (kind === 'item') {
-                    setEntryMode(editing ? 'manual' : 'catalog')
-                    setLines([])
-                  } else {
-                    setEntryMode(editing ? 'manual' : 'compose')
-                  }
-                }}
-                className={[
-                  'min-h-9 rounded-lg px-2 text-xs font-semibold transition',
-                  form.kind === kind
-                    ? 'bg-white text-text shadow-sm'
-                    : 'text-muted hover:text-text',
-                ].join(' ')}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
           {isMealForm ? (
             <ModeTabs
               value={entryMode === 'manual' ? 'manual' : 'compose'}
@@ -614,7 +607,8 @@ export function SavedMeals() {
 
           {isMealForm && entryMode !== 'manual' ? (
             <MealIngredientBuilder
-              catalog={catalog}
+              israeliCatalog={israeliCatalog}
+              recipeCatalog={recipeCatalog}
               lines={lines}
               onChange={setLines}
             />

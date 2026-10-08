@@ -21,6 +21,7 @@ import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
+import { AddCustomIsraeliFoodModal } from './AddCustomIsraeliFoodModal'
 
 type FoodSearchProps = {
   onAdd: (entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) => void
@@ -50,6 +51,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
   const [quantity, setQuantity] = useState('1')
   const [freeGrams, setFreeGrams] = useState(false)
   const [gramsDraft, setGramsDraft] = useState('100')
+  const [catalogOpen, setCatalogOpen] = useState(false)
   const [customOpen, setCustomOpen] = useState(false)
   const [custom, setCustom] = useState(EMPTY_CUSTOM)
   const [saveCustom, setSaveCustom] = useState(false)
@@ -179,12 +181,20 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
       </div>
 
       <Button
-        variant="surface"
+        variant="accent"
         className="mt-3 w-full"
+        onClick={() => setCatalogOpen(true)}
+      >
+        <Plus className="size-3.5" strokeWidth={2} />
+        הוסף פריט חדש למאגר
+      </Button>
+      <Button
+        variant="surface"
+        className="mt-2 w-full"
         onClick={() => setCustomOpen(true)}
       >
         <Plus className="size-3.5" strokeWidth={2} />
-        הזנה ידנית
+        הזנה ידנית ליומן
       </Button>
 
       {toast ? (
@@ -331,6 +341,17 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
           </div>
         ) : null}
       </Modal>
+
+      <AddCustomIsraeliFoodModal
+        open={catalogOpen}
+        onClose={() => setCatalogOpen(false)}
+        onSaved={(food) => {
+          showToast(`"${food.name}" נוסף למאגר`)
+          if (query.trim()) {
+            void searchIsraeliFoods(query.trim()).then(setResults)
+          }
+        }}
+      />
 
       <Modal
         open={customOpen}

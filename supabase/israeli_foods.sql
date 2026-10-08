@@ -45,4 +45,15 @@ create policy "israeli_foods_system_update"
   using (is_system = true)
   with check (is_system = true);
 
+drop policy if exists "israeli_foods_custom_insert" on public.israeli_foods;
+create policy "israeli_foods_custom_insert"
+  on public.israeli_foods for insert
+  with check (true);
+
+drop policy if exists "israeli_foods_custom_update" on public.israeli_foods;
+create policy "israeli_foods_custom_update"
+  on public.israeli_foods for update
+  using (is_system = false)
+  with check (is_system = false);
+
 grant select, insert, update on public.israeli_foods to anon, authenticated;

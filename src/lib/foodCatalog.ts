@@ -35,7 +35,7 @@ export type MacroPer100g = {
   fats: number
 }
 
-export type CatalogSource = 'pantry' | 'recipe' | 'saved'
+export type CatalogSource = 'pantry' | 'recipe' | 'saved' | 'israeli'
 
 export type CatalogFood = {
   id: string
