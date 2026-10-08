@@ -349,6 +349,7 @@ const OBSOLETE_PROGRAM_IDS = new Set(['program-bulk', 'program-cut'])
 const OBSOLETE_PROGRAM_NAMES = new Set(['תוכנית מסה', 'תוכנית חיטוב'])
 
 export const OFFICIAL_PROGRAM_IDS = ['program-block-1', 'program-block-2'] as const
+export const DEFAULT_ACTIVE_PROGRAM_ID = 'program-block-2' as const
 const OFFICIAL_TEMPLATE_IDS = [
   'tpl-b1-pull',
   'tpl-b1-push',
@@ -359,7 +360,7 @@ const OFFICIAL_TEMPLATE_IDS = [
 ]
 
 /** Bump to force the official plan onto existing local + Supabase state again. */
-export const OFFICIAL_PLAN_VERSION = 6
+export const OFFICIAL_PLAN_VERSION = 7
 
 /** Same exercise name always maps to the same demo across the PDFs. */
 const SEED_MEDIA_BY_NAME = new Map(
@@ -560,19 +561,39 @@ export function ensureOfficialPlan(state: WorkoutPlanState): WorkoutPlanState {
     ...keptTemplates,
   ]
 
-  const activeStillExists = programs.some((p) => p.id === state.activeProgramId)
   return {
     programs,
     templates,
-    activeProgramId: activeStillExists
-      ? state.activeProgramId
-      : programs[0]?.id ?? '',
+    activeProgramId: resolveActiveProgramId({
+      programs,
+      templates,
+      activeProgramId: state.activeProgramId,
+    }),
   }
+}
+
+/** Prefer Block 2 as the live training block. */
+export function resolveActiveProgramId(state: WorkoutPlanState): string {
+  if (state.programs.some((p) => p.id === DEFAULT_ACTIVE_PROGRAM_ID)) {
+    return DEFAULT_ACTIVE_PROGRAM_ID
+  }
+  const named = state.programs.find((p) => p.name.trim() === 'בלוק 2')
+  if (named) return named.id
+  if (state.programs.some((p) => p.id === state.activeProgramId)) {
+    return state.activeProgramId
+  }
+  return state.programs[0]?.id ?? ''
+}
+
+export function withBlock2Active(state: WorkoutPlanState): WorkoutPlanState {
+  const activeProgramId = resolveActiveProgramId(state)
+  if (activeProgramId === state.activeProgramId) return state
+  return { ...state, activeProgramId }
 }
 
 /**
  * Force the official Block 1 / Block 2 plan: fresh official programs and
- * library workouts, obsolete defaults removed, Block 1 active.
+ * library workouts, obsolete defaults removed, Block 2 active.
  * User-created programs and templates are kept.
  */
 export function applyOfficialPlan(state: WorkoutPlanState): WorkoutPlanState {
@@ -590,7 +611,7 @@ export function applyOfficialPlan(state: WorkoutPlanState): WorkoutPlanState {
   return {
     programs: [...official, ...customPrograms],
     templates: [...structuredClone(SEED_WORKOUT_TEMPLATES), ...customTemplates],
-    activeProgramId: OFFICIAL_PROGRAM_IDS[0],
+    activeProgramId: DEFAULT_ACTIVE_PROGRAM_ID,
   }
 }
 

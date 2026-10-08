@@ -10,6 +10,7 @@ import {
 import {
   calcBmi,
   calcMaleNavyBodyFatPct,
+  latestWeighInKg,
   navyBodyFatValidationMessage,
   SEX_LABELS,
   type Sex,
@@ -70,9 +71,10 @@ function toForm(
 export function ProfileCard() {
   const { profile, setProfile, goal, setGoal, weightLogs, recordBodyMeasurement } =
     useAppData()
-  const latestWeight = [...weightLogs]
-    .reverse()
-    .find((e) => e.weightKg > 0)?.weightKg
+  const latestWeight = latestWeighInKg(weightLogs, [], [
+    goal.startWeightKg,
+    profile.startWeightKg,
+  ])
   const [form, setForm] = useState<ProfileForm>(() =>
     toForm(profile, goal.masterTargetWeightKg),
   )

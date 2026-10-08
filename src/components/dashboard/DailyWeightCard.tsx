@@ -9,7 +9,9 @@ import { NumericInput } from '../ui/NumericInput'
 
 export function DailyWeightCard() {
   const { weightLogs, addWeight } = useAppData()
-  const latest = weightLogs.at(-1)
+  const latest = [...weightLogs].sort((a, b) =>
+    a.loggedAt.localeCompare(b.loggedAt),
+  ).at(-1)
   const [date, setDate] = useState(todayKey())
   const [weight, setWeight] = useState('')
   const [saved, setSaved] = useState(false)

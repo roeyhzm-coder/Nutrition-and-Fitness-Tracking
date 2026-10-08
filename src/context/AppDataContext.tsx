@@ -11,6 +11,7 @@ import {
 import {
   cloneProgram,
   createDefaultPrograms,
+  applySeedWeightLogs,
   DEFAULT_GOAL,
   DEFAULT_PHASE,
   DEFAULT_PHASE_MACROS,
@@ -50,6 +51,7 @@ import {
 } from '../lib/focusTracks'
 import { DEFAULT_FOOD_CATEGORIES, adoptRemoteRecipes, seedRecipesIfEmpty } from '../data/recipes'
 import {
+  DEFAULT_ACTIVE_PROGRAM_ID,
   OFFICIAL_PLAN_VERSION,
   ensureOfficialPlan,
   backfillProgramMedia,
@@ -57,6 +59,7 @@ import {
   officialBlockForProgram,
   officialDayFor,
   replaceSingleLegWallSitInPlan,
+  withBlock2Active,
 } from '../data/workouts'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import {
@@ -334,8 +337,13 @@ function migrateStoredPlan() {
     activeProgramId: readStored<string>(ACTIVE_PROGRAM_KEY, ''),
   }
   const ensured = isStalePlan(stored) ? ensureOfficialPlan(stored) : stored
-  const plan = replaceSingleLegWallSitInPlan(ensured)
-  const shouldWrite = isStalePlan(stored) || plan.changed || version < OFFICIAL_PLAN_VERSION
+  const patched = replaceSingleLegWallSitInPlan(ensured)
+  const plan = withBlock2Active(patched)
+  const shouldWrite =
+    isStalePlan(stored) ||
+    patched.changed ||
+    plan.activeProgramId !== stored.activeProgramId ||
+    version < OFFICIAL_PLAN_VERSION
   if (shouldWrite) {
     localStorage.setItem(PROGRAMS_KEY, JSON.stringify(plan.programs))
     localStorage.setItem(TEMPLATES_KEY, JSON.stringify(plan.templates))
@@ -388,9 +396,18 @@ function migratePlanTargets() {
   )
 }
 
+function migrateWeightSeed() {
+  const weights = readStored<WeightEntry[]>('tn.weightLogs', [])
+  const next = applySeedWeightLogs(weights)
+  if (next !== weights) {
+    localStorage.setItem('tn.weightLogs', JSON.stringify(next))
+  }
+}
+
 export function AppDataProvider({ children }: { children: ReactNode }) {
   useState(migrateStoredPlan)
   useState(migratePlanTargets)
+  useState(migrateWeightSeed)
   const defaults = useMemo(() => createDefaultPrograms(), [])
   const [phase, setPhaseState] = useLocalStorage<Phase>(
     'tn.phase',
@@ -434,7 +451,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   >(PROGRAMS_KEY, defaults)
   const [activeProgramId, setActiveProgramIdState] = useLocalStorage<string>(
     ACTIVE_PROGRAM_KEY,
-    defaults[0]?.id ?? '',
+    DEFAULT_ACTIVE_PROGRAM_ID,
   )
   const [workoutTemplates, setWorkoutTemplates] = useLocalStorage<
     WorkoutTemplate[]
@@ -532,6 +549,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const activeProgram =
     workoutPrograms.find((p) => p.id === activeProgramId) ??
+    workoutPrograms.find((p) => p.id === DEFAULT_ACTIVE_PROGRAM_ID) ??
     workoutPrograms[0] ??
     null
 
@@ -1095,13 +1113,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
             activeProgramId:
               remotePlan.activeProgramId || remotePlan.programs[0]?.id || '',
           }
-      const plan = replaceSingleLegWallSitInPlan(basePlan)
-      if (remoteStale || plan.changed) skipNextPush.current = false
+      const patched = replaceSingleLegWallSitInPlan(basePlan)
+      const plan = withBlock2Active(patched)
+      if (
+        remoteStale ||
+        patched.changed ||
+        plan.activeProgramId !== remotePlan.activeProgramId
+      ) {
+        skipNextPush.current = false
+      }
       if (plan.programs.length) {
         setWorkoutPrograms(plan.programs)
         setActiveProgramIdState(plan.activeProgramId)
       }
-      if (remote.workoutTemplates || plan.changed) {
+      if (remote.workoutTemplates || patched.changed) {
         setWorkoutTemplates(plan.templates)
       }
       if (remote.consistencyDayMarks) {
@@ -1150,11 +1175,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         })
       }
       if (remote.weightLogs !== undefined) {
-        setWeightLogs(
+        const nextWeights = applySeedWeightLogs(
           [...remote.weightLogs].sort((a, b) =>
             a.loggedAt.localeCompare(b.loggedAt),
           ),
         )
+        if (nextWeights.length !== (remote.weightLogs?.length ?? 0)) {
+          skipNextPush.current = false
+        }
+        setWeightLogs(nextWeights)
       }
       if (remote.bodyMeasurements !== undefined) {
         setBodyMeasurements((local) =>

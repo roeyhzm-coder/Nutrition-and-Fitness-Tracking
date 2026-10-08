@@ -709,6 +709,37 @@ export function navyBodyFatValidationMessage(
   return null
 }
 
+function positiveKg(value: unknown): number | null {
+  const n = Number(value)
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/** Most recent logged weigh-in. Falls back to extras (measurements) then explicit kg values. */
+export function latestWeighInKg(
+  weightLogs: Array<{ weightKg?: number | null; loggedAt?: string }>,
+  extras: Array<{ weightKg?: number | null; recordedAt?: string }> = [],
+  fallbacks: Array<number | null | undefined> = [],
+): number | null {
+  const rows: { at: string; kg: number }[] = []
+  for (const entry of weightLogs) {
+    const kg = positiveKg(entry.weightKg)
+    if (kg == null) continue
+    rows.push({ at: entry.loggedAt || '', kg })
+  }
+  for (const extra of extras) {
+    const kg = positiveKg(extra.weightKg)
+    if (kg == null) continue
+    rows.push({ at: extra.recordedAt || '', kg })
+  }
+  rows.sort((a, b) => a.at.localeCompare(b.at))
+  if (rows.length) return rows.at(-1)!.kg
+  for (const fallback of fallbacks) {
+    const kg = positiveKg(fallback)
+    if (kg != null) return kg
+  }
+  return null
+}
+
 export function calcBmi(
   weightKg: number | null | undefined,
   heightCm: number | null | undefined,

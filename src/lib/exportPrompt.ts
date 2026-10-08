@@ -20,6 +20,7 @@ import type {
   WorkoutLog,
   WorkoutProgram,
 } from './types'
+import { DEFAULT_ACTIVE_PROGRAM_ID } from '../data/workouts'
 import type { BodyMeasurement } from './bodyMeasurements'
 import { extractBodyMeasurementsHistory } from './bodyMeasurements'
 import {
@@ -29,6 +30,7 @@ import {
   DEFAULT_MASTER_NAME,
   DEFAULT_PHASE_NAME,
   DEFAULT_TOTAL_PHASES,
+  latestWeighInKg,
   localDateKey,
   PHASE_LABELS,
   ROUTINE_TIME_LABELS,
@@ -48,7 +50,6 @@ import {
   collectProgramExerciseSlots,
   formatBlockStrengthMarkdown,
   formatStrengthDelta,
-  logsForActiveBlock,
 } from './blockStrength'
 import {
   buildFoodCatalog,
@@ -717,14 +718,24 @@ export function buildAiExportPrompt(input: {
   const sortedWeights = [...input.weightLogs].sort((a, b) =>
     a.loggedAt.localeCompare(b.loggedAt),
   )
-  const startWeight = profile.startWeightKg ?? sortedWeights[0]?.weightKg ?? null
-  const currentWeight = sortedWeights.at(-1)?.weightKg ?? null
+  const startWeight =
+    goal.startWeightKg ?? profile.startWeightKg ?? sortedWeights[0]?.weightKg ?? null
+  const currentWeight = latestWeighInKg(
+    sortedWeights,
+    input.bodyMeasurements ?? [],
+    [goal.startWeightKg, profile.startWeightKg],
+  )
   const latestFat =
     [...sortedWeights].reverse().find((w) => w.bodyFatPct != null)
       ?.bodyFatPct ??
+    [...(input.bodyMeasurements ?? [])]
+      .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
+      .reverse()
+      .find((row) => row.bodyFatPercentage != null)?.bodyFatPercentage ??
     profile.estimatedBodyFatPct ??
     null
-  const bmi = calcBmi(currentWeight, profile.heightCm)
+  const heightCm = profile.heightCm ?? 182
+  const bmi = calcBmi(currentWeight, heightCm)
   const weightDelta =
     startWeight != null && currentWeight != null
       ? currentWeight - startWeight
@@ -781,37 +792,19 @@ export function buildAiExportPrompt(input: {
       ].join('\n')
     : ''
 
-  let activeProgramId = input.activeProgramId ?? ''
-  let activeProgramName = input.activeProgramName?.trim() ?? ''
+  const programs = input.workoutPrograms ?? []
   const activeProgram =
-    input.workoutPrograms?.find((program) => program.id === activeProgramId) ??
-    input.workoutPrograms?.find(
-      (program) => program.name.trim() === activeProgramName,
+    programs.find((program) => program.id === DEFAULT_ACTIVE_PROGRAM_ID) ??
+    programs.find((program) => program.name.trim() === 'בלוק 2') ??
+    programs.find((program) => program.id === (input.activeProgramId ?? '')) ??
+    programs.find(
+      (program) => program.name.trim() === (input.activeProgramName?.trim() ?? ''),
     )
+  const activeProgramId = activeProgram?.id ?? input.activeProgramId ?? DEFAULT_ACTIVE_PROGRAM_ID
+  const activeProgramName = activeProgram?.name.trim() || input.activeProgramName?.trim() || 'בלוק 2'
   const activeDays = activeProgram?.days?.length
     ? activeProgram.days
     : input.workoutDays
-  let activeLogs = logsForActiveBlock(
-    workoutLogs,
-    activeProgramId,
-    activeProgramName,
-    activeDays,
-  )
-  if (!activeLogs.length && workoutLogs.length && !activeDays.length) {
-    const latest = [...workoutLogs].sort((a, b) =>
-      b.completedAt.localeCompare(a.completedAt),
-    )[0]
-    if (latest) {
-      activeProgramId = latest.programId
-      activeProgramName = latest.programName.trim()
-      activeLogs = logsForActiveBlock(
-        workoutLogs,
-        activeProgramId,
-        activeProgramName,
-        activeDays,
-      )
-    }
-  }
   const strengthRows = buildActiveBlockStrengthRows({
     logs: workoutLogs,
     days: activeDays,
@@ -838,7 +831,7 @@ export function buildAiExportPrompt(input: {
   const tracksSection = formatFocusTracksDump(input.focusTracks ?? [])
   const workoutLogsSection = formatRecentWorkouts(workoutLogs, activeDays)
   const foodLogsSection = formatFoodLogs(input.foodLogs, savedMeals, recipes)
-  const splitSummary = formatSplitSummary(input.workoutDays)
+  const splitSummary = formatSplitSummary(activeDays)
 
   const completedDates = completedDateKeys({
     workoutLogs,
@@ -846,7 +839,7 @@ export function buildAiExportPrompt(input: {
     activityLogs: input.activityLogs,
     dayMarks: input.consistencyDayMarks ?? {},
   })
-  const scheduledDays = scheduledDayNumbers(input.workoutDays)
+  const scheduledDays = scheduledDayNumbers(activeDays)
   const weekStart = startOfRelativeWeek(phaseStart, today)
   const weekAdherence = adherenceForDates(
     eachDateKey(weekStart, today),
@@ -902,7 +895,7 @@ export function buildAiExportPrompt(input: {
     `אנא נתח את הנתונים שלי לאימונים ותזונה ותן המלצות ממוקדות בעברית:
 
 ## מדדי גוף ומטרות (Biometrics & Goals)
-- גיל: ${fmtNum(profile.age)} | מין: ${profile.sex ? SEX_LABELS[profile.sex] : NA} | גובה: ${fmtNum(profile.heightCm)} ס״מ
+- גיל: ${fmtNum(profile.age)} | מין: ${profile.sex ? SEX_LABELS[profile.sex] : NA} | גובה: ${fmtNum(heightCm)} ס״מ
 - משקל התחלתי: ${fmtNum(startWeight, 2)} ק״ג | משקל עדכני: ${fmtNum(currentWeight, 2)} ק״ג (שינוי: ${fmtSigned(weightDelta)} ק״ג)
 - אחוז שומן מוערך: ${fmtNum(latestFat, 2)}% | BMI: ${fmtNum(bmi, 1)}
 - שעות שינה ממוצעות: ${fmtNum(profile.avgSleepHours, 1)} ש׳ | רמת פעילות: ${profile.activityLevel ? ACTIVITY_LEVEL_LABELS[profile.activityLevel] : NA} | עבודה: ${profile.workStyle ? WORK_STYLE_LABELS[profile.workStyle] : NA}

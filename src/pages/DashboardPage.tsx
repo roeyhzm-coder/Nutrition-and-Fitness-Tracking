@@ -38,7 +38,9 @@ export function DashboardPage() {
   const todayFood = foodLogs.filter((f) => f.loggedAt.startsWith(today))
   const calories = todayFood.reduce((s, f) => s + f.calories, 0)
   const burned = caloriesBurnedOnDate(localDateKey(), { workoutLogs, focusTracks })
-  const latest = weightLogs.at(-1)
+  const latest = [...weightLogs].sort((a, b) =>
+    a.loggedAt.localeCompare(b.loggedAt),
+  ).at(-1)
 
   return (
     <>
