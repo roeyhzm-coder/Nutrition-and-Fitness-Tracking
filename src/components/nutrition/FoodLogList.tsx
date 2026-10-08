@@ -188,7 +188,9 @@ export function FoodLogList({ entries, compact }: FoodLogListProps) {
               <p className="truncate text-xs text-muted">
                 {compact
                   ? `ח ${f.protein} · פ ${f.carbs} · ש ${f.fats}`
-                  : `${SOURCE_LABELS[f.source]}${isGramBased(f) ? ` · ${f.grams}ג׳` : ''}`}
+                  : f.notes?.trim()
+                    ? f.notes
+                    : `${SOURCE_LABELS[f.source]}${isGramBased(f) ? ` · ${f.grams}ג׳` : ''}`}
               </p>
             </div>
             <div className="shrink-0 text-left text-xs text-muted">

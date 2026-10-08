@@ -86,6 +86,8 @@ export type FoodLogEntry = {
   fats: number
   loggedAt: string
   source: 'openfoodfacts' | 'manual' | 'recipe' | 'saved-meal'
+  /** Optional breakdown for an adapted meal log (does not mutate the saved template). */
+  notes?: string
 }
 
 export type HabitChecks = Record<string, string[]>

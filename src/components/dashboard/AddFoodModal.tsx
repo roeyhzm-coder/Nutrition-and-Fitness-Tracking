@@ -356,8 +356,8 @@ export function AddFoodModal({ open, onClose }: AddFoodModalProps) {
     <QuickPortionModal
       item={portionItem}
       onClose={() => setPortionItem(null)}
-      onAdd={(entry) => {
-        addFood(entry)
+      onAdd={(entries) => {
+        for (const entry of entries) addFood(entry)
         close()
       }}
     />

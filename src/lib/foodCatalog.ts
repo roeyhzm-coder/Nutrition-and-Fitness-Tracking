@@ -1,7 +1,12 @@
 import { PANTRY_CATEGORY_LABELS, PANTRY_ITEMS, type PantryItem } from '../data/pantry'
 import { savedPresetKind } from '../data/defaults'
 import { savedItemServingGrams } from './foodUnits'
-import { formatNiceNumber, parsePositiveDecimal, roundTo } from './numericInput'
+import {
+  formatNiceNumber,
+  parseDecimal,
+  parsePositiveDecimal,
+  roundTo,
+} from './numericInput'
 import {
   recipePortionUnits,
   recipeServings,
@@ -379,6 +384,29 @@ export function lineToComponent(line: MealIngredientLine): SavedMealComponent {
     unitId: line.unitId,
     serving_units: line.serving_units,
   }
+}
+
+export function scaleLineQuantity(
+  line: MealIngredientLine,
+  ratio: number,
+): MealIngredientLine {
+  if (!Number.isFinite(ratio) || ratio === 1) return line
+  const n = parseDecimal(line.amount)
+  if (n == null) return line
+  return applyLineQuantity(
+    line,
+    formatNiceNumber(n * ratio, 2),
+    line.unitId,
+  )
+}
+
+export function mealComponentsToLines(
+  components: SavedMealComponent[] | undefined,
+): MealIngredientLine[] {
+  if (!components?.length) return []
+  return components.map((component, index) =>
+    componentToLine(component, `comp-${index}`),
+  )
 }
 
 export function componentToLine(

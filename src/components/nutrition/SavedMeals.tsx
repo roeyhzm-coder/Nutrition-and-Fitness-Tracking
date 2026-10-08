@@ -766,9 +766,13 @@ export function SavedMeals() {
       <QuickPortionModal
         item={portionItem}
         onClose={() => setPortionItem(null)}
-        onAdd={(entry) => {
-          addFood(entry)
-          showToast('נוסף בהצלחה ליומן המזון')
+        onAdd={(entries) => {
+          for (const entry of entries) addFood(entry)
+          showToast(
+            entries.length > 1
+              ? `${entries.length} פריטים נוספו ליומן המזון`
+              : 'נוסף בהצלחה ליומן המזון',
+          )
         }}
       />
     </>
