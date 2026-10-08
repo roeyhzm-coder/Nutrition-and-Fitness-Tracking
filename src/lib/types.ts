@@ -94,7 +94,7 @@ export type FoodLogEntry = {
   carbs: number
   fats: number
   loggedAt: string
-  source: 'openfoodfacts' | 'manual' | 'recipe' | 'saved-meal'
+  source: 'openfoodfacts' | 'manual' | 'recipe' | 'saved-meal' | 'israeli-food'
   /** Optional breakdown for an adapted meal log (does not mutate the saved template). */
   notes?: string
 }
@@ -168,6 +168,8 @@ export type ServingUnit = {
   grams: number
   is_default?: boolean
 }
+
+export type { FoodPortion, IsraeliFood, IsraeliFoodRow } from '../data/foods/types'
 
 export type SavedPresetKind = 'item' | 'meal'
 

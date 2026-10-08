@@ -1,0 +1,158 @@
+import { food, labeled, P } from './helpers'
+import type { IsraeliFood } from './types'
+
+const CAT = 'חטיפים ומתוקים'
+
+export const snacksSweetsFoods: IsraeliFood[] = [
+  ...(['קלאסי', 'בצל', 'חלפניו', 'גריל'] as const).flatMap((flavor) =>
+    (['אוסם', 'השחר'] as const).map((brand) =>
+      food(
+        CAT,
+        labeled(`במבה ${flavor}`, brand),
+        534,
+        16,
+        48,
+        30,
+        P.snackBag(25, 60, 80),
+        brand,
+      ),
+    ),
+  ),
+  ...(['בארביקיו', 'פיצה', 'בצל', 'גריל', 'שמנת בצל'] as const).map((flavor) =>
+    food(
+      CAT,
+      `ביסלי ${flavor}`,
+      500,
+      8,
+      62,
+      24,
+      P.snackBag(25, 55, 80),
+      'אוסם',
+    ),
+  ),
+  ...(['טבעי', 'שמנת בצל', 'גריל', 'מלח ים'] as const).map((flavor) =>
+    food(
+      CAT,
+      `תפוצ׳יפס ${flavor}`,
+      536,
+      6,
+      53,
+      34,
+      P.snackBag(25, 50, 75),
+      'תלמה',
+    ),
+  ),
+  ...(['גבינה', 'חמוץ חריף', 'בשר', 'נאצ׳ו'] as const).map((flavor) =>
+    food(CAT, `דוריטוס ${flavor}`, 497, 7, 62, 25, P.snackBag(30, 65, 80), 'פפסקו'),
+  ),
+  ...(['חלב', 'מריר', 'אוכמניות', 'שקדים', 'תות'] as const).flatMap((flavor) =>
+    (['עלית', 'שטראוס'] as const).map((brand) =>
+      food(
+        CAT,
+        labeled(`שוקולד פרה ${flavor}`, brand),
+        540,
+        7,
+        55,
+        32,
+        P.chocolate(),
+        brand,
+      ),
+    ),
+  ),
+  food(CAT, 'פתיבר וניל', 470, 7, 72, 16, P.cracker(), 'אסם'),
+  food(CAT, 'פתיבר שוקולד', 490, 6.5, 70, 20, P.cracker(), 'אסם'),
+  food(CAT, 'פתיבר במילוי שוקולד', 500, 6, 68, 22, P.cracker(), 'אסם'),
+  food(CAT, 'ופל שוקולד עלית', 510, 6, 64, 26, P.cracker(), 'עלית'),
+  food(CAT, 'ופל לימון', 500, 5.5, 66, 24, P.cracker(), 'עלית'),
+  food(CAT, 'כיף כף מקלות', 520, 7, 62, 28, P.chocolate(), 'עלית'),
+  food(CAT, 'טעמי', 500, 6, 64, 25, P.chocolate(), 'עלית'),
+  food(CAT, 'מקופלת', 530, 7, 55, 31, P.chocolate(), 'עלית'),
+  food(CAT, 'פסק זמן', 515, 7, 58, 28, P.chocolate(), 'עלית'),
+  food(CAT, 'במבה במילוי חלבה', 545, 14, 48, 32, P.snackBag(25, 60, 80), 'אוסם'),
+  food(CAT, 'במבה נוגט', 540, 14, 50, 30, P.snackBag(25, 60, 80), 'אוסם'),
+  food(CAT, 'אפרופו', 480, 6, 68, 20, P.snackBag(20, 40, 70), 'אוסם'),
+  food(CAT, 'פופקו', 470, 7, 70, 18, P.snackBag(20, 40, 70), 'אוסם'),
+  food(CAT, 'צ׳יטוס', 500, 6, 58, 28, P.snackBag(25, 55, 80), 'פפסקו'),
+  food(CAT, 'חטיף חלבון Weider שוקולד', 360, 32, 22, 12, P.chocolate(), 'Weider'),
+  food(CAT, 'חטיף חלבון Quest שוקולד', 340, 21, 22, 16, P.chocolate(), 'Quest'),
+  food(CAT, 'חטיף חלבון Quest בוטנים', 350, 21, 21, 17, P.chocolate(), 'Quest'),
+  food(CAT, 'חטיף חלבון CNP', 330, 30, 20, 10, P.chocolate(), 'CNP'),
+  food(CAT, 'חטיף חלבון פרוטאין מקס', 355, 28, 24, 11, P.chocolate(), 'Protein Max'),
+  food(CAT, 'חטיף חלבון יופלה', 140, 15, 12, 3, P.yogurtCup(), 'דנונה'),
+  food(CAT, 'גלידת וניל בן אנד ג׳ריס', 230, 4, 24, 13, P.iceCream(), 'Ben & Jerry\'s'),
+  food(CAT, 'גלידת שוקולד בן אנד ג׳ריס', 240, 4.5, 25, 14, P.iceCream(), 'Ben & Jerry\'s'),
+  food(CAT, 'גלידת פיסטוק גולדה', 210, 4, 22, 12, P.iceCream(), 'גולדה'),
+  food(CAT, 'גלידת וניל גולדה', 200, 3.5, 22, 11, P.iceCream(), 'גולדה'),
+  food(CAT, 'ארטיק שוקולד שלגו', 180, 3, 22, 9, P.iceCream(), 'שטראוס'),
+  food(CAT, 'לה קרימל וניל', 190, 3.5, 21, 10, P.iceCream(), 'שטראוס'),
+  food(CAT, 'קורנטו קלאסיק', 220, 3.5, 28, 10, P.iceCream(), 'שטראוס'),
+  food(CAT, 'מאגנום שקדים', 280, 4, 24, 18, P.iceCream(), 'שטראוס'),
+  food(CAT, 'קרח פרי תות', 90, 0.3, 22, 0, P.iceCream(), 'שטראוס'),
+  food(CAT, 'עוגיות שוקולד צ׳יפס', 480, 6, 64, 22, P.cracker()),
+  food(CAT, 'עוגיות חמאה', 500, 6, 62, 25, P.cracker()),
+  food(CAT, 'ביסקוויט מרי', 430, 7, 76, 10, P.cracker(), 'אסם'),
+  food(CAT, 'קרקר מלוח זהב', 440, 8, 72, 13, P.cracker(), 'אוסם'),
+  food(CAT, 'בייגלה שמיניות', 400, 10, 78, 6, P.cracker(), 'אוסם'),
+  food(CAT, 'שוקולד מריר 70%', 580, 8, 45, 42, P.chocolate(), 'עלית'),
+  food(CAT, 'שוקולד מריר 85%', 590, 10, 22, 48, P.chocolate(), 'לינדט'),
+  food(CAT, 'חטיף מקופלת בייטס', 530, 7, 55, 31, P.chocolate(), 'עלית'),
+  food(CAT, 'רבע לשבע וניל', 490, 6, 66, 22, P.cracker(), 'עלית'),
+  food(CAT, 'רבע לשבע שוקולד', 500, 6, 64, 24, P.cracker(), 'עלית'),
+  food(CAT, 'חטיף כיף כף כדורים', 515, 6.5, 63, 26, P.chocolate(), 'עלית'),
+  food(CAT, 'סוכריות גומי', 340, 5, 77, 0.2, P.snackBag(25, 50, 100)),
+  food(CAT, 'מסטיק', 3, 0, 1, 0, portionsOne()),
+  food(CAT, 'חלבה', 516, 13, 54, 28, P.chocolate(), 'אחוה'),
+  food(CAT, 'חלבה עם שוקולד', 530, 12, 52, 30, P.chocolate(), 'אחוה'),
+  food(CAT, 'עוגת שמרים שוקולד', 380, 7, 52, 16, P.bun()),
+  food(CAT, 'רוגלעך שוקולד', 420, 6, 50, 22, P.bun()),
+  food(CAT, 'סופגנייה', 390, 6, 48, 18, P.bun()),
+  food(CAT, 'אוזן המן', 400, 6, 52, 18, P.bun()),
+  food(CAT, 'חטיף גרנולה', 420, 7, 64, 14, P.chocolate(), 'תלמה'),
+  food(CAT, 'חטיף צ׳יה ודבש', 430, 8, 48, 20, P.chocolate()),
+  food(CAT, 'שקית במבה 25ג', 534, 16, 48, 30, P.snackBag(25, 60, 80), 'אוסם'),
+  food(CAT, 'שקית במבה 60ג', 534, 16, 48, 30, P.snackBag(25, 60, 80), 'אוסם'),
+  food(CAT, 'שקית במבה 80ג', 534, 16, 48, 30, P.snackBag(25, 60, 80), 'אוסם'),
+  food(CAT, 'גלידת שוקולד בלגי גולדה', 230, 4.5, 24, 13, P.iceCream(), 'גולדה'),
+  food(CAT, 'גלידת ריבת חלב', 220, 4, 28, 10, P.iceCream(), 'גולדה'),
+  food(CAT, 'לה קרמייר שוקולד', 210, 4, 23, 11, P.iceCream(), 'שטראוס'),
+  food(CAT, 'חטיף חלבון יוטרישן', 340, 25, 22, 12, P.chocolate()),
+  food(CAT, 'חטיף חלבון בילונג', 310, 28, 8, 16, P.chocolate()),
+  food(CAT, 'חטיפי אנרגיה תמרים', 380, 6, 70, 8, P.chocolate()),
+  ...(['וניל', 'שוקולד', 'פיסטוק', 'ריבת חלב', 'לוטוס', 'מנגו'] as const).flatMap(
+    (flavor) =>
+      (['גולדה', 'שטראוס', 'נסטלה'] as const).map((brand) =>
+        food(
+          CAT,
+          labeled(`גלידה ${flavor}`, brand),
+          210,
+          4,
+          24,
+          11,
+          P.iceCream(),
+          brand,
+        ),
+      ),
+  ),
+  ...(['שוקולד', 'וניל', 'קרמל', 'בוטנים'] as const).map((flavor) =>
+    food(
+      CAT,
+      `חטיף חלבון ${flavor}`,
+      350,
+      28,
+      22,
+      12,
+      P.chocolate(),
+      'Optimum',
+    ),
+  ),
+]
+
+function portionsOne() {
+  return [
+    { name: 'יחידה', grams: 2, isDefault: true },
+    { name: '2 יחידות', grams: 4, isDefault: false },
+    { name: 'כף', grams: 5, isDefault: false },
+    { name: '100 גרם', grams: 100, isDefault: false },
+  ]
+}
+

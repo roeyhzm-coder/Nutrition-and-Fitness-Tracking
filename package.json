@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "db:sql": "node scripts/run-supabase-sql.mjs"
+    "db:sql": "node scripts/run-supabase-sql.mjs",
+    "seed:foods": "npx --yes tsx scripts/seed-israeli-foods.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

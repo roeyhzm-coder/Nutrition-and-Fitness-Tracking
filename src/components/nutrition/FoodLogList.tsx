@@ -38,6 +38,7 @@ const SOURCE_LABELS: Record<FoodLogEntry['source'], string> = {
   openfoodfacts: 'Open Food Facts',
   'saved-meal': 'ארוחה קבועה',
   manual: 'ידני',
+  'israeli-food': 'מאגר ישראלי',
 }
 
 /** Entries logged per-gram get a grams field; the rest scale by servings. */

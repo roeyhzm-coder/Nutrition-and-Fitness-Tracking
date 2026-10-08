@@ -1,23 +1,26 @@
-import { useEffect, useRef, useState } from 'react'
-import { Plus, Star } from 'lucide-react'
-import { useAppData } from '../../context/AppDataContext'
-import { parseDecimal, parsePositiveDecimal, roundTo } from '../../lib/numericInput'
-import { gramsPerServing } from '../../lib/foodUnits'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Plus, Search } from 'lucide-react'
 import {
-  defaultServingUnit,
-  effectiveGrams,
-  GRAMS_UNIT_ID,
-  resolveServingUnits,
-} from '../../lib/servingUnits'
-import type { FoodProduct } from '../../lib/openFoodFacts'
-import { searchOpenFoodFacts } from '../../lib/openFoodFacts'
+  defaultIsraeliPortion,
+  israeliFoodLabel,
+  israeliFoodMacros,
+  searchIsraeliFoods,
+  seedIsraeliFoodsOnce,
+  type IsraeliFood,
+} from '../../lib/israeliFoods'
+import {
+  formatNiceNumber,
+  parseDecimal,
+  parsePositiveDecimal,
+  roundTo,
+} from '../../lib/numericInput'
+import { PORTION_PRESETS } from '../../lib/foodUnits'
 import type { FoodLogEntry, SavedMeal } from '../../lib/types'
+import { useAppData } from '../../context/AppDataContext'
 import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
-import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
-import { UniversalQuantitySelector } from './UniversalQuantitySelector'
 
 type FoodSearchProps = {
   onAdd: (entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) => void
@@ -36,34 +39,26 @@ function round2(n: number) {
   return roundTo(n, 2)
 }
 
-function productLabel(product: FoodProduct) {
-  return product.brand ? `${product.name} (${product.brand})` : product.name
-}
-
-function macrosForGrams(product: FoodProduct, grams: number) {
-  const factor = grams / 100
-  return {
-    calories: round2((product.caloriesPer100g ?? 0) * factor),
-    protein: round2((product.proteinPer100g ?? 0) * factor),
-    carbs: round2((product.carbsPer100g ?? 0) * factor),
-    fats: round2((product.fatsPer100g ?? 0) * factor),
-  }
-}
-
-type QtyDraft = { quantity: string; unitId: string }
-
 export function FoodSearch({ onAdd }: FoodSearchProps) {
   const { addSavedMeal, savedMeals } = useAppData()
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<FoodProduct[]>([])
+  const [results, setResults] = useState<IsraeliFood[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [qtyDrafts, setQtyDrafts] = useState<Record<string, QtyDraft>>({})
+  const [selected, setSelected] = useState<IsraeliFood | null>(null)
+  const [portionIndex, setPortionIndex] = useState(0)
+  const [quantity, setQuantity] = useState('1')
+  const [freeGrams, setFreeGrams] = useState(false)
+  const [gramsDraft, setGramsDraft] = useState('100')
   const [customOpen, setCustomOpen] = useState(false)
   const [custom, setCustom] = useState(EMPTY_CUSTOM)
   const [saveCustom, setSaveCustom] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const toastTimer = useRef<number | null>(null)
+
+  useEffect(() => {
+    void seedIsraeliFoodsOnce()
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -72,9 +67,11 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
   }, [])
 
   useEffect(() => {
-    if (query.trim().length < 2) {
+    const q = query.trim()
+    if (q.length < 1) {
       setResults([])
       setError(null)
+      setLoading(false)
       return
     }
 
@@ -83,11 +80,8 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
       setLoading(true)
       setError(null)
       try {
-        const products = await searchOpenFoodFacts(
-          query.trim(),
-          controller.signal,
-        )
-        setResults(products)
+        const foods = await searchIsraeliFoods(q, controller.signal)
+        setResults(foods)
       } catch (err) {
         if ((err as Error).name !== 'AbortError') {
           setError('לא ניתן לחפש כרגע. נסה שוב.')
@@ -95,7 +89,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
       } finally {
         setLoading(false)
       }
-    }, 400)
+    }, 200)
 
     return () => {
       controller.abort()
@@ -109,68 +103,43 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
     toastTimer.current = window.setTimeout(() => setToast(null), 2800)
   }
 
-  function unitsOf(product: FoodProduct) {
-    return resolveServingUnits({
-      name: product.name,
-      brand: product.brand,
-      servingGrams: gramsPerServing(product.name, product.brand),
-      servingLabel: 'מנה',
-    })
-  }
-
-  function qtyOf(product: FoodProduct): QtyDraft {
-    return (
-      qtyDrafts[product.code] ?? {
-        quantity: '1',
-        unitId: defaultServingUnit(unitsOf(product))?.id ?? GRAMS_UNIT_ID,
-      }
+  function openFood(food: IsraeliFood) {
+    const def = defaultIsraeliPortion(food)
+    const index = Math.max(
+      0,
+      food.portions.findIndex((p) => p === def),
     )
+    setSelected(food)
+    setPortionIndex(index)
+    setQuantity('1')
+    setFreeGrams(false)
+    setGramsDraft(String(def?.grams ?? 100))
   }
 
-  function gramsOf(product: FoodProduct): number | null {
-    const draft = qtyOf(product)
-    const amount = parsePositiveDecimal(draft.quantity)
-    if (amount == null) return null
-    return effectiveGrams(amount, draft.unitId, unitsOf(product))
+  const live = useMemo(() => {
+    if (!selected) return null
+    const portion = selected.portions[portionIndex] ?? selected.portions[0]
+    const grams = freeGrams
+      ? (parsePositiveDecimal(gramsDraft) ?? 0)
+      : (parsePositiveDecimal(quantity) ?? 0) * (portion?.grams ?? 0)
+    return { grams, macros: israeliFoodMacros(selected, grams), portion }
+  }, [selected, portionIndex, quantity, freeGrams, gramsDraft])
+
+  function addSelected() {
+    if (!selected || !live || live.grams <= 0) return
+    const name = israeliFoodLabel(selected)
+    onAdd({
+      name: selected.brand ? `${name} · ${selected.brand}` : name,
+      grams: round2(live.grams),
+      ...live.macros,
+      source: 'israeli-food',
+    })
+    setSelected(null)
+    showToast(`נוסף ${selected.name} ליומן היום`)
   }
 
   function isFavorite(name: string) {
     return savedMeals.some((m) => m.name.trim() === name.trim())
-  }
-
-  function addProduct(product: FoodProduct) {
-    const grams = gramsOf(product)
-    if (grams == null) return
-    const macros = macrosForGrams(product, grams)
-    onAdd({
-      name: productLabel(product),
-      grams,
-      ...macros,
-      source: 'openfoodfacts',
-    })
-    showToast(`נוסף ${product.name} ליומן`)
-  }
-
-  function saveProductFavorite(product: FoodProduct) {
-    const name = productLabel(product)
-    if (isFavorite(name)) {
-      showToast('כבר שמור בקבועים שלי')
-      return
-    }
-    const grams = gramsOf(product)
-    if (grams == null) return
-    const macros = macrosForGrams(product, grams)
-    const draft = qtyOf(product)
-    const notes = `${draft.quantity} · ${round2(grams)} גרם`
-    addSavedMeal({
-      name,
-      ...macros,
-      notes,
-      kind: 'item',
-      servingGrams: grams,
-      serving_units: unitsOf(product),
-    })
-    showToast('נשמר לקבועים שלי')
   }
 
   function submitCustom() {
@@ -197,13 +166,17 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
   }
 
   return (
-    <Card title="חיפוש מזון">
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="חפש מוצר… למשל לחם מלא, קוטג׳, חלבון מי גבינה"
-        className="field"
-      />
+    <Card title="חיפוש מאגר ישראלי">
+      <div className="relative">
+        <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="חפש מזון… קוטג׳, פיתה, במבה, חזה עוף"
+          className="field ps-9"
+          autoComplete="off"
+        />
+      </div>
 
       <Button
         variant="surface"
@@ -211,7 +184,7 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
         onClick={() => setCustomOpen(true)}
       >
         <Plus className="size-3.5" strokeWidth={2} />
-        פריט מותאם אישית
+        הזנה ידנית
       </Button>
 
       {toast ? (
@@ -224,88 +197,140 @@ export function FoodSearch({ onAdd }: FoodSearchProps) {
       ) : null}
       {loading ? <p className="mt-3 text-sm text-muted">מחפש…</p> : null}
       {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
+      {!loading && query.trim() && results.length === 0 ? (
+        <p className="mt-3 text-sm text-muted">לא נמצאו תוצאות במאגר.</p>
+      ) : null}
 
-      <ul className="mt-3 max-h-72 space-y-2 overflow-y-auto">
-        {results.map((p) => {
-          const grams = gramsOf(p)
-          const favorite = isFavorite(productLabel(p))
-          const draft = qtyOf(p)
-          const servingUnits = unitsOf(p)
-          return (
-            <li
-              key={p.code}
-              className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+      <ul className="mt-3 max-h-72 overflow-y-auto">
+        {results.map((food) => (
+          <li key={food.id}>
+            <button
+              type="button"
+              onClick={() => openFood(food)}
+              className="flex min-h-11 w-full items-center gap-2 border-b border-slate-100 px-1 py-2 text-right last:border-b-0 hover:bg-slate-50"
             >
-              <div className="flex gap-3">
-                {p.imageUrl ? (
-                  <img
-                    src={p.imageUrl}
-                    alt=""
-                    className="size-12 rounded-2xl object-cover"
-                  />
-                ) : (
-                  <div className="size-12 rounded-2xl bg-slate-100" />
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-text">
-                    {p.name}
-                  </p>
-                  <p className="text-xs text-muted">
-                    {p.brand ?? 'ללא מותג'} ·{' '}
-                    {p.caloriesPer100g != null
-                      ? `${Math.round(p.caloriesPer100g)} קק״ל/100ג׳`
-                      : 'ללא נתונים'}
-                  </p>
-                  <div className="mt-2">
-                    <UniversalQuantitySelector
-                      compact
-                      units={servingUnits}
-                      quantity={draft.quantity}
-                      unitId={draft.unitId}
-                      onChange={(next) =>
-                        setQtyDrafts((prev) => ({
-                          ...prev,
-                          [p.code]: {
-                            quantity: next.quantity,
-                            unitId: next.unitId,
-                          },
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <IconButton
-                      label={
-                        favorite ? 'שמור בקבועים שלי' : 'שמירה לקבועים שלי'
-                      }
-                      tone={favorite ? 'accentSolid' : 'accent'}
-                      onClick={() => saveProductFavorite(p)}
-                    >
-                      <Star
-                        className="size-4"
-                        strokeWidth={1.75}
-                        fill={favorite ? 'currentColor' : 'none'}
-                      />
-                    </IconButton>
-                    <Button
-                      className="ms-auto"
-                      variant="accent"
-                      onClick={() => addProduct(p)}
-                    >
-                      הוסף
-                    </Button>
-                  </div>
-                  {grams != null ? (
-                    <p className="mt-1 text-[10px] text-muted">
-                      סה״כ {round2(grams)} גרם
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            </li>
-          )
-        })}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold text-text">
+                  {food.name}
+                </span>
+                <span className="block truncate text-[11px] text-muted">
+                  {food.brand ?? food.category} · {Math.round(Number(food.calories_per_100g))}{' '}
+                  קק״ל/100ג׳
+                </span>
+              </span>
+              <Plus className="size-4 shrink-0 text-accent" strokeWidth={2} />
+            </button>
+          </li>
+        ))}
       </ul>
+
+      <Modal
+        open={selected != null}
+        title={selected?.name ?? 'הוספת מזון'}
+        onClose={() => setSelected(null)}
+      >
+        {selected && live ? (
+          <div className="space-y-3">
+            <p className="text-xs text-muted">
+              {selected.brand ? `${selected.brand} · ` : ''}
+              {selected.category}
+            </p>
+
+            <label className="flex min-h-11 items-center justify-between gap-3 text-sm text-text">
+              <span>משקל חופשי בגרמים</span>
+              <input
+                type="checkbox"
+                checked={freeGrams}
+                onChange={(e) => {
+                  const next = e.target.checked
+                  setFreeGrams(next)
+                  if (next) {
+                    setGramsDraft(String(round2(live.grams || 100)))
+                  }
+                }}
+                className="size-4 accent-primary"
+              />
+            </label>
+
+            {freeGrams ? (
+              <label className="block text-xs text-muted">
+                גרמים
+                <NumericInput
+                  decimals={2}
+                  value={gramsDraft}
+                  onChange={setGramsDraft}
+                  className="mt-1 field"
+                />
+              </label>
+            ) : (
+              <>
+                <label className="block text-xs text-muted">
+                  מידה
+                  <select
+                    value={portionIndex}
+                    onChange={(e) => setPortionIndex(Number(e.target.value))}
+                    className="mt-1 field"
+                  >
+                    {selected.portions.map((portion, index) => (
+                      <option key={`${portion.name}-${index}`} value={index}>
+                        {portion.name} ({portion.grams}ג׳)
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-xs text-muted">
+                  כמות יחידות
+                  <NumericInput
+                    decimals={2}
+                    value={quantity}
+                    onChange={setQuantity}
+                    className="mt-1 field"
+                  />
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {PORTION_PRESETS.map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setQuantity(String(preset))}
+                      className={[
+                        'min-h-8 rounded-full px-3 text-xs font-semibold tabular-nums',
+                        quantity === String(preset) ||
+                        Number(quantity) === preset
+                          ? 'bg-cyan-600 text-white'
+                          : 'bg-slate-100 text-muted hover:text-text',
+                      ].join(' ')}
+                    >
+                      {formatNiceNumber(preset)}×
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <div className="rounded-2xl bg-slate-50 px-3 py-2 text-sm text-text">
+              <p className="font-semibold tabular-nums">
+                {formatNiceNumber(live.macros.calories, 0)} קק״ל · {round2(live.grams)}{' '}
+                גרם
+              </p>
+              <p className="text-xs text-muted">
+                ח {formatNiceNumber(live.macros.protein)} · פ{' '}
+                {formatNiceNumber(live.macros.carbs)} · ש{' '}
+                {formatNiceNumber(live.macros.fats)}
+              </p>
+            </div>
+
+            <Button
+              className="w-full"
+              variant="accent"
+              disabled={live.grams <= 0}
+              onClick={addSelected}
+            >
+              הוסף ליומן היום
+            </Button>
+          </div>
+        ) : null}
+      </Modal>
 
       <Modal
         open={customOpen}
