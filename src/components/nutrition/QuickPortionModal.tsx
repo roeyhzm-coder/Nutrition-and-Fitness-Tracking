@@ -246,16 +246,14 @@ function QuickPortionForm({
         ) : null}
 
         {templateHasComponents ? (
-          <div className="space-y-2">
-            <div>
-              <p className="text-xs font-semibold text-text">
-                פירוט והתאמת מצרכים
-              </p>
-              <p className="text-[11px] text-muted">
-                השינויים חלים רק על הרישום להיום. התבנית ב״הקבועים שלי״ לא
-                משתנה.
-              </p>
-            </div>
+          <details open className="space-y-2 rounded-xl border border-slate-200 bg-white p-2">
+            <summary className="cursor-pointer text-xs font-semibold text-text">
+              פירוט והתאמת מצרכים
+            </summary>
+            <p className="-mt-1 text-[11px] text-muted">
+              השינויים חלים רק על הרישום להיום. התבנית ב״הקבועים שלי״ לא
+              משתנה.
+            </p>
             {lines.length === 0 ? (
               <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-muted">
                 כל המצרכים הוסרו מהרישום הנוכחי. התבנית השמורה לא השתנתה.
@@ -280,7 +278,7 @@ function QuickPortionForm({
                           : ''}
                       </p>
                     </div>
-                    <div className="w-[9.75rem] shrink-0">
+                    <div className="w-[10.5rem] shrink-0">
                       <UniversalQuantitySelector
                         compact
                         units={line.serving_units}
@@ -337,7 +335,7 @@ function QuickPortionForm({
                 </button>
               ))}
             </div>
-          </div>
+          </details>
         ) : null}
 
         <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-medium tabular-nums text-text">

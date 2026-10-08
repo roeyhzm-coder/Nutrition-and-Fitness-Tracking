@@ -13,7 +13,13 @@ export type ExerciseDefaultValues = {
 
 export type ExerciseDefaultsSource = Pick<
   Exercise,
-  'sets' | 'reps' | 'weight' | 'defaultWeightKg' | 'defaultReps' | 'defaultSets'
+  | 'sets'
+  | 'reps'
+  | 'weight'
+  | 'defaultWeightKg'
+  | 'defaultReps'
+  | 'defaultSets'
+  | 'default_sets'
 >
 
 /** Pulls the first numeric kg value from free-text weight. */
@@ -156,7 +162,12 @@ export function defaultsFromExercise(ex: ExerciseDefaultsSource): ExerciseDefaul
     ex.defaultReps != null && Number.isFinite(ex.defaultReps)
       ? ex.defaultReps
       : parseDefaultReps(ex.reps)
-  const defaultSets = normalizeDefaultSets(ex.defaultSets, sets, weightKg, reps)
+  const defaultSets = normalizeDefaultSets(
+    ex.defaultSets ?? ex.default_sets,
+    sets,
+    weightKg,
+    reps,
+  )
   const first = defaultSets[0]
   return {
     sets,
@@ -249,7 +260,13 @@ export function exercisePatchFromDefaults(
   defaults: ExerciseDefaultValues,
 ): Pick<
   Exercise,
-  'sets' | 'reps' | 'weight' | 'defaultWeightKg' | 'defaultReps' | 'defaultSets'
+  | 'sets'
+  | 'reps'
+  | 'weight'
+  | 'defaultWeightKg'
+  | 'defaultReps'
+  | 'defaultSets'
+  | 'default_sets'
 > {
   const defaultSets = (
     defaults.defaultSets.length
@@ -277,5 +294,6 @@ export function exercisePatchFromDefaults(
     defaultWeightKg: weightKg,
     defaultReps: reps,
     defaultSets,
+    default_sets: defaultSets,
   }
 }

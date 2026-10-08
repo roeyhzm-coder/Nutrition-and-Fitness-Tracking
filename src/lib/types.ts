@@ -407,6 +407,8 @@ export type Exercise = {
   defaultReps?: number | null
   /** Per-set defaults; index 0 = set 1. Falls back to defaultWeightKg/defaultReps. */
   defaultSets?: ExerciseDefaultSet[]
+  /** Snake-case JSONB alias written to Supabase (`default_sets`). */
+  default_sets?: ExerciseDefaultSet[]
   notes?: string
   /** Demo video / external link */
   mediaUrl?: string

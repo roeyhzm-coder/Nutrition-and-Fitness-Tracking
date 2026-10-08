@@ -16,10 +16,10 @@ begin
   end if;
   existing := coalesce(ex->'defaultSets', ex->'default_sets');
   if jsonb_typeof(existing) = 'array' and jsonb_array_length(existing) > 0 then
-    if ex ? 'defaultSets' then
-      return ex;
-    end if;
-    return (ex - 'default_sets') || jsonb_build_object('defaultSets', existing);
+    return ex || jsonb_build_object(
+      'defaultSets', existing,
+      'default_sets', existing
+    );
   end if;
   begin
     n := greatest(1, coalesce(nullif(ex->>'sets', '')::int, 1));
@@ -28,6 +28,17 @@ begin
   end;
   return ex || jsonb_build_object(
     'defaultSets',
+    (
+      select coalesce(jsonb_agg(
+        jsonb_build_object(
+          'setNumber', g,
+          'weightKg', ex->'defaultWeightKg',
+          'reps', ex->'defaultReps'
+        ) order by g
+      ), '[]'::jsonb)
+      from generate_series(1, n) as g
+    ),
+    'default_sets',
     (
       select coalesce(jsonb_agg(
         jsonb_build_object(

@@ -1100,13 +1100,18 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
       if (remote.savedMeals !== undefined) {
         setSavedMeals((local) => {
-          if (shouldKeepLocalList(local, remote.savedMeals, localDirtyRef.current)) {
+          const remoteMeals = remote.savedMeals ?? []
+          if (remoteMeals.length === 0 && local.length > 0) {
             skipNextPush.current = false
             localDirtyRef.current = true
-            return local
+            return mergeSavedMeals(local)
           }
           markCatalogSeeded()
-          return mergeSavedMeals(remote.savedMeals ?? [])
+          return mergeSavedMeals(
+            localDirtyRef.current
+              ? unionById(local, remoteMeals)
+              : unionById(remoteMeals, local),
+          )
         })
       } else if (needsCatalogSeed()) {
         setSavedMeals((prev) => seedSavedMealsIfEmpty(prev))

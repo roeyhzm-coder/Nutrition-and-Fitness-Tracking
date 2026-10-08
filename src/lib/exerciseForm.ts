@@ -99,6 +99,7 @@ export function formToExercise(form: ExerciseForm): Omit<Exercise, 'id'> {
     defaultWeightKg: first?.weightKg ?? null,
     defaultReps: first?.reps ?? null,
     defaultSets,
+    default_sets: defaultSets,
     notes: form.notes.trim() || undefined,
     mediaUrl: form.mediaUrl.trim() || undefined,
     imageUrl: form.imageUrl.trim() || undefined,

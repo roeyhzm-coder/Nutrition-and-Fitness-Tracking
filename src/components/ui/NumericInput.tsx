@@ -40,7 +40,7 @@ export function NumericInput({
     <input
       type="text"
       inputMode={integer ? 'numeric' : 'decimal'}
-      step={integer ? 1 : 0.01}
+      step={integer ? '1' : '0.01'}
       lang="en"
       dir="ltr"
       autoComplete="off"

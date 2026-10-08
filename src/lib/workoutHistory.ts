@@ -44,7 +44,7 @@ function normalizeExercise(
     defaultWeightKg: asNumber(ex.defaultWeightKg),
     defaultReps: asNumber(ex.defaultReps),
     defaultSets: normalizeDefaultSets(
-      ex.defaultSets,
+      ex.defaultSets ?? (ex as { default_sets?: unknown }).default_sets,
       Number(ex.targetSets) || sets.length || 1,
       asNumber(ex.defaultWeightKg),
       asNumber(ex.defaultReps),

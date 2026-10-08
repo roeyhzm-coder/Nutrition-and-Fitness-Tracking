@@ -17,6 +17,7 @@ import {
   toLoggedAt,
   uid,
 } from '../lib/types'
+import { mergeRestoredSavedMeals } from './pinnedSavedMeals'
 import { DEFAULT_WORKOUT_DAYS, createOfficialPrograms } from './workouts'
 
 export const PLAN_SEED_VERSION = 2
@@ -182,7 +183,7 @@ export function normalizeSavedMeal(meal: SavedMeal): SavedMeal {
 }
 
 export function mergeSavedMeals(existing: SavedMeal[]): SavedMeal[] {
-  return existing.map(normalizeSavedMeal)
+  return mergeRestoredSavedMeals(existing.map(normalizeSavedMeal))
 }
 
 export function seedSavedMealsIfEmpty(existing: SavedMeal[]): SavedMeal[] {

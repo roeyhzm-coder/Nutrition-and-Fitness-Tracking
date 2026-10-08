@@ -31,6 +31,11 @@ import {
   unionBodyMeasurements,
   type BodyMeasurement,
 } from './bodyMeasurements'
+import {
+  pullUserSavedMeals,
+  pushUserSavedMeals,
+  restorePinnedSavedMeals,
+} from './savedMealsSync'
 
 const DEVICE_KEY = 'tn.deviceId'
 
@@ -411,10 +416,22 @@ export async function pullAppState(): Promise<SyncedAppState | null> {
   const base = fromApp ?? (await pullFromTable('client_app_state')) ?? (await pullFromUserProfile())
   if (!base) return null
   const measurements = await pullBodyMeasurements()
-  if (measurements == null) return base
+  let tableMeals = await pullUserSavedMeals()
+  if (tableMeals != null && tableMeals.length === 0) {
+    await restorePinnedSavedMeals()
+    tableMeals = await pullUserSavedMeals()
+  }
+  const savedMeals =
+    tableMeals != null && tableMeals.length > 0
+      ? unionById(tableMeals, base.savedMeals)
+      : base.savedMeals
   return {
     ...base,
-    bodyMeasurements: unionBodyMeasurements(measurements, base.bodyMeasurements),
+    savedMeals,
+    bodyMeasurements:
+      measurements == null
+        ? base.bodyMeasurements
+        : unionBodyMeasurements(measurements, base.bodyMeasurements),
   }
 }
 
@@ -559,6 +576,11 @@ export async function pushAppState(
     if (!wroteHistory) errors.push('body_measurements: upsert failed')
   }
 
+  if (state.savedMeals) {
+    const wroteMeals = await pushUserSavedMeals(state.savedMeals)
+    if (!wroteMeals) errors.push('user_saved_meals: upsert failed')
+  }
+
   if (!wroteNutrition) {
     const error = errors[0] ?? 'food_logs/saved_meals/recipes were not written'
     console.error('[appStateSync] nutrition write failed', { errors, ...counts })
@@ -606,6 +628,11 @@ export function subscribeSharedSync(
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'workout_logs' },
+      fire,
+    )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'user_saved_meals' },
       fire,
     )
     .subscribe()
