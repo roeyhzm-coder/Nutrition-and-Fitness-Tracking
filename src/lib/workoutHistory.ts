@@ -1,5 +1,6 @@
 import { getDeviceId, SHARED_OWNER_ID } from './appStateSync'
 import { isSupabaseConfigured, supabase } from './supabase'
+import { normalizeDefaultSets, parseOptionalNumber } from './exerciseDefaults'
 import type { LoggedExercise, LoggedSet, WorkoutLog } from './types'
 
 const PAGE_SIZE = 1000
@@ -16,9 +17,7 @@ export function deriveBlockNumber(
 }
 
 function asNumber(value: unknown): number | null {
-  if (value == null || value === '') return null
-  const n = Number(value)
-  return Number.isFinite(n) ? n : null
+  return parseOptionalNumber(value)
 }
 
 function normalizeSet(set: Partial<LoggedSet> | null | undefined): LoggedSet {
@@ -44,6 +43,12 @@ function normalizeExercise(
     targetWeight: typeof ex.targetWeight === 'string' ? ex.targetWeight : undefined,
     defaultWeightKg: asNumber(ex.defaultWeightKg),
     defaultReps: asNumber(ex.defaultReps),
+    defaultSets: normalizeDefaultSets(
+      ex.defaultSets,
+      Number(ex.targetSets) || sets.length || 1,
+      asNumber(ex.defaultWeightKg),
+      asNumber(ex.defaultReps),
+    ),
     rest: typeof ex.rest === 'string' ? ex.rest : undefined,
     imageUrl: typeof ex.imageUrl === 'string' ? ex.imageUrl : undefined,
     sets,

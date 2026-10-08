@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { CirclePlay, Dumbbell, Timer } from 'lucide-react'
 import type { Exercise } from '../../lib/types'
-import type { ExerciseForm } from '../../lib/exerciseForm'
+import { resizeFormDefaultSets, type ExerciseForm } from '../../lib/exerciseForm'
 import { NumericInput } from '../ui/NumericInput'
 
 const inputClass = 'field'
@@ -12,7 +12,7 @@ type ExerciseFormFieldsProps = {
 }
 
 export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
-  const bind = (key: keyof ExerciseForm) => ({
+  const bind = (key: Exclude<keyof ExerciseForm, 'defaultSets'>) => ({
     value: form[key],
     onChange: (e: { target: { value: string } }) =>
       setForm((p) => ({ ...p, [key]: e.target.value })),
@@ -30,7 +30,16 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
           <NumericInput
             decimals={0}
             value={form.sets}
-            onChange={(sets) => setForm((p) => ({ ...p, sets }))}
+            onChange={(sets) =>
+              setForm((p) => ({
+                ...p,
+                sets,
+                defaultSets: resizeFormDefaultSets(
+                  p.defaultSets,
+                  Math.max(1, Number(sets) || 1),
+                ),
+              }))
+            }
             className={`mt-1 ${inputClass}`}
           />
         </label>
@@ -39,31 +48,57 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
           <input {...bind('reps')} placeholder="8-12 / 30 שניות" className={`mt-1 ${inputClass}`} />
         </label>
         <label className="block text-xs text-muted">
-          חזרות מספריות (למילוי)
-          <NumericInput
-            value={form.defaultReps}
-            onChange={(defaultReps) => setForm((p) => ({ ...p, defaultReps }))}
-            placeholder="8"
-            className={`mt-1 ${inputClass}`}
-          />
-        </label>
-        <label className="block text-xs text-muted">
           משקל (תווית)
           <input {...bind('weight')} placeholder='משקל גוף / 10 ק"ג' className={`mt-1 ${inputClass}`} />
-        </label>
-        <label className="block text-xs text-muted">
-          משקל בק״ג (למילוי)
-          <NumericInput
-            value={form.defaultWeightKg}
-            onChange={(defaultWeightKg) => setForm((p) => ({ ...p, defaultWeightKg }))}
-            placeholder="10"
-            className={`mt-1 ${inputClass}`}
-          />
         </label>
         <label className="block text-xs text-muted">
           זמן מנוחה
           <input {...bind('rest')} placeholder="2-3 דקות / 60 שניות" className={`mt-1 ${inputClass}`} />
         </label>
+      </div>
+      <div>
+        <p className="mb-1.5 text-xs text-muted">משקל וחזרות לפי סט</p>
+        <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_minmax(0,1fr)] items-center gap-1.5 text-[11px] text-muted">
+          <span className="text-center">#</span>
+          <span className="text-center">משקל (ק״ג)</span>
+          <span className="text-center">חזרות</span>
+        </div>
+        <ul className="mt-1 space-y-1">
+          {form.defaultSets.map((row, i) => (
+            <li
+              key={i}
+              className="grid h-11 grid-cols-[1.75rem_minmax(0,1fr)_minmax(0,1fr)] items-center gap-1.5"
+            >
+              <span className="text-center text-sm font-semibold text-muted">{i + 1}</span>
+              <NumericInput
+                value={row.weightKg}
+                onChange={(weightKg) =>
+                  setForm((p) => ({
+                    ...p,
+                    defaultSets: p.defaultSets.map((s, j) =>
+                      j === i ? { ...s, weightKg } : s,
+                    ),
+                  }))
+                }
+                placeholder="10"
+                className={inputClass}
+              />
+              <NumericInput
+                value={row.reps}
+                onChange={(reps) =>
+                  setForm((p) => ({
+                    ...p,
+                    defaultSets: p.defaultSets.map((s, j) =>
+                      j === i ? { ...s, reps } : s,
+                    ),
+                  }))
+                }
+                placeholder="8"
+                className={inputClass}
+              />
+            </li>
+          ))}
+        </ul>
       </div>
       <textarea
         {...bind('notes')}

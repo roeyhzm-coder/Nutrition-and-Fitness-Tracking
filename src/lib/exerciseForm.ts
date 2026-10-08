@@ -1,5 +1,15 @@
-import type { Exercise } from './types'
-import { parseDefaultReps, parseKg } from './exerciseDefaults'
+import type { Exercise, ExerciseDefaultSet } from './types'
+import {
+  defaultsFromExercise,
+  parseDefaultReps,
+  parseKg,
+  parseOptionalNumber,
+} from './exerciseDefaults'
+
+export type ExerciseFormDefaultSet = {
+  weightKg: string
+  reps: string
+}
 
 export type ExerciseForm = {
   name: string
@@ -7,11 +17,27 @@ export type ExerciseForm = {
   reps: string
   rest: string
   weight: string
-  defaultWeightKg: string
-  defaultReps: string
+  defaultSets: ExerciseFormDefaultSet[]
   notes: string
   mediaUrl: string
   imageUrl: string
+}
+
+function emptyDefaultSetRow(): ExerciseFormDefaultSet {
+  return { weightKg: '', reps: '' }
+}
+
+export function resizeFormDefaultSets(
+  rows: ExerciseFormDefaultSet[],
+  count: number,
+): ExerciseFormDefaultSet[] {
+  const n = Math.max(1, count)
+  if (rows.length >= n) return rows.slice(0, n)
+  const last = rows[rows.length - 1] ?? emptyDefaultSetRow()
+  return [
+    ...rows,
+    ...Array.from({ length: n - rows.length }, () => ({ ...last })),
+  ]
 }
 
 export const EMPTY_EXERCISE_FORM: ExerciseForm = {
@@ -20,8 +46,7 @@ export const EMPTY_EXERCISE_FORM: ExerciseForm = {
   reps: '8–10',
   rest: '',
   weight: '',
-  defaultWeightKg: '',
-  defaultReps: '',
+  defaultSets: [emptyDefaultSetRow(), emptyDefaultSetRow(), emptyDefaultSetRow()],
   notes: '',
   mediaUrl: '',
   imageUrl: '',
@@ -33,49 +58,47 @@ function displayOptionalNumber(value: number | null | undefined): string {
 }
 
 export function exerciseToForm(ex: Exercise): ExerciseForm {
-  const weightKg =
-    ex.defaultWeightKg != null && Number.isFinite(ex.defaultWeightKg)
-      ? ex.defaultWeightKg
-      : parseKg(ex.weight)
-  const reps =
-    ex.defaultReps != null && Number.isFinite(ex.defaultReps)
-      ? ex.defaultReps
-      : parseDefaultReps(ex.reps)
-
+  const defaults = defaultsFromExercise(ex)
   return {
     name: ex.name,
-    sets: String(ex.sets),
+    sets: String(defaults.sets),
     reps: ex.reps,
     rest: ex.rest ?? '',
     weight: ex.weight ?? '',
-    defaultWeightKg: displayOptionalNumber(weightKg),
-    defaultReps: displayOptionalNumber(reps),
+    defaultSets: defaults.defaultSets.map((row) => ({
+      weightKg: displayOptionalNumber(row.weightKg),
+      reps: displayOptionalNumber(row.reps),
+    })),
     notes: ex.notes ?? '',
     mediaUrl: ex.mediaUrl ?? '',
     imageUrl: ex.imageUrl ?? '',
   }
 }
 
-export function formToExercise(form: ExerciseForm): Omit<Exercise, 'id'> {
-  const defaultWeightKg = form.defaultWeightKg.trim()
-    ? Number(form.defaultWeightKg)
-    : parseKg(form.weight)
-  const defaultReps = form.defaultReps.trim()
-    ? Number(form.defaultReps)
-    : parseDefaultReps(form.reps)
+function formDefaultSets(form: ExerciseForm): ExerciseDefaultSet[] {
+  const count = Math.max(1, Number(form.sets) || form.defaultSets.length || 1)
+  const rows = resizeFormDefaultSets(form.defaultSets, count)
+  const fallbackWeight = parseKg(form.weight)
+  const fallbackReps = parseDefaultReps(form.reps)
+  return rows.map((row, i) => ({
+    setNumber: i + 1,
+    weightKg: parseOptionalNumber(row.weightKg) ?? fallbackWeight,
+    reps: parseOptionalNumber(row.reps) ?? fallbackReps,
+  }))
+}
 
+export function formToExercise(form: ExerciseForm): Omit<Exercise, 'id'> {
+  const defaultSets = formDefaultSets(form)
+  const first = defaultSets[0]
   return {
     name: form.name.trim(),
-    sets: Math.max(1, Number(form.sets) || 1),
+    sets: Math.max(1, Number(form.sets) || defaultSets.length || 1),
     reps: form.reps.trim() || '8–10',
     rest: form.rest.trim() || undefined,
     weight: form.weight.trim() || undefined,
-    defaultWeightKg:
-      defaultWeightKg != null && Number.isFinite(defaultWeightKg)
-        ? defaultWeightKg
-        : null,
-    defaultReps:
-      defaultReps != null && Number.isFinite(defaultReps) ? defaultReps : null,
+    defaultWeightKg: first?.weightKg ?? null,
+    defaultReps: first?.reps ?? null,
+    defaultSets,
     notes: form.notes.trim() || undefined,
     mediaUrl: form.mediaUrl.trim() || undefined,
     imageUrl: form.imageUrl.trim() || undefined,

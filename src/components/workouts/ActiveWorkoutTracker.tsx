@@ -13,6 +13,7 @@ import {
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import {
   defaultsFromExercise,
+  formatPerSetDefaultSummary,
   setsMatchDefaults,
   setsValuesKey,
 } from '../../lib/exerciseDefaults'
@@ -88,15 +89,16 @@ function DraftNumberInput({
 }
 
 function formatDefaultSummary(exercise: LoggedExercise) {
-  const weight =
-    exercise.defaultWeightKg != null
-      ? `${exercise.defaultWeightKg} ק״ג`
-      : exercise.targetWeight || '—'
-  const reps =
-    exercise.defaultReps != null
-      ? String(exercise.defaultReps)
-      : exercise.targetReps || '—'
-  return `${exercise.targetSets} סטים · ${weight} · ${reps} חזרות`
+  return formatPerSetDefaultSummary(
+    defaultsFromExercise({
+      sets: exercise.targetSets,
+      reps: exercise.targetReps,
+      weight: exercise.targetWeight,
+      defaultWeightKg: exercise.defaultWeightKg,
+      defaultReps: exercise.defaultReps,
+      defaultSets: exercise.defaultSets,
+    }),
+  )
 }
 
 type ExerciseBlockProps = {
@@ -123,6 +125,7 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
     weight: exercise.targetWeight,
     defaultWeightKg: exercise.defaultWeightKg,
     defaultReps: exercise.defaultReps,
+    defaultSets: exercise.defaultSets,
   })
   const currentValuesKey = setsValuesKey(exercise.sets)
   const showSaveDefaults =
@@ -204,8 +207,8 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
         </button>
       </div>
 
-      <div className="mt-3 grid grid-cols-[1.25rem_minmax(0,1fr)_minmax(0,0.9fr)_3rem_2.25rem_2.25rem] items-center gap-2 text-[11px] text-muted">
-        <span>#</span>
+      <div className="mt-3 grid grid-cols-[1.75rem_minmax(0,1.15fr)_minmax(0,1fr)_2.75rem_2.5rem_2.5rem] items-center gap-1.5 text-[11px] text-muted sm:gap-2">
+        <span className="text-center">#</span>
         <span className="text-center">משקל (ק״ג)</span>
         <span className="text-center">חזרות</span>
         <span className="text-center">RPE</span>
@@ -216,7 +219,7 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
         {exercise.sets.map((set, setIndex) => (
           <li
             key={setIndex}
-            className="grid grid-cols-[1.25rem_minmax(0,1fr)_minmax(0,0.9fr)_3rem_2.25rem_2.25rem] items-center gap-2"
+            className="grid grid-cols-[1.75rem_minmax(0,1.15fr)_minmax(0,1fr)_2.75rem_2.5rem_2.5rem] items-center gap-1.5 sm:gap-2"
           >
             <span className="text-sm font-semibold text-muted">{setIndex + 1}</span>
             <DraftNumberInput

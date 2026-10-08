@@ -11,6 +11,7 @@ import { onWindowResume, subscribeSharedSync } from '../lib/appStateSync'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import {
   buildSetsFromDefaults,
+  defaultSetAt,
   defaultsFromExercise,
   defaultsFromLoggedSets,
   exercisePatchFromDefaults,
@@ -70,17 +71,35 @@ export type FlexibleWorkoutSource = {
 
 const WorkoutSessionContext = createContext<WorkoutSessionValue | null>(null)
 
-/** Completing a set fills blanks from the previous set's weight and a numeric rep target. */
+function loggedExerciseDefaults(ex: LoggedExercise): ExerciseDefaultValues {
+  return defaultsFromExercise({
+    sets: ex.targetSets,
+    reps: ex.targetReps,
+    weight: ex.targetWeight,
+    defaultWeightKg: ex.defaultWeightKg,
+    defaultReps: ex.defaultReps,
+    defaultSets: ex.defaultSets,
+  })
+}
+
+/** Completing a set fills blanks from that set's default, then the previous set. */
 function completeSet(ex: LoggedExercise, index: number, sets = ex.sets): LoggedSet {
   const set = sets[index]
+  const perSet = defaultSetAt(loggedExerciseDefaults(ex), index)
   const targetReps =
-    ex.defaultReps != null && Number.isFinite(ex.defaultReps)
+    perSet.reps ??
+    (ex.defaultReps != null && Number.isFinite(ex.defaultReps)
       ? ex.defaultReps
-      : parseDefaultReps(ex.targetReps)
+      : parseDefaultReps(ex.targetReps))
   return {
     ...set,
     done: true,
-    weightKg: set.weightKg ?? sets[index - 1]?.weightKg ?? ex.defaultWeightKg ?? null,
+    weightKg:
+      set.weightKg ??
+      perSet.weightKg ??
+      sets[index - 1]?.weightKg ??
+      ex.defaultWeightKg ??
+      null,
     reps: set.reps ?? targetReps,
   }
 }
@@ -114,7 +133,12 @@ function loggedTargetsFromDefaults(
   defaults: ExerciseDefaultValues,
 ): Pick<
   LoggedExercise,
-  'targetSets' | 'targetReps' | 'targetWeight' | 'defaultWeightKg' | 'defaultReps'
+  | 'targetSets'
+  | 'targetReps'
+  | 'targetWeight'
+  | 'defaultWeightKg'
+  | 'defaultReps'
+  | 'defaultSets'
 > {
   const patch = exercisePatchFromDefaults(defaults)
   return {
@@ -123,6 +147,7 @@ function loggedTargetsFromDefaults(
     targetWeight: patch.weight,
     defaultWeightKg: patch.defaultWeightKg ?? null,
     defaultReps: patch.defaultReps ?? null,
+    defaultSets: patch.defaultSets,
   }
 }
 
@@ -137,6 +162,7 @@ function resolveDefaults(
     weight: logged.targetWeight,
     defaultWeightKg: logged.defaultWeightKg,
     defaultReps: logged.defaultReps,
+    defaultSets: logged.defaultSets,
   })
 }
 
@@ -243,6 +269,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
             targetWeight: ex.weight,
             defaultWeightKg: defaults.weightKg,
             defaultReps: defaults.reps,
+            defaultSets: defaults.defaultSets,
             rest: ex.rest,
             imageUrl: ex.imageUrl,
             sets: buildSetsFromDefaults(defaults),
@@ -322,19 +349,22 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     (exIndex: number) => {
       setActiveWorkout((prev) =>
         prev
-          ? updateLoggedExercise(prev, exIndex, (ex) => ({
-              ...ex,
-              sets: [
-                ...ex.sets,
-                {
-                  weightKg:
-                    ex.sets.at(-1)?.weightKg ?? ex.defaultWeightKg ?? null,
-                  reps: ex.sets.at(-1)?.reps ?? ex.defaultReps ?? null,
-                  done: false,
-                  rpe: ex.sets.at(-1)?.rpe ?? null,
-                },
-              ],
-            }))
+          ? updateLoggedExercise(prev, exIndex, (ex) => {
+              const last = ex.sets.at(-1)
+              const extra = defaultSetAt(loggedExerciseDefaults(ex), ex.sets.length)
+              return {
+                ...ex,
+                sets: [
+                  ...ex.sets,
+                  {
+                    weightKg: last?.weightKg ?? extra.weightKg ?? ex.defaultWeightKg ?? null,
+                    reps: last?.reps ?? extra.reps ?? ex.defaultReps ?? null,
+                    done: false,
+                    rpe: last?.rpe ?? null,
+                  },
+                ],
+              }
+            })
           : prev,
       )
     },

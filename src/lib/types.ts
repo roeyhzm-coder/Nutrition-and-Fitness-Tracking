@@ -381,6 +381,13 @@ export type LifestyleLogs = Record<string, LifestyleEntry>
 /** @deprecated use GoalSettings */
 export type ProcessSettings = GoalSettings
 
+/** Per-set default weight/reps stored on an exercise definition. */
+export type ExerciseDefaultSet = {
+  setNumber: number
+  weightKg: number | null
+  reps: number | null
+}
+
 export type Exercise = {
   id: string
   name: string
@@ -392,10 +399,12 @@ export type Exercise = {
   rest?: string
   /** Default / prescribed weight (free text); numeric part seeds set weightKg. */
   weight?: string
-  /** Preferred numeric default weight for autofill. */
+  /** Preferred numeric default weight for autofill (legacy / first-set fallback). */
   defaultWeightKg?: number | null
-  /** Preferred numeric default reps for autofill. */
+  /** Preferred numeric default reps for autofill (legacy / first-set fallback). */
   defaultReps?: number | null
+  /** Per-set defaults; index 0 = set 1. Falls back to defaultWeightKg/defaultReps. */
+  defaultSets?: ExerciseDefaultSet[]
   notes?: string
   /** Demo video / external link */
   mediaUrl?: string
@@ -486,6 +495,8 @@ export type LoggedExercise = {
   /** Numeric defaults mirrored from the exercise definition. */
   defaultWeightKg?: number | null
   defaultReps?: number | null
+  /** Per-set defaults mirrored from the exercise definition. */
+  defaultSets?: ExerciseDefaultSet[]
   rest?: string
   imageUrl?: string
   sets: LoggedSet[]
