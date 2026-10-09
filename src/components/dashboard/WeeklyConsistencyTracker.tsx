@@ -1,6 +1,7 @@
 import { useState, type MouseEvent } from 'react'
-import { Pencil } from 'lucide-react'
+import { Pencil, Settings2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
+import { useLocalStorage } from '../../hooks/useLocalStorage'
 import {
   consistencyWorkoutOptions,
   scheduledWorkoutForDate,
@@ -9,13 +10,25 @@ import {
 import {
   buildRelativeWeeklyConsistency,
   parseDayMark,
+  parseWeekStartDay,
+  WEEK_START_OPTIONS,
+  WEEK_START_STORAGE_KEY,
   weekTone,
   type ConsistencyDayMarks,
   type DaySlot,
   type WeekConsistency,
+  type WeekStartDay,
 } from '../../lib/weeklyConsistency'
 import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu'
 import { Modal } from '../ui/Modal'
 import { NumericInput } from '../ui/NumericInput'
 
@@ -143,6 +156,11 @@ export function WeeklyConsistencyTracker() {
   const [editWeek, setEditWeek] = useState<WeekConsistency | null>(null)
   const [countInput, setCountInput] = useState('0')
   const [pickerDate, setPickerDate] = useState<string | null>(null)
+  const [storedWeekStart, setStoredWeekStart] = useLocalStorage<WeekStartDay>(
+    WEEK_START_STORAGE_KEY,
+    0,
+  )
+  const weekStartsOn = parseWeekStartDay(storedWeekStart)
 
   const targetPerWeek = goal.weeklyWorkoutTarget || 5
   const options = consistencyWorkoutOptions(workoutTemplates)
@@ -151,12 +169,14 @@ export function WeeklyConsistencyTracker() {
     weeksBack: 3,
     target: targetPerWeek,
     dayMarks: consistencyDayMarks,
+    weekStartsOn,
   })
 
   const allWeeks = buildRelativeWeeklyConsistency(setLogs, goal.startDate, {
     weeksBack: 'all',
     target: targetPerWeek,
     dayMarks: consistencyDayMarks,
+    weekStartsOn,
   })
 
   function scheduledFor(date: string): ConsistencyWorkoutOption {
@@ -237,7 +257,39 @@ export function WeeklyConsistencyTracker() {
       <Card
         title="עקביות שבועית"
         action={
-          <span className="text-xs text-muted">יעד {targetPerWeek}/שבוע</span>
+          <div className="flex items-center gap-1.5">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="בחירת יום תחילת השבוע"
+                  title="יום תחילת השבוע"
+                  className="inline-flex size-8 items-center justify-center rounded-full text-muted transition hover:bg-slate-100 hover:text-text"
+                >
+                  <Settings2 className="size-3.5" strokeWidth={1.75} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-40">
+                <DropdownMenuLabel>תחילת השבוע</DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={String(weekStartsOn)}
+                  onValueChange={(next) =>
+                    setStoredWeekStart(parseWeekStartDay(next))
+                  }
+                >
+                  {WEEK_START_OPTIONS.map((option) => (
+                    <DropdownMenuRadioItem
+                      key={option.day}
+                      value={String(option.day)}
+                    >
+                      {option.short} · {option.label}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <span className="text-xs text-muted">יעד {targetPerWeek}/שבוע</span>
+          </div>
         }
       >
         <p className="mb-3 text-xs text-muted">

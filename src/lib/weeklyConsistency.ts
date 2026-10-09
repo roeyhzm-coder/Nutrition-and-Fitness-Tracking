@@ -46,7 +46,42 @@ export function parseDayMark(
   return undefined
 }
 
+/** JS `Date.getDay()`: 0 = Sunday … 6 = Saturday */
+export type WeekStartDay = 0 | 1 | 2 | 3 | 4 | 5 | 6
+
 const WEEKDAY_HE = ['א׳', 'ב׳', 'ג׳', 'ד׳', 'ה׳', 'ו׳', 'ש׳']
+
+export const WEEK_START_OPTIONS: { day: WeekStartDay; short: string; label: string }[] =
+  [
+    { day: 0, short: 'א׳', label: 'ראשון' },
+    { day: 1, short: 'ב׳', label: 'שני' },
+    { day: 2, short: 'ג׳', label: 'שלישי' },
+    { day: 3, short: 'ד׳', label: 'רביעי' },
+    { day: 4, short: 'ה׳', label: 'חמישי' },
+    { day: 5, short: 'ו׳', label: 'שישי' },
+    { day: 6, short: 'ש׳', label: 'שבת' },
+  ]
+
+export const WEEK_START_STORAGE_KEY = 'tn.weekStartsOn.v1'
+
+export function parseWeekStartDay(value: unknown): WeekStartDay {
+  const n = typeof value === 'string' ? Number(value) : value
+  if (n === 0 || n === 1 || n === 2 || n === 3 || n === 4 || n === 5 || n === 6) {
+    return n
+  }
+  return 0
+}
+
+export function startOfCalendarWeek(
+  date: Date,
+  weekStartsOn: WeekStartDay = 0,
+): Date {
+  const d = new Date(date)
+  d.setHours(0, 0, 0, 0)
+  const diff = (d.getDay() - weekStartsOn + 7) % 7
+  d.setDate(d.getDate() - diff)
+  return d
+}
 
 function parseDateOnly(iso: string) {
   const d = new Date(iso)
@@ -111,16 +146,22 @@ export function buildRelativeWeeklyConsistency(
     weeksBack?: number | 'all'
     target?: number
     dayMarks?: ConsistencyDayMarks
+    weekStartsOn?: WeekStartDay
   },
 ): WeekConsistency[] {
   const target = options?.target ?? 5
   const marks = options?.dayMarks ?? {}
+  const weekStartsOn = parseWeekStartDay(options?.weekStartsOn ?? 0)
   const phaseStart = parseDateOnly(phaseStartDate)
   const today = new Date()
   today.setHours(0, 0, 0, 0)
+  const firstWeekStart = startOfCalendarWeek(phaseStart, weekStartsOn)
+  const currentWeekStart = startOfCalendarWeek(today, weekStartsOn)
   const currentWeekIndex = Math.max(
     0,
-    Math.floor((today.getTime() - phaseStart.getTime()) / 86400000 / 7),
+    Math.round(
+      (currentWeekStart.getTime() - firstWeekStart.getTime()) / 86400000 / 7,
+    ),
   )
 
   const weeksBack =
@@ -135,8 +176,8 @@ export function buildRelativeWeeklyConsistency(
     const weekIndex = currentWeekIndex - i
     if (weekIndex < 0) break
 
-    const start = new Date(phaseStart)
-    start.setDate(phaseStart.getDate() + weekIndex * 7)
+    const start = new Date(currentWeekStart)
+    start.setDate(currentWeekStart.getDate() - i * 7)
     start.setHours(0, 0, 0, 0)
     const end = new Date(start)
     end.setDate(start.getDate() + 6)

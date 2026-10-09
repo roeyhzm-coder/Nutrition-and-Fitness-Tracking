@@ -208,9 +208,15 @@ function CompactPresetRow({
         <p className="truncate text-xs font-semibold text-text">{item.name}</p>
         <p className="truncate text-[10px] text-muted">{subtitle}</p>
       </div>
-      <MiniIcon label={`הוסף ${item.name} להיום`} tone="accent" onClick={onLog}>
-        <Plus className="size-3.5" strokeWidth={2.25} />
-      </MiniIcon>
+      <button
+        type="button"
+        aria-label={`הוסף ${item.name} להיום`}
+        title={`הוסף ${item.name} להיום`}
+        onClick={onLog}
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-sky-500/10 text-sky-600 shadow-sm shadow-sky-500/20 transition hover:bg-sky-500/20 hover:text-sky-700 active:scale-95 active:bg-sky-500/25"
+      >
+        <Plus className="size-4" strokeWidth={2.5} />
+      </button>
       <MiniIcon label={`ערוך ${item.name}`} onClick={onEdit}>
         <Pencil className="size-3.5" strokeWidth={1.75} />
       </MiniIcon>
