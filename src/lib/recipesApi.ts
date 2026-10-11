@@ -1,7 +1,7 @@
 import type { MealType, Recipe, RecipeVariation, ServingUnit } from './types'
 import { roundTo } from './numericInput'
 import { GRAMS_UNIT_ID } from './servingUnits'
-import { supabase } from './supabase'
+import { isRecipeBookConfigured, recipeBookSupabase } from './recipeBookSupabase'
 
 export const DEFAULT_SERVING_GRAMS = 150
 
@@ -27,6 +27,7 @@ export type SupabaseRecipeRow = {
   servings?: number | string | null
   base_servings?: number | string | null
   updated_at?: string | null
+  deleted_at_ms?: number | string | null
 }
 
 function num(value: unknown, fallback = 0) {
@@ -471,14 +472,75 @@ export function mapSupabaseRecipe(row: SupabaseRecipeRow): Recipe {
   }
 }
 
+export function isRecipeRowActive(row: Pick<SupabaseRecipeRow, 'deleted_at_ms'>) {
+  const deleted = num(row.deleted_at_ms)
+  return deleted <= 0
+}
+
+export function uniqueRecipesById(recipes: Recipe[]): Recipe[] {
+  const byId = new Map<string, Recipe>()
+  for (const recipe of recipes) {
+    if (!recipe?.id) continue
+    byId.set(recipe.id, recipe)
+  }
+  return [...byId.values()]
+}
+
+export function applyRecipeRealtimeChange(
+  current: Recipe[],
+  event: 'INSERT' | 'UPDATE' | 'DELETE',
+  row: SupabaseRecipeRow | null | undefined,
+): Recipe[] {
+  if (!row?.id) return uniqueRecipesById(current)
+  if (event === 'DELETE' || !isRecipeRowActive(row)) {
+    return current.filter((recipe) => recipe.id !== row.id)
+  }
+  const mapped = mapSupabaseRecipe(row)
+  const byId = new Map(current.map((recipe) => [recipe.id, recipe]))
+  byId.set(mapped.id, mapped)
+  return [...byId.values()]
+}
+
 export async function fetchRecipesFromSupabase(): Promise<Recipe[]> {
-  if (!supabase) {
-    throw new Error('Supabase אינו מוגדר')
+  if (!isRecipeBookConfigured || !recipeBookSupabase) {
+    throw new Error('ספר המתכונים אינו מוגדר')
   }
 
-  const { data, error } = await supabase.from('recipes').select('*')
+  const { data, error } = await recipeBookSupabase.from('recipes').select('*')
   if (error) throw error
-  return (data as SupabaseRecipeRow[] | null)?.map(mapSupabaseRecipe) ?? []
+  const rows = (data as SupabaseRecipeRow[] | null) ?? []
+  return uniqueRecipesById(
+    rows.filter(isRecipeRowActive).map(mapSupabaseRecipe),
+  )
+}
+
+export function subscribeRecipesRealtime(
+  onChange: (
+    event: 'INSERT' | 'UPDATE' | 'DELETE',
+    row: SupabaseRecipeRow,
+  ) => void,
+): () => void {
+  const client = recipeBookSupabase
+  if (!client) return () => {}
+
+  const channel = client
+    .channel('recipe-book-recipes-live')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'recipes' },
+      (payload) => {
+        const event = payload.eventType as 'INSERT' | 'UPDATE' | 'DELETE'
+        const row = (
+          event === 'DELETE' ? payload.old : payload.new
+        ) as SupabaseRecipeRow | undefined
+        if (row?.id) onChange(event, row)
+      },
+    )
+    .subscribe()
+
+  return () => {
+    void client.removeChannel(channel)
+  }
 }
 
 /** Unique category labels from synced recipes. */

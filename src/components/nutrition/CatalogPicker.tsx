@@ -12,6 +12,7 @@ type CatalogPickerProps = {
   placeholder?: string
   onSelect: (item: CatalogFood) => void
   autoFocus?: boolean
+  limit?: number
 }
 
 export function CatalogPicker({
@@ -19,12 +20,16 @@ export function CatalogPicker({
   placeholder = 'חיפוש במאגר…',
   onSelect,
   autoFocus,
+  limit = 16,
 }: CatalogPickerProps) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(0)
 
-  const matches = useMemo(() => filterCatalog(items, query, 16), [items, query])
+  const matches = useMemo(
+    () => filterCatalog(items, query, limit),
+    [items, query, limit],
+  )
   const showList = open
 
   function pick(item: CatalogFood) {

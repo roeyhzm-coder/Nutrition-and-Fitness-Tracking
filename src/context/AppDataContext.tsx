@@ -49,7 +49,7 @@ import {
   normalizeFocusTrack,
   sortFocusTracks,
 } from '../lib/focusTracks'
-import { DEFAULT_FOOD_CATEGORIES, adoptRemoteRecipes, seedRecipesIfEmpty } from '../data/recipes'
+import { DEFAULT_FOOD_CATEGORIES, replaceLiveRecipes } from '../data/recipes'
 import {
   DEFAULT_ACTIVE_PROGRAM_ID,
   OFFICIAL_PLAN_VERSION,
@@ -74,9 +74,12 @@ import {
   type SyncedAppState,
 } from '../lib/appStateSync'
 import {
+  applyRecipeRealtimeChange,
   extractRecipeCategories,
   fetchRecipesFromSupabase,
+  subscribeRecipesRealtime,
 } from '../lib/recipesApi'
+import { isRecipeBookConfigured } from '../lib/recipeBookSupabase'
 import {
   createBodyMeasurement,
   pullBodyMeasurements,
@@ -511,7 +514,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     loadPresetMeals(),
   )
   const [recipes, setRecipes] = useLocalStorage<Recipe[]>(
-    'tn.recipes.v3',
+    'tn.recipes.live.v1',
     [],
   )
   const [profileRaw, setProfileRaw] = useLocalStorage<UserProfile>(
@@ -975,8 +978,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const ingestRemoteRecipes = useCallback(
     (remote: Recipe[]) => {
       markCatalogSeeded()
-      localDirtyRef.current = true
-      setRecipes((prev) => adoptRemoteRecipes(prev, remote))
+      setRecipes(replaceLiveRecipes(remote))
       const fromRecipes = extractRecipeCategories(remote)
       if (fromRecipes.length > 0) {
         setFoodCategories((prev) => {
@@ -994,8 +996,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   )
 
   const syncRecipes = useCallback(async () => {
-    if (!isSupabaseConfigured) {
-      const error = 'חסרים משתני סביבה של Supabase'
+    if (!isRecipeBookConfigured) {
+      const error = 'חסרים משתני סביבה של ספר המתכונים'
       setRecipesSyncStatus('error')
       setRecipesSyncError(error)
       console.error('[recipes] sync failed', error)
@@ -1021,6 +1023,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void syncRecipes()
   }, [syncRecipes])
+
+  useEffect(() => {
+    return subscribeRecipesRealtime((event, row) => {
+      setRecipes((prev) => applyRecipeRealtimeChange(prev, event, row))
+      setRecipesSyncStatus('synced')
+      setRecipesSyncError(null)
+    })
+  }, [setRecipes])
 
   useEffect(() => {
     void hydrateServingPresets()
@@ -1154,16 +1164,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setSavedMeals((prev) => seedSavedMealsIfEmpty(prev))
         markCatalogSeeded()
       }
-      if (remote.recipes !== undefined) {
-        setRecipes((local) => {
-          if (shouldKeepLocalList(local, remote.recipes, localDirtyRef.current)) {
-            skipNextPush.current = false
-            localDirtyRef.current = true
-            return local
-          }
-          return adoptRemoteRecipes(remote.recipes ?? [], local)
-        })
-      }
+      // Recipe book is owned by the live recipe-book `recipes` table, not app_state.
       if (remote.foodLogs !== undefined) {
         setFoodLogs((local) => {
           if (shouldKeepLocalList(local, remote.foodLogs, localDirtyRef.current)) {
@@ -1259,7 +1260,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const remote = await pullAppState()
     const nextFoodLogs = unionById(local.foodLogs, remote?.foodLogs)
     const nextSavedMeals = unionById(local.savedMeals, remote?.savedMeals)
-    const nextRecipes = unionById(local.recipes, remote?.recipes)
+    const nextRecipes = replaceLiveRecipes(local.recipes ?? [])
     const nextBodyMeasurements = unionBodyMeasurements(
       local.bodyMeasurements,
       remote?.bodyMeasurements,
@@ -1332,7 +1333,6 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         }
         if (reason === 'load' && needsCatalogSeed()) {
           setSavedMeals((prev) => seedSavedMealsIfEmpty(prev))
-          setRecipes((prev) => seedRecipesIfEmpty(prev))
           setFocusTracks((prev) => seedFocusTracksIfEmpty(prev))
           markCatalogSeeded()
         }
@@ -1382,6 +1382,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     const refetch = () => {
       if (!hydratedRef.current) return
       void hydrateFromCloud('refetch')
+      void syncRecipes()
     }
     const stopRealtime = subscribeSharedSync(refetch, 'app-state')
     const stopResume = onWindowResume(refetch)
@@ -1389,7 +1390,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       stopRealtime()
       stopResume()
     }
-  }, [hydrateFromCloud])
+  }, [hydrateFromCloud, syncRecipes])
 
   useEffect(() => {
     if (!hydratedRef.current) return

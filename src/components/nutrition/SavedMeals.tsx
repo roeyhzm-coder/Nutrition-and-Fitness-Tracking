@@ -18,7 +18,6 @@ import {
   lineToComponent,
   macrosFromPer100g,
   recipeToCatalog,
-  savedToCatalog,
   suggestMealName,
   sumIngredientLines,
   type CatalogFood,
@@ -291,15 +290,7 @@ export function SavedMeals() {
       ...allIsraeliFoods().filter((food) => !seen.has(food.id)),
     ].map(israeliToCatalog)
   }, [customIsraeliFoods])
-  const recipeCatalog = useMemo(() => {
-    const items = recipes.map(recipeToCatalog)
-    for (const meal of savedMeals) {
-      if (meal.id === editing?.id) continue
-      if (savedPresetKind(meal) !== 'meal') continue
-      items.push(savedToCatalog(meal))
-    }
-    return items
-  }, [recipes, savedMeals, editing?.id])
+  const recipeCatalog = useMemo(() => recipes.map(recipeToCatalog), [recipes])
 
   const namedLines = useMemo(
     () => lines.filter((line) => line.name.trim()),

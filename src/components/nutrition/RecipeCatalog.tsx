@@ -5,16 +5,15 @@ import { useAppData } from '../../context/AppDataContext'
 import { parsePositiveDecimal, roundTo } from '../../lib/numericInput'
 import {
   defaultRecipeVariation,
-  mapSupabaseRecipe,
+  fetchRecipesFromSupabase,
   recipeMatchesCategoryTag,
   recipePortionUnits,
   recipeServings,
   recipeWithVariation,
   resolveServingGrams,
-  type SupabaseRecipeRow,
 } from '../../lib/recipesApi'
 import { normalizeSearch } from '../../lib/foodCatalog'
-import { supabase } from '../../lib/supabase'
+import { isRecipeBookConfigured } from '../../lib/recipeBookSupabase'
 import {
   defaultServingUnit,
   effectiveGrams,
@@ -384,21 +383,15 @@ export function RecipeCatalog() {
   }
 
   async function handleSync() {
-    if (!supabase) {
-      const error = 'Supabase אינו מוגדר'
+    if (!isRecipeBookConfigured) {
+      const error = 'ספר המתכונים אינו מוגדר'
       console.error('[RecipeCatalog] sync failed', error)
       showToast(error, 'error')
       return
     }
     setButtonSyncing(true)
     try {
-      const { data, error } = await supabase.from('recipes').select('*')
-      if (error) {
-        console.error('[RecipeCatalog] sync failed', error)
-        showToast(error.message, 'error')
-        return
-      }
-      const mapped = ((data ?? []) as SupabaseRecipeRow[]).map(mapSupabaseRecipe)
+      const mapped = await fetchRecipesFromSupabase()
       ingestRemoteRecipes(mapped)
       showToast(`סונכרנו ${mapped.length} מתכונים בהצלחה`, 'ok')
     } catch (err) {

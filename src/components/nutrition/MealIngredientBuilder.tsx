@@ -74,11 +74,13 @@ export function MealIngredientBuilder({
       </div>
 
       <CatalogPicker
+        key={source}
         items={activeCatalog}
+        limit={source === 'recipes' ? 200 : 16}
         placeholder={
           source === 'israeli'
             ? 'תות שדה, בננה, חמאת בוטנים, אבקת חלבון…'
-            : 'טוסט מותאם, שייק, שניצל דק ביתי…'
+            : 'חיפוש בספר המתכונים החי…'
         }
         onSelect={addItem}
       />

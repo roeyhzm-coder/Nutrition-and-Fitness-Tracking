@@ -1,5 +1,4 @@
 import type { FoodCategory, MealType, Recipe } from '../lib/types'
-import { RECIPE_BOOK_RECIPES } from './recipeBookRecipes'
 
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   breakfast: 'ארוחת בוקר',
@@ -129,7 +128,6 @@ export const DEFAULT_RECIPES: Recipe[] = [
     steps: ['לערבב ולהגיש'],
     servingGrams: 200,
   },
-  ...RECIPE_BOOK_RECIPES,
 ]
 
 export function mergeRecipes(existing: Recipe[]): Recipe[] {
@@ -141,16 +139,22 @@ export function mergeRecipes(existing: Recipe[]): Recipe[] {
   return [...byId.values()]
 }
 
-/** Remote rows win on id so a live Supabase pull replaces stale local copies. */
-export function adoptRemoteRecipes(local: Recipe[], remote: Recipe[]): Recipe[] {
+/** Live recipe-book table is the only source — deleted rows must disappear. */
+export function adoptRemoteRecipes(_local: Recipe[], remote: Recipe[]): Recipe[] {
+  return replaceLiveRecipes(remote)
+}
+
+export function replaceLiveRecipes(remote: Recipe[]): Recipe[] {
   const byId = new Map<string, Recipe>()
-  for (const recipe of local) byId.set(recipe.id, recipe)
-  for (const recipe of remote) byId.set(recipe.id, recipe)
+  for (const recipe of remote) {
+    if (!recipe?.id) continue
+    byId.set(recipe.id, recipe)
+  }
   return [...byId.values()]
 }
 
 export function seedRecipesIfEmpty(existing: Recipe[]): Recipe[] {
-  return existing.length > 0 ? mergeRecipes(existing) : DEFAULT_RECIPES
+  return mergeRecipes(existing)
 }
 
 export function recipesEqual(a: Recipe[], b: Recipe[]): boolean {
