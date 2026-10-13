@@ -81,8 +81,13 @@ function LogItem({ log }: { log: WorkoutLog }) {
               <p className="text-muted">
                 {ex.sets
                   .map((s) => {
-                    const lift = `${s.weightKg ?? 0} ק״ג × ${s.reps ?? '?'}`
-                    return s.rpe != null && s.rpe > 0 ? `${lift} @ RPE ${s.rpe}` : lift
+                    const qty = s.reps ?? '?'
+                    const isDuration =
+                      /שניות|seconds?|secs?\b/i.test(ex.targetReps) ||
+                      /תליי[הה]|החזקה|plank|hold|hang|isometric/i.test(ex.name)
+                    return isDuration
+                      ? `${s.weightKg ?? 0} ק״ג × ${qty} שנ׳`
+                      : `${s.weightKg ?? 0} ק״ג × ${qty}`
                   })
                   .join(' · ')}
               </p>

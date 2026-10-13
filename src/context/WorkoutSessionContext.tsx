@@ -53,8 +53,8 @@ type WorkoutSessionValue = {
   addSet: (exIndex: number) => void
   /** Removes a set; always keeps at least one set. */
   removeSet: (exIndex: number, setIndex: number) => void
-  /** Persist current set values as the exercise's permanent defaults. */
-  saveAsDefaults: (exIndex: number) => boolean
+  /** Persist current set values as the exercise's permanent defaults (Supabase). */
+  saveAsDefaults: (exIndex: number) => Promise<boolean>
   finishWorkout: () => WorkoutLog | null
   cancelWorkout: () => void
   workoutLogs: WorkoutLog[]
@@ -179,12 +179,29 @@ function applyDefaultsIfUnset(
   }
 }
 
+function seedLoggedExercise(ex: Exercise): LoggedExercise {
+  const defaults = defaultsFromExercise(ex)
+  return {
+    exerciseId: ex.id,
+    name: ex.name,
+    targetSets: defaults.sets,
+    targetReps: ex.reps,
+    targetWeight: ex.weight,
+    defaultWeightKg: defaults.weightKg,
+    defaultReps: defaults.reps,
+    defaultSets: defaults.defaultSets,
+    rest: ex.rest,
+    imageUrl: ex.imageUrl,
+    sets: buildSetsFromDefaults(defaults),
+  }
+}
+
 export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
   const {
     activeProgram,
     addSetLog,
     setConsistencyDayMark,
-    updateExercise: updateProgramExercise,
+    persistExerciseDefaults,
   } = useAppData()
   const [activeWorkout, setActiveWorkout] = useLocalStorage<ActiveWorkout | null>(
     'tn.activeWorkout.v1',
@@ -248,6 +265,14 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
         source.estimatedCalories != null && Number.isFinite(source.estimatedCalories)
           ? Math.max(0, Math.round(source.estimatedCalories))
           : null
+
+      // Always prefer the latest program copy so "save as default" survives
+      // into the next Start Workout, even if the caller passed a stale day snapshot.
+      const liveExercises = source.exercises.map((ex) => {
+        if (!source.dayId) return ex
+        return findProgramExercise(activeProgram.days, source.dayId, ex.id) ?? ex
+      })
+
       setActiveWorkout({
         id: uid(),
         programId: activeProgram.id,
@@ -259,22 +284,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
         startedAt: new Date().toISOString(),
         performedOn: today,
         estimatedCalories: calories,
-        exercises: source.exercises.map((ex) => {
-          const defaults = defaultsFromExercise(ex)
-          return {
-            exerciseId: ex.id,
-            name: ex.name,
-            targetSets: ex.sets,
-            targetReps: ex.reps,
-            targetWeight: ex.weight,
-            defaultWeightKg: defaults.weightKg,
-            defaultReps: defaults.reps,
-            defaultSets: defaults.defaultSets,
-            rest: ex.rest,
-            imageUrl: ex.imageUrl,
-            sets: buildSetsFromDefaults(defaults),
-          }
-        }),
+        exercises: liveExercises.map(seedLoggedExercise),
       })
     },
     [activeWorkout, activeProgram, setActiveWorkout],
@@ -360,7 +370,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
                     weightKg: last?.weightKg ?? extra.weightKg ?? ex.defaultWeightKg ?? null,
                     reps: last?.reps ?? extra.reps ?? ex.defaultReps ?? null,
                     done: false,
-                    rpe: last?.rpe ?? null,
+                    rpe: null,
                   },
                 ],
               }
@@ -390,7 +400,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
   )
 
   const saveAsDefaults = useCallback(
-    (exIndex: number) => {
+    async (exIndex: number) => {
       const workout = activeWorkout
       if (!workout) return false
       const logged = workout.exercises[exIndex]
@@ -399,20 +409,39 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       const defaults = defaultsFromLoggedSets(logged.sets)
       const patch = exercisePatchFromDefaults(defaults)
 
-      // Persist onto the program exercise (localStorage + Supabase sync via AppData).
-      updateProgramExercise(workout.dayId, logged.exerciseId, patch)
+      // Prefer duration-aware label when the prescription already used seconds.
+      if (
+        /שניות|seconds?|secs?\b/i.test(logged.targetReps) &&
+        patch.defaultReps != null
+      ) {
+        const allSame = defaults.defaultSets.every(
+          (s) => s.reps === defaults.defaultSets[0]?.reps,
+        )
+        patch.reps = allSame
+          ? `${patch.defaultReps} שניות`
+          : `${defaults.defaultSets.map((s) => (s.reps == null ? '—' : String(s.reps))).join(' / ')} שניות`
+      }
+
+      const ok = await persistExerciseDefaults(
+        workout.dayId,
+        logged.exerciseId,
+        patch,
+      )
+      if (!ok) return false
 
       setActiveWorkout((prev) =>
         prev
           ? updateLoggedExercise(prev, exIndex, (current) => ({
               ...current,
               ...loggedTargetsFromDefaults(defaults),
+              targetReps: patch.reps,
+              targetWeight: patch.weight,
             }))
           : prev,
       )
       return true
     },
-    [activeWorkout, setActiveWorkout, updateProgramExercise],
+    [activeWorkout, persistExerciseDefaults, setActiveWorkout],
   )
 
   const finishWorkout = useCallback(() => {

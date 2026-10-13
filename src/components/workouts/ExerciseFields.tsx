@@ -1,7 +1,8 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { CirclePlay, Dumbbell, Timer } from 'lucide-react'
-import type { Exercise } from '../../lib/types'
+import { isDurationTrackedExercise } from '../../lib/exerciseDefaults'
 import { resizeFormDefaultSets, type ExerciseForm } from '../../lib/exerciseForm'
+import type { Exercise } from '../../lib/types'
 import { NumericInput } from '../ui/NumericInput'
 
 const inputClass = 'field'
@@ -17,6 +18,12 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
     onChange: (e: { target: { value: string } }) =>
       setForm((p) => ({ ...p, [key]: e.target.value })),
   })
+  const durationSeconds = isDurationTrackedExercise({
+    name: form.name,
+    reps: form.reps,
+    notes: form.notes,
+  })
+  const qtyLabel = durationSeconds ? 'שניות' : 'חזרות'
 
   return (
     <>
@@ -44,7 +51,7 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
           />
         </label>
         <label className="block text-xs text-muted">
-          חזרות (תווית / טווח)
+          {durationSeconds ? 'זמן (תווית / שניות)' : 'חזרות (תווית / טווח)'}
           <input {...bind('reps')} placeholder="8-12 / 30 שניות" className={`mt-1 ${inputClass}`} />
         </label>
         <label className="block text-xs text-muted">
@@ -57,11 +64,13 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
         </label>
       </div>
       <div>
-        <p className="mb-1.5 text-xs text-muted">משקל וחזרות לפי סט</p>
+        <p className="mb-1.5 text-xs text-muted">
+          משקל ו{qtyLabel} לפי סט
+        </p>
         <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_minmax(0,1fr)] items-center gap-1.5 text-[11px] text-muted">
           <span className="text-center">#</span>
           <span className="text-center">משקל (ק״ג)</span>
-          <span className="text-center">חזרות</span>
+          <span className="text-center">{qtyLabel}</span>
         </div>
         <ul className="mt-1 space-y-1">
           {form.defaultSets.map((row, i) => (
@@ -93,7 +102,7 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
                     ),
                   }))
                 }
-                placeholder="8"
+                placeholder={durationSeconds ? '30' : '8'}
                 className={inputClass}
               />
             </li>

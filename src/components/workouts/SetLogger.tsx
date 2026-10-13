@@ -1,6 +1,7 @@
 import type { Exercise } from '../../lib/types'
 import type { SetLog } from '../../lib/types'
 import { useState } from 'react'
+import { isDurationTrackedExercise } from '../../lib/exerciseDefaults'
 import { parseDecimal } from '../../lib/numericInput'
 import { Button } from '../ui/button'
 import { NumericInput } from '../ui/NumericInput'
@@ -14,7 +15,7 @@ type SetLoggerProps = {
 export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
   const [weightKg, setWeightKg] = useState('')
   const [reps, setReps] = useState('')
-  const [rpe, setRpe] = useState('7')
+  const durationSeconds = isDurationTrackedExercise(exercise)
 
   return (
     <form
@@ -22,7 +23,6 @@ export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
         e.preventDefault()
         const w = parseDecimal(weightKg)
         const r = parseDecimal(reps)
-        const pe = parseDecimal(rpe) ?? 7
         if (w == null || r == null || r <= 0) return
         onLog({
           exerciseId: exercise.id,
@@ -30,7 +30,7 @@ export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
           dayId,
           weightKg: w,
           reps: r,
-          rpe: pe,
+          rpe: 0,
         })
         setReps('')
       }}
@@ -39,7 +39,7 @@ export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
       <p className="font-display text-base font-bold text-text">
         רישום סט — {exercise.name}
       </p>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <label className="block text-xs text-muted">
           משקל (ק״ג)
           <NumericInput
@@ -49,21 +49,13 @@ export function SetLogger({ exercise, dayId, onLog }: SetLoggerProps) {
           />
         </label>
         <label className="block text-xs text-muted">
-          חזרות
+          {durationSeconds ? 'שניות' : 'חזרות'}
           <NumericInput
             value={reps}
             onChange={setReps}
+            decimals={0}
             required
-          />
-        </label>
-        <label className="block text-xs text-muted">
-          RPE
-          <NumericInput
-            value={rpe}
-            onChange={setRpe}
-            min={1}
-            max={10}
-            required
+            placeholder={durationSeconds ? '30' : undefined}
           />
         </label>
       </div>

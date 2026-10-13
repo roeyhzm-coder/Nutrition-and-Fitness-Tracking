@@ -14,6 +14,7 @@ import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import {
   defaultsFromExercise,
   formatPerSetDefaultSummary,
+  isDurationTrackedExercise,
   setsMatchDefaults,
   setsValuesKey,
 } from '../../lib/exerciseDefaults'
@@ -89,6 +90,10 @@ function DraftNumberInput({
 }
 
 function formatDefaultSummary(exercise: LoggedExercise) {
+  const durationSeconds = isDurationTrackedExercise({
+    name: exercise.name,
+    targetReps: exercise.targetReps,
+  })
   return formatPerSetDefaultSummary(
     defaultsFromExercise({
       sets: exercise.targetSets,
@@ -98,6 +103,7 @@ function formatDefaultSummary(exercise: LoggedExercise) {
       defaultReps: exercise.defaultReps,
       defaultSets: exercise.defaultSets,
     }),
+    { durationSeconds },
   )
 }
 
@@ -119,6 +125,10 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
   const [savedValuesKey, setSavedValuesKey] = useState<string | null>(null)
   const allDone = exercise.sets.length > 0 && exercise.sets.every((s) => s.done)
   const canRemoveSet = exercise.sets.length > 1
+  const durationSeconds = isDurationTrackedExercise({
+    name: exercise.name,
+    targetReps: exercise.targetReps,
+  })
   const defaults = defaultsFromExercise({
     sets: exercise.targetSets,
     reps: exercise.targetReps,
@@ -144,11 +154,18 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
     toastTimer.current = window.setTimeout(() => setDefaultsToast(null), 2200)
   }
 
-  function handleSaveDefaults() {
-    if (!saveAsDefaults(index)) return
+  async function handleSaveDefaults() {
+    const ok = await saveAsDefaults(index)
+    if (!ok) {
+      flash('שמירת ברירת המחדל נכשלה')
+      return
+    }
     setSavedValuesKey(currentValuesKey)
-    flash('ברירת המחדל נשמרה')
+    flash('ברירת המחדל נשמרה בענן')
   }
+
+  const setGridClass =
+    'grid grid-cols-[1.75rem_minmax(0,1.15fr)_minmax(0,1fr)_2.5rem_2.5rem] items-center gap-1.5 sm:gap-2'
 
   return (
     <li
@@ -207,20 +224,16 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
         </button>
       </div>
 
-      <div className="mt-3 grid grid-cols-[1.75rem_minmax(0,1.15fr)_minmax(0,1fr)_2.75rem_2.5rem_2.5rem] items-center gap-1.5 text-[11px] text-muted sm:gap-2">
+      <div className={`mt-3 ${setGridClass} text-[11px] text-muted`}>
         <span className="text-center">#</span>
         <span className="text-center">משקל (ק״ג)</span>
-        <span className="text-center">חזרות</span>
-        <span className="text-center">RPE</span>
+        <span className="text-center">{durationSeconds ? 'שניות' : 'חזרות'}</span>
         <span className="text-center">בוצע</span>
         <span className="text-center">הסר</span>
       </div>
       <ul className="mt-1 space-y-1.5">
         {exercise.sets.map((set, setIndex) => (
-          <li
-            key={setIndex}
-            className="grid grid-cols-[1.75rem_minmax(0,1.15fr)_minmax(0,1fr)_2.75rem_2.5rem_2.5rem] items-center gap-1.5 sm:gap-2"
-          >
+          <li key={setIndex} className={`h-11 ${setGridClass}`}>
             <span className="text-sm font-semibold text-muted">{setIndex + 1}</span>
             <DraftNumberInput
               value={set.weightKg}
@@ -231,15 +244,15 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
             />
             <DraftNumberInput
               value={set.reps}
+              decimals={0}
               onCommit={(reps) => updateSet(index, setIndex, { reps })}
               placeholder={
-                exercise.targetReps.length <= 8 ? exercise.targetReps : 'חזרות'
+                durationSeconds
+                  ? '30'
+                  : exercise.targetReps.length <= 8
+                    ? exercise.targetReps
+                    : 'חזרות'
               }
-            />
-            <DraftNumberInput
-              value={set.rpe ?? null}
-              onCommit={(rpe) => updateSet(index, setIndex, { rpe })}
-              placeholder="7"
             />
             <button
               type="button"
@@ -290,7 +303,7 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
           <button
             type="button"
             title="שמור את הערכים הנוכחיים כברירת מחדל קבועה לתרגיל"
-            onClick={handleSaveDefaults}
+            onClick={() => void handleSaveDefaults()}
             className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
           >
             <Save className="size-3" strokeWidth={2} />

@@ -1,3 +1,4 @@
+import { isHoldExercise } from './blockStrength'
 import type { Exercise, ExerciseDefaultSet, LoggedSet } from './types'
 
 /** Structured defaults used to seed active-workout sets. */
@@ -9,6 +10,23 @@ export type ExerciseDefaultValues = {
   /** Free-text labels stored on the Exercise definition. */
   weightLabel?: string
   repsLabel?: string
+}
+
+const DURATION_LABEL_RE = /שניות|seconds?|secs?\b|hold|isometric|תליי[הה]|החזקה/i
+
+/**
+ * Timed / isometric work tracks duration (seconds) in the numeric `reps` field.
+ * Detected from exercise name, prescribed reps label, or notes.
+ */
+export function isDurationTrackedExercise(ex: {
+  name?: string
+  reps?: string
+  targetReps?: string
+  notes?: string
+}): boolean {
+  if (ex.name && isHoldExercise(ex.name)) return true
+  const blob = [ex.reps, ex.targetReps, ex.notes].filter(Boolean).join(' ')
+  return blob.length > 0 && DURATION_LABEL_RE.test(blob)
 }
 
 export type ExerciseDefaultsSource = Pick<
@@ -145,9 +163,15 @@ function formatJoinedNumbers(values: Array<number | null>, suffix: string): stri
   return `${values.map((v) => (v == null ? '—' : String(v))).join(' / ')}${suffix}`
 }
 
-export function formatPerSetDefaultSummary(defaults: ExerciseDefaultValues): string {
+export function formatPerSetDefaultSummary(
+  defaults: ExerciseDefaultValues,
+  opts?: { durationSeconds?: boolean },
+): string {
   const weights = defaults.defaultSets.map((s) => s.weightKg)
   const reps = defaults.defaultSets.map((s) => s.reps)
+  if (opts?.durationSeconds) {
+    return `${defaults.sets} סטים · ${formatJoinedNumbers(weights, ' ק״ג')} · ${formatJoinedNumbers(reps, ' שנ׳')}`
+  }
   return `${defaults.sets} סטים · ${formatJoinedNumbers(weights, ' ק״ג')} · ${formatJoinedNumbers(reps, '')} חזרות`
 }
 
@@ -182,9 +206,7 @@ export function defaultsFromExercise(ex: ExerciseDefaultsSource): ExerciseDefaul
 /** True when the workout has no entered/saved set values to keep. */
 export function loggedSetsAreUnset(sets: LoggedSet[]): boolean {
   if (!sets.length) return true
-  return sets.every(
-    (s) => !s.done && s.weightKg == null && s.reps == null && s.rpe == null,
-  )
+  return sets.every((s) => !s.done && s.weightKg == null && s.reps == null)
 }
 
 /** Build LoggedSet rows from defaults (all unmarked). Extra sets copy the last default. */

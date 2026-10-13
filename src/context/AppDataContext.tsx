@@ -205,6 +205,17 @@ type AppDataContextValue = {
     exerciseId: string,
     patch: Partial<Exercise>,
   ) => void
+  /**
+   * Persist exercise defaults onto the program day + linked library template,
+   * then flush immediately to Supabase so the next workout loads them.
+   */
+  persistExerciseDefaults: (
+    dayId: string,
+    exerciseId: string,
+    patch: Partial<Exercise>,
+  ) => Promise<boolean>
+  /** Force an immediate cloud flush of the current app snapshot. */
+  flushCloudNow: (reason?: string) => Promise<boolean>
   deleteExercise: (dayId: string, exerciseId: string) => void
   removeDaySession: (dayId: string, sessionId: string) => void
   workoutTemplates: WorkoutTemplate[]
@@ -641,6 +652,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const updateExercise = useCallback(
     (dayId: string, exerciseId: string, patch: Partial<Exercise>) => {
       if (!activeProgram) return
+      // Mark dirty before React effects so a concurrent remote hydrate cannot
+      // overwrite the in-flight defaults edit with a stale cloud snapshot.
+      localDirtyRef.current = true
       setWorkoutPrograms((prev) =>
         updateActiveProgramDays(prev, activeProgram.id, (days) =>
           days.map((d) => {
@@ -1096,6 +1110,109 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [flushCloud],
   )
 
+  const flushCloudNow = useCallback(
+    (reason = 'flush-now') => {
+      window.clearTimeout(flushTimerRef.current)
+      return flushCloud(reason)
+    },
+    [flushCloud],
+  )
+
+  const persistExerciseDefaults = useCallback(
+    async (
+      dayId: string,
+      exerciseId: string,
+      patch: Partial<Exercise>,
+    ): Promise<boolean> => {
+      if (!activeProgram) return false
+      localDirtyRef.current = true
+
+      const day = activeProgram.days
+        .map(normalizeWorkoutDay)
+        .find((d) => d.id === dayId)
+      if (!day) return false
+
+      const inSessions = day.sessions.flatMap((s) =>
+        s.exercises
+          .filter((e) => e.id === exerciseId)
+          .map((e) => ({ exercise: e, sourceTemplateId: s.sourceTemplateId })),
+      )
+      const standalone = day.exercises.find((e) => e.id === exerciseId)
+      const match =
+        inSessions[0] ??
+        (standalone
+          ? {
+              exercise: standalone,
+              sourceTemplateId: null as string | null | undefined,
+            }
+          : null)
+      if (!match) return false
+
+      const exerciseName = (patch.name ?? match.exercise.name).trim()
+      const sourceTemplateId = match.sourceTemplateId
+
+      const nextPrograms = updateActiveProgramDays(
+        workoutPrograms,
+        activeProgram.id,
+        (days) =>
+          days.map((d) => {
+            if (d.id !== dayId) return d
+            const normalized = normalizeWorkoutDay(d)
+            return {
+              ...normalized,
+              sessions: normalized.sessions.map((s) => ({
+                ...s,
+                exercises: s.exercises.map((e) =>
+                  e.id === exerciseId ? { ...e, ...patch } : e,
+                ),
+              })),
+              exercises: normalized.exercises.map((e) =>
+                e.id === exerciseId ? { ...e, ...patch } : e,
+              ),
+            }
+          }),
+      ).map(normalizeWorkoutProgram)
+
+      const nextTemplates = sourceTemplateId
+        ? workoutTemplates.map((t) => {
+            if (t.id !== sourceTemplateId) return t
+            return {
+              ...t,
+              updatedAt: new Date().toISOString(),
+              exercises: t.exercises.map((e) =>
+                e.name.trim() === exerciseName ? { ...e, ...patch, id: e.id } : e,
+              ),
+            }
+          })
+        : workoutTemplates
+
+      setWorkoutPrograms(nextPrograms)
+      if (sourceTemplateId) setWorkoutTemplates(nextTemplates)
+
+      if (snapshotRef.current) {
+        snapshotRef.current = {
+          ...snapshotRef.current,
+          workoutPrograms: nextPrograms,
+          workoutTemplates: nextTemplates,
+        }
+      }
+
+      window.clearTimeout(flushTimerRef.current)
+      return flushCloud('persist-exercise-defaults', {
+        workoutPrograms: nextPrograms,
+        workoutTemplates: nextTemplates,
+      })
+    },
+    [
+      activeProgram,
+      flushCloud,
+      setWorkoutPrograms,
+      setWorkoutTemplates,
+      workoutPrograms,
+      workoutTemplates,
+    ],
+  )
+
   const applyRemoteState = useCallback(
     (remote: SyncedAppState) => {
       skipNextPush.current = true
@@ -1132,11 +1249,16 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       ) {
         skipNextPush.current = false
       }
-      if (plan.programs.length) {
+      // Never clobber in-flight local plan edits (e.g. "save as default") with a
+      // stale remote pull — flush first via hydrate, then adopt remote.
+      if (plan.programs.length && !localDirtyRef.current) {
         setWorkoutPrograms(plan.programs)
         setActiveProgramIdState(plan.activeProgramId)
       }
-      if (remote.workoutTemplates || patched.changed) {
+      if (
+        (remote.workoutTemplates || patched.changed) &&
+        !localDirtyRef.current
+      ) {
         setWorkoutTemplates(plan.templates)
       }
       if (remote.consistencyDayMarks) {
@@ -2025,6 +2147,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateWorkoutDay,
       addExercise,
       updateExercise,
+      persistExerciseDefaults,
+      flushCloudNow,
       deleteExercise,
       removeDaySession,
       workoutTemplates,
@@ -2119,6 +2243,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateWorkoutDay,
       addExercise,
       updateExercise,
+      persistExerciseDefaults,
+      flushCloudNow,
       deleteExercise,
       removeDaySession,
       workoutTemplates,
