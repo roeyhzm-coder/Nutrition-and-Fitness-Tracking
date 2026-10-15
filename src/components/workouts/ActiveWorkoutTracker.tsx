@@ -174,6 +174,20 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
     )
   }
 
+  async function handleMetricChange(next: ExerciseMetric) {
+    try {
+      const result = await setExerciseMetric(index, next)
+      if (!result.ok) {
+        flash({ tone: 'error', message: result.error || 'שמירת יחידת המדידה נכשלה' })
+        return
+      }
+      flash({ tone: 'ok', message: `נמדד ב${METRIC_LABEL[next]} — נשמר כברירת מחדל ✓` })
+    } catch (err) {
+      console.error('[ActiveWorkoutTracker] save metric failed', err)
+      flash({ tone: 'error', message: 'שגיאת רשת — יחידת המדידה לא נשמרה' })
+    }
+  }
+
   async function handleSaveDefaults() {
     if (savingDefaults) return
     setSavingDefaults(true)
@@ -267,7 +281,7 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
         <span className="flex justify-center">
           <MetricToggle
             value={metric}
-            onChange={(next) => setExerciseMetric(index, next)}
+            onChange={(next) => void handleMetricChange(next)}
           />
         </span>
         <span className="text-center">בוצע</span>

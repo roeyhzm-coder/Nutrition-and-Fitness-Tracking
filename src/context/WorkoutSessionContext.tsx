@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
@@ -60,8 +61,15 @@ type WorkoutSessionValue = {
   addSet: (exIndex: number) => void
   /** Removes a set; always keeps at least one set. */
   removeSet: (exIndex: number, setIndex: number) => void
-  /** Switch an exercise between counting reps and seconds. */
-  setExerciseMetric: (exIndex: number, metric: ExerciseMetric) => void
+  /**
+   * Switch an exercise between counting reps and seconds. Updates the active
+   * workout immediately and persists the metric onto the exercise's saved
+   * defaults (keeping its saved sets / kg / values).
+   */
+  setExerciseMetric: (
+    exIndex: number,
+    metric: ExerciseMetric,
+  ) => Promise<ExerciseDefaultsWriteResult>
   /** Persist current sets, kg, reps/seconds and metric as the exercise's defaults (Supabase). */
   saveAsDefaults: (exIndex: number) => Promise<ExerciseDefaultsWriteResult>
   finishWorkout: () => WorkoutLog | null
@@ -243,6 +251,10 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     [],
   )
   const [trackerOpen, setTrackerOpen] = useState(false)
+  // Latest workout for async actions, so a value typed right before tapping
+  // "save as default" is never read from a stale render closure.
+  const activeWorkoutRef = useRef<ActiveWorkout | null>(activeWorkout)
+  activeWorkoutRef.current = activeWorkout
   const activeWorkoutId = activeWorkout?.id
   const programDays = activeProgram?.days
 
@@ -433,18 +445,46 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     [setActiveWorkout],
   )
 
-  const setExerciseMetric = useCallback(
-    (exIndex: number, metric: ExerciseMetric) => {
-      setActiveWorkout((prev) =>
-        prev ? updateLoggedExercise(prev, exIndex, (ex) => ({ ...ex, metric })) : prev,
-      )
+  /** Functional update of one logged exercise that also refreshes the ref. */
+  const patchLoggedExercise = useCallback(
+    (exIndex: number, fn: (ex: LoggedExercise) => LoggedExercise) => {
+      setActiveWorkout((prev) => {
+        if (!prev) return prev
+        const next = updateLoggedExercise(prev, exIndex, fn)
+        activeWorkoutRef.current = next
+        return next
+      })
     },
     [setActiveWorkout],
   )
 
+  const setExerciseMetric = useCallback(
+    async (exIndex: number, metric: ExerciseMetric): Promise<ExerciseDefaultsWriteResult> => {
+      const logged = activeWorkoutRef.current?.exercises[exIndex]
+      if (!logged) return { ok: false, error: 'התרגיל לא נמצא באימון הפעיל' }
+
+      patchLoggedExercise(exIndex, (ex) => ({ ...ex, metric }))
+      if (logged.defaultMetric === metric) return { ok: true }
+
+      // Same saved sets / kg / values — only the unit changes.
+      const defaults: ExerciseDefaultValues = { ...loggedExerciseDefaults(logged), metric }
+      const result = await persistExerciseDefaults(logged.name, defaults)
+      if (!result.ok) return result
+
+      const targets = loggedTargetsFromDefaults(defaults)
+      patchLoggedExercise(exIndex, (current) =>
+        current.name === logged.name
+          ? { ...current, ...targets, defaultMetric: metric }
+          : current,
+      )
+      return result
+    },
+    [patchLoggedExercise, persistExerciseDefaults],
+  )
+
   const saveAsDefaults = useCallback(
     async (exIndex: number): Promise<ExerciseDefaultsWriteResult> => {
-      const workout = activeWorkout
+      const workout = activeWorkoutRef.current
       const logged = workout?.exercises[exIndex]
       if (!workout || !logged) return { ok: false, error: 'התרגיל לא נמצא באימון הפעיל' }
 
@@ -454,19 +494,15 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       if (!result.ok) return result
 
       const targets = loggedTargetsFromDefaults(defaults)
-      setActiveWorkout((prev) =>
-        prev
-          ? updateLoggedExercise(prev, exIndex, (current) => ({
-              ...current,
-              ...targets,
-              metric,
-              defaultMetric: metric,
-            }))
-          : prev,
-      )
+      patchLoggedExercise(exIndex, (current) => ({
+        ...current,
+        ...targets,
+        metric,
+        defaultMetric: metric,
+      }))
       return result
     },
-    [activeWorkout, persistExerciseDefaults, setActiveWorkout],
+    [patchLoggedExercise, persistExerciseDefaults],
   )
 
   const finishWorkout = useCallback(() => {
