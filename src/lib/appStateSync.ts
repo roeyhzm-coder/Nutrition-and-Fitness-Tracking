@@ -635,6 +635,11 @@ export function subscribeSharedSync(
       { event: '*', schema: 'public', table: 'user_saved_meals' },
       fire,
     )
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'exercise_defaults' },
+      fire,
+    )
     .subscribe()
 
   return () => {

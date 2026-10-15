@@ -401,6 +401,9 @@ export type ExerciseDefaultSet = {
   reps: number | null
 }
 
+/** What the numeric `reps` field of a set measures. */
+export type ExerciseMetric = 'reps' | 'seconds'
+
 export type Exercise = {
   id: string
   name: string
@@ -420,6 +423,10 @@ export type Exercise = {
   defaultSets?: ExerciseDefaultSet[]
   /** Snake-case JSONB alias written to Supabase (`default_sets`). */
   default_sets?: ExerciseDefaultSet[]
+  /** Reps vs. seconds; undefined = auto-detect from name / prescription. */
+  metric?: ExerciseMetric
+  /** ISO time the defaults on this definition were last edited (conflict resolution). */
+  defaultsUpdatedAt?: string
   notes?: string
   /** Demo video / external link */
   mediaUrl?: string
@@ -512,6 +519,10 @@ export type LoggedExercise = {
   defaultReps?: number | null
   /** Per-set defaults mirrored from the exercise definition. */
   defaultSets?: ExerciseDefaultSet[]
+  /** Metric currently used in the tracker for this exercise. */
+  metric?: ExerciseMetric
+  /** Metric stored in the exercise's saved defaults. */
+  defaultMetric?: ExerciseMetric
   rest?: string
   imageUrl?: string
   sets: LoggedSet[]

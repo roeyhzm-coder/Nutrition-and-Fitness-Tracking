@@ -49,6 +49,7 @@ function normalizeExercise(
       asNumber(ex.defaultWeightKg),
       asNumber(ex.defaultReps),
     ),
+    metric: ex.metric === 'reps' || ex.metric === 'seconds' ? ex.metric : undefined,
     rest: typeof ex.rest === 'string' ? ex.rest : undefined,
     imageUrl: typeof ex.imageUrl === 'string' ? ex.imageUrl : undefined,
     sets,

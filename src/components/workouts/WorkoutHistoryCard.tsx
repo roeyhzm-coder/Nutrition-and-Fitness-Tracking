@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { ChevronDown, Trash2 } from 'lucide-react'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
-import type { WorkoutLog } from '../../lib/types'
+import { isDurationTrackedExercise } from '../../lib/exerciseDefaults'
+import type { LoggedExercise, WorkoutLog } from '../../lib/types'
 import { parseLocalDateKey } from '../../lib/types'
 import { workoutPerformedOn } from '../../lib/caloriesBurned'
 import { Card } from '../ui/Card'
@@ -22,8 +23,18 @@ function durationMin(log: WorkoutLog) {
   )
 }
 
+function isSecondsExercise(ex: LoggedExercise) {
+  return isDurationTrackedExercise({
+    name: ex.name,
+    targetReps: ex.targetReps,
+    metric: ex.metric,
+  })
+}
+
+/** kg × reps; timed sets (seconds) are not volume. */
 function volumeKg(log: WorkoutLog) {
   return log.exercises
+    .filter((e) => !isSecondsExercise(e))
     .flatMap((e) => e.sets)
     .reduce((sum, s) => sum + (s.weightKg ?? 0) * (s.reps ?? 0), 0)
 }
@@ -82,10 +93,7 @@ function LogItem({ log }: { log: WorkoutLog }) {
                 {ex.sets
                   .map((s) => {
                     const qty = s.reps ?? '?'
-                    const isDuration =
-                      /שניות|seconds?|secs?\b/i.test(ex.targetReps) ||
-                      /תליי[הה]|החזקה|plank|hold|hang|isometric/i.test(ex.name)
-                    return isDuration
+                    return isSecondsExercise(ex)
                       ? `${s.weightKg ?? 0} ק״ג × ${qty} שנ׳`
                       : `${s.weightKg ?? 0} ק״ג × ${qty}`
                   })

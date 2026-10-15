@@ -1,5 +1,5 @@
 import { isHoldExercise } from './blockStrength'
-import type { Exercise, ExerciseDefaultSet, LoggedSet } from './types'
+import type { Exercise, ExerciseDefaultSet, ExerciseMetric, LoggedSet } from './types'
 
 /** Structured defaults used to seed active-workout sets. */
 export type ExerciseDefaultValues = {
@@ -7,12 +7,16 @@ export type ExerciseDefaultValues = {
   weightKg: number | null
   reps: number | null
   defaultSets: ExerciseDefaultSet[]
+  /** Reps vs. seconds; undefined keeps auto-detection. */
+  metric?: ExerciseMetric
   /** Free-text labels stored on the Exercise definition. */
   weightLabel?: string
   repsLabel?: string
 }
 
 const DURATION_LABEL_RE = /שניות|seconds?|secs?\b|hold|isometric|תליי[הה]|החזקה/i
+
+const DURATION_SUFFIX_RE = /\s*(שניות|שנ׳|seconds?|secs?)\s*$/i
 
 /**
  * Timed / isometric work tracks duration (seconds) in the numeric `reps` field.
@@ -23,10 +27,24 @@ export function isDurationTrackedExercise(ex: {
   reps?: string
   targetReps?: string
   notes?: string
+  metric?: ExerciseMetric
 }): boolean {
+  if (ex.metric) return ex.metric === 'seconds'
   if (ex.name && isHoldExercise(ex.name)) return true
   const blob = [ex.reps, ex.targetReps, ex.notes].filter(Boolean).join(' ')
   return blob.length > 0 && DURATION_LABEL_RE.test(blob)
+}
+
+/** Explicit metric when set, otherwise auto-detected from name / labels. */
+export function resolveExerciseMetric(
+  ex: Parameters<typeof isDurationTrackedExercise>[0],
+): ExerciseMetric {
+  return isDurationTrackedExercise(ex) ? 'seconds' : 'reps'
+}
+
+export const METRIC_LABEL: Record<ExerciseMetric, string> = {
+  reps: 'חזרות',
+  seconds: 'שניות',
 }
 
 export type ExerciseDefaultsSource = Pick<
@@ -38,7 +56,8 @@ export type ExerciseDefaultsSource = Pick<
   | 'defaultReps'
   | 'defaultSets'
   | 'default_sets'
->
+> &
+  Partial<Pick<Exercise, 'metric'>>
 
 /** Pulls the first numeric kg value from free-text weight. */
 export function parseKg(text?: string): number | null {
@@ -198,6 +217,7 @@ export function defaultsFromExercise(ex: ExerciseDefaultsSource): ExerciseDefaul
     weightKg: first?.weightKg ?? weightKg,
     reps: first?.reps ?? reps,
     defaultSets,
+    metric: ex.metric,
     weightLabel: ex.weight,
     repsLabel: ex.reps,
   }
@@ -248,7 +268,10 @@ export function setsValuesKey(sets: LoggedSet[]): string {
 }
 
 /** Derive per-set defaults from the values currently entered in an active exercise. */
-export function defaultsFromLoggedSets(sets: LoggedSet[]): ExerciseDefaultValues {
+export function defaultsFromLoggedSets(
+  sets: LoggedSet[],
+  metric?: ExerciseMetric,
+): ExerciseDefaultValues {
   const usable = sets.length ? sets : [{ weightKg: null, reps: null, done: false }]
   const defaultSets = usable.map((s, i) => ({
     setNumber: i + 1,
@@ -261,6 +284,7 @@ export function defaultsFromLoggedSets(sets: LoggedSet[]): ExerciseDefaultValues
     weightKg: first.weightKg,
     reps: first.reps,
     defaultSets,
+    metric,
     weightLabel: formatWeightLabel(first.weightKg),
     repsLabel: formatRepsLabel(first.reps),
   }
@@ -289,6 +313,7 @@ export function exercisePatchFromDefaults(
   | 'defaultReps'
   | 'defaultSets'
   | 'default_sets'
+  | 'metric'
 > {
   const defaultSets = (
     defaults.defaultSets.length
@@ -303,12 +328,21 @@ export function exercisePatchFromDefaults(
     (v) => formatWeightLabel(v),
     defaults.weightLabel,
   )
-  const repsLabel =
+  const hasNumericReps = defaultSets.some((s) => s.reps != null)
+  const rawRepsLabel =
     labelFromDefaultSets(
       defaultSets.map((s) => s.reps),
       (v) => (v != null ? String(v) : undefined),
       defaults.repsLabel,
     ) ?? formatRepsLabel(reps, defaults.repsLabel)
+  // Numeric labels carry the unit for seconds and drop a stale "שניות" for reps.
+  const repsLabel = !hasNumericReps
+    ? rawRepsLabel
+    : defaults.metric === 'seconds'
+      ? `${rawRepsLabel.replace(DURATION_SUFFIX_RE, '').trim()} שניות`
+      : defaults.metric === 'reps'
+        ? rawRepsLabel.replace(DURATION_SUFFIX_RE, '').trim()
+        : rawRepsLabel
   return {
     sets: Math.max(1, defaults.sets, defaultSets.length),
     reps: repsLabel,
@@ -317,5 +351,6 @@ export function exercisePatchFromDefaults(
     defaultReps: reps,
     defaultSets,
     default_sets: defaultSets,
+    ...(defaults.metric ? { metric: defaults.metric } : {}),
   }
 }

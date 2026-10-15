@@ -1,9 +1,14 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { CirclePlay, Dumbbell, Timer } from 'lucide-react'
-import { isDurationTrackedExercise } from '../../lib/exerciseDefaults'
-import { resizeFormDefaultSets, type ExerciseForm } from '../../lib/exerciseForm'
+import { METRIC_LABEL } from '../../lib/exerciseDefaults'
+import {
+  formMetric,
+  resizeFormDefaultSets,
+  type ExerciseForm,
+} from '../../lib/exerciseForm'
 import type { Exercise } from '../../lib/types'
 import { NumericInput } from '../ui/NumericInput'
+import { MetricToggle } from './MetricToggle'
 
 const inputClass = 'field'
 
@@ -13,17 +18,14 @@ type ExerciseFormFieldsProps = {
 }
 
 export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
-  const bind = (key: Exclude<keyof ExerciseForm, 'defaultSets'>) => ({
+  const bind = (key: Exclude<keyof ExerciseForm, 'defaultSets' | 'metric'>) => ({
     value: form[key],
     onChange: (e: { target: { value: string } }) =>
       setForm((p) => ({ ...p, [key]: e.target.value })),
   })
-  const durationSeconds = isDurationTrackedExercise({
-    name: form.name,
-    reps: form.reps,
-    notes: form.notes,
-  })
-  const qtyLabel = durationSeconds ? 'שניות' : 'חזרות'
+  const metric = formMetric(form)
+  const durationSeconds = metric === 'seconds'
+  const qtyLabel = METRIC_LABEL[metric]
 
   return (
     <>
@@ -70,7 +72,12 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
         <div className="grid grid-cols-[1.75rem_minmax(0,1fr)_minmax(0,1fr)] items-center gap-1.5 text-[11px] text-muted">
           <span className="text-center">#</span>
           <span className="text-center">משקל (ק״ג)</span>
-          <span className="text-center">{qtyLabel}</span>
+          <span className="flex justify-center">
+            <MetricToggle
+              value={metric}
+              onChange={(next) => setForm((p) => ({ ...p, metric: next }))}
+            />
+          </span>
         </div>
         <ul className="mt-1 space-y-1">
           {form.defaultSets.map((row, i) => (

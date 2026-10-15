@@ -1,9 +1,10 @@
-import type { Exercise, ExerciseDefaultSet } from './types'
+import type { Exercise, ExerciseDefaultSet, ExerciseMetric } from './types'
 import {
   defaultsFromExercise,
   parseDefaultReps,
   parseKg,
   parseOptionalNumber,
+  resolveExerciseMetric,
 } from './exerciseDefaults'
 
 export type ExerciseFormDefaultSet = {
@@ -18,9 +19,19 @@ export type ExerciseForm = {
   rest: string
   weight: string
   defaultSets: ExerciseFormDefaultSet[]
+  /** Explicit reps/seconds choice; null = auto-detect from name / labels. */
+  metric: ExerciseMetric | null
   notes: string
   mediaUrl: string
   imageUrl: string
+}
+
+/** Metric shown in the form: explicit choice, else auto-detected. */
+export function formMetric(form: ExerciseForm): ExerciseMetric {
+  return (
+    form.metric ??
+    resolveExerciseMetric({ name: form.name, reps: form.reps, notes: form.notes })
+  )
 }
 
 function emptyDefaultSetRow(): ExerciseFormDefaultSet {
@@ -47,6 +58,7 @@ export const EMPTY_EXERCISE_FORM: ExerciseForm = {
   rest: '',
   weight: '',
   defaultSets: [emptyDefaultSetRow(), emptyDefaultSetRow(), emptyDefaultSetRow()],
+  metric: null,
   notes: '',
   mediaUrl: '',
   imageUrl: '',
@@ -69,6 +81,7 @@ export function exerciseToForm(ex: Exercise): ExerciseForm {
       weightKg: displayOptionalNumber(row.weightKg),
       reps: displayOptionalNumber(row.reps),
     })),
+    metric: ex.metric ?? null,
     notes: ex.notes ?? '',
     mediaUrl: ex.mediaUrl ?? '',
     imageUrl: ex.imageUrl ?? '',
@@ -100,6 +113,8 @@ export function formToExercise(form: ExerciseForm): Omit<Exercise, 'id'> {
     defaultReps: first?.reps ?? null,
     defaultSets,
     default_sets: defaultSets,
+    metric: formMetric(form),
+    defaultsUpdatedAt: new Date().toISOString(),
     notes: form.notes.trim() || undefined,
     mediaUrl: form.mediaUrl.trim() || undefined,
     imageUrl: form.imageUrl.trim() || undefined,

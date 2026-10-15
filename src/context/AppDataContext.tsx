@@ -90,6 +90,21 @@ import {
 } from '../lib/bodyMeasurements'
 import { latestDateKey, readLastAiExportAt } from '../lib/aiCheckin'
 import { hydrateServingPresets } from '../lib/servingPresets'
+import {
+  defaultsFromExercise,
+  resolveExerciseMetric,
+  type ExerciseDefaultValues,
+} from '../lib/exerciseDefaults'
+import {
+  applyStoredDefaultsToPrograms,
+  applyStoredDefaultsToTemplates,
+  mergeExerciseDefaults,
+  pullExerciseDefaults,
+  pushExerciseDefaults,
+  storedDefaultsFromValues,
+  type ExerciseDefaultsMap,
+  type ExerciseDefaultsWriteResult,
+} from '../lib/exerciseDefaultsStore'
 import { isSupabaseConfigured } from '../lib/supabase'
 import type {
   ActivityLog,
@@ -205,15 +220,17 @@ type AppDataContextValue = {
     exerciseId: string,
     patch: Partial<Exercise>,
   ) => void
+  /** Saved per-exercise defaults (Supabase `exercise_defaults`), keyed by name. */
+  exerciseDefaults: ExerciseDefaultsMap
   /**
-   * Persist exercise defaults onto the program day + linked library template,
-   * then flush immediately to Supabase so the next workout loads them.
+   * Persist defaults for an exercise name: upserts its `exercise_defaults` row,
+   * mirrors it onto every matching exercise in programs + library templates,
+   * and flushes the app-state blob.
    */
   persistExerciseDefaults: (
-    dayId: string,
-    exerciseId: string,
-    patch: Partial<Exercise>,
-  ) => Promise<boolean>
+    exerciseName: string,
+    values: ExerciseDefaultValues,
+  ) => Promise<ExerciseDefaultsWriteResult>
   /** Force an immediate cloud flush of the current app snapshot. */
   flushCloudNow: (reason?: string) => Promise<boolean>
   deleteExercise: (dayId: string, exerciseId: string) => void
@@ -328,6 +345,16 @@ function updateActiveProgramDays(
 const PROGRAMS_KEY = 'tn.workoutPrograms.v1'
 const ACTIVE_PROGRAM_KEY = 'tn.activeProgramId.v1'
 const TEMPLATES_KEY = 'tn.workoutTemplates.v1'
+const EXERCISE_DEFAULTS_KEY = 'tn.exerciseDefaults.v1'
+
+/** Fields of an exercise patch that belong to its saved defaults. */
+function hasDefaultsFields(patch: Partial<Exercise>) {
+  return (
+    patch.defaultSets !== undefined ||
+    patch.metric !== undefined ||
+    patch.sets !== undefined
+  )
+}
 const PLAN_VERSION_KEY = 'tn.officialPlanVersion'
 
 function readStored<T>(key: string, fallback: T): T {
@@ -470,6 +497,23 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [workoutTemplates, setWorkoutTemplates] = useLocalStorage<
     WorkoutTemplate[]
   >(TEMPLATES_KEY, [])
+  const [exerciseDefaults, setExerciseDefaults] = useLocalStorage<ExerciseDefaultsMap>(
+    EXERCISE_DEFAULTS_KEY,
+    {},
+  )
+  // Synchronous mirror so remote merges see a default the moment it is saved.
+  const exerciseDefaultsRef = useRef<ExerciseDefaultsMap>(exerciseDefaults)
+
+  const rememberExerciseDefaults = useCallback(
+    (incoming: ExerciseDefaultsMap) => {
+      const merged = mergeExerciseDefaults(exerciseDefaultsRef.current, incoming)
+      if (merged === exerciseDefaultsRef.current) return false
+      exerciseDefaultsRef.current = merged
+      setExerciseDefaults(merged)
+      return true
+    },
+    [setExerciseDefaults],
+  )
 
   const setWorkoutPrograms = useCallback(
     (
@@ -650,13 +694,40 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   )
 
   const updateExercise = useCallback(
-    (dayId: string, exerciseId: string, patch: Partial<Exercise>) => {
+    (dayId: string, exerciseId: string, rawPatch: Partial<Exercise>) => {
       if (!activeProgram) return
       // Mark dirty before React effects so a concurrent remote hydrate cannot
       // overwrite the in-flight defaults edit with a stale cloud snapshot.
       localDirtyRef.current = true
-      setWorkoutPrograms((prev) =>
-        updateActiveProgramDays(prev, activeProgram.id, (days) =>
+
+      // Defaults edited in the program editor become the exercise's saved
+      // defaults too, so every weekday + the next Start Workout agree.
+      let patch = rawPatch
+      let single: ExerciseDefaultsMap | null = null
+      const current = activeProgram.days
+        .map(normalizeWorkoutDay)
+        .find((d) => d.id === dayId)
+      const existing = current
+        ? dayAllExercises(current).find((e) => e.id === exerciseId)
+        : undefined
+      if (existing && hasDefaultsFields(rawPatch)) {
+        const merged = { ...existing, ...rawPatch }
+        const updatedAt = rawPatch.defaultsUpdatedAt ?? new Date().toISOString()
+        const row = storedDefaultsFromValues(
+          merged.name,
+          { ...defaultsFromExercise(merged), metric: resolveExerciseMetric(merged) },
+          updatedAt,
+        )
+        single = { [row.exerciseKey]: row }
+        patch = { ...rawPatch, metric: row.metric, defaultsUpdatedAt: updatedAt }
+        rememberExerciseDefaults(single)
+        void pushExerciseDefaults(row).then((res) => {
+          if (!res.ok) setLastSyncNotice({ type: 'error', message: res.error })
+        })
+      }
+
+      setWorkoutPrograms((prev) => {
+        const next = updateActiveProgramDays(prev, activeProgram.id, (days) =>
           days.map((d) => {
             if (d.id !== dayId) return d
             const day = normalizeWorkoutDay(d)
@@ -673,10 +744,15 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
               ),
             }
           }),
-        ),
-      )
+        )
+        return single ? applyStoredDefaultsToPrograms(next, single).programs : next
+      })
+      if (single) {
+        const map = single
+        setWorkoutTemplates((prev) => applyStoredDefaultsToTemplates(prev, map).templates)
+      }
     },
-    [activeProgram, setWorkoutPrograms],
+    [activeProgram, rememberExerciseDefaults, setWorkoutPrograms, setWorkoutTemplates],
   )
 
   const deleteExercise = useCallback(
@@ -1120,75 +1196,27 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
   const persistExerciseDefaults = useCallback(
     async (
-      dayId: string,
-      exerciseId: string,
-      patch: Partial<Exercise>,
-    ): Promise<boolean> => {
-      if (!activeProgram) return false
+      exerciseName: string,
+      values: ExerciseDefaultValues,
+    ): Promise<ExerciseDefaultsWriteResult> => {
+      const name = exerciseName.trim()
+      if (!name) return { ok: false, error: 'שם התרגיל חסר' }
+
+      const row = storedDefaultsFromValues(name, values)
+      const single: ExerciseDefaultsMap = { [row.exerciseKey]: row }
+      rememberExerciseDefaults(single)
       localDirtyRef.current = true
 
-      const day = activeProgram.days
-        .map(normalizeWorkoutDay)
-        .find((d) => d.id === dayId)
-      if (!day) return false
-
-      const inSessions = day.sessions.flatMap((s) =>
-        s.exercises
-          .filter((e) => e.id === exerciseId)
-          .map((e) => ({ exercise: e, sourceTemplateId: s.sourceTemplateId })),
-      )
-      const standalone = day.exercises.find((e) => e.id === exerciseId)
-      const match =
-        inSessions[0] ??
-        (standalone
-          ? {
-              exercise: standalone,
-              sourceTemplateId: null as string | null | undefined,
-            }
-          : null)
-      if (!match) return false
-
-      const exerciseName = (patch.name ?? match.exercise.name).trim()
-      const sourceTemplateId = match.sourceTemplateId
-
-      const nextPrograms = updateActiveProgramDays(
-        workoutPrograms,
-        activeProgram.id,
-        (days) =>
-          days.map((d) => {
-            if (d.id !== dayId) return d
-            const normalized = normalizeWorkoutDay(d)
-            return {
-              ...normalized,
-              sessions: normalized.sessions.map((s) => ({
-                ...s,
-                exercises: s.exercises.map((e) =>
-                  e.id === exerciseId ? { ...e, ...patch } : e,
-                ),
-              })),
-              exercises: normalized.exercises.map((e) =>
-                e.id === exerciseId ? { ...e, ...patch } : e,
-              ),
-            }
-          }),
-      ).map(normalizeWorkoutProgram)
-
-      const nextTemplates = sourceTemplateId
-        ? workoutTemplates.map((t) => {
-            if (t.id !== sourceTemplateId) return t
-            return {
-              ...t,
-              updatedAt: new Date().toISOString(),
-              exercises: t.exercises.map((e) =>
-                e.name.trim() === exerciseName ? { ...e, ...patch, id: e.id } : e,
-              ),
-            }
-          })
-        : workoutTemplates
+      // Mirror onto every copy of this exercise (all weekdays, all programs, and
+      // library templates) — previously only the one day's copy was patched, so
+      // the same exercise on another weekday kept its old defaults.
+      const nextPrograms = applyStoredDefaultsToPrograms(workoutPrograms, single)
+        .programs.map(normalizeWorkoutProgram)
+      const nextTemplates = applyStoredDefaultsToTemplates(workoutTemplates, single)
+        .templates
 
       setWorkoutPrograms(nextPrograms)
-      if (sourceTemplateId) setWorkoutTemplates(nextTemplates)
-
+      setWorkoutTemplates(nextTemplates)
       if (snapshotRef.current) {
         snapshotRef.current = {
           ...snapshotRef.current,
@@ -1198,14 +1226,27 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       }
 
       window.clearTimeout(flushTimerRef.current)
-      return flushCloud('persist-exercise-defaults', {
-        workoutPrograms: nextPrograms,
-        workoutTemplates: nextTemplates,
-      })
+      const [tableResult, blobOk] = await Promise.all([
+        pushExerciseDefaults(row),
+        flushCloud('persist-exercise-defaults', {
+          workoutPrograms: nextPrograms,
+          workoutTemplates: nextTemplates,
+        }),
+      ])
+      if (tableResult.ok) return tableResult
+      if (blobOk) {
+        console.warn(
+          '[AppData] exercise_defaults upsert failed; defaults kept in app_state only',
+          tableResult.error,
+        )
+        return { ok: true }
+      }
+      setLastSyncNotice({ type: 'error', message: tableResult.error })
+      return tableResult
     },
     [
-      activeProgram,
       flushCloud,
+      rememberExerciseDefaults,
       setWorkoutPrograms,
       setWorkoutTemplates,
       workoutPrograms,
@@ -1241,10 +1282,27 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
               remotePlan.activeProgramId || remotePlan.programs[0]?.id || '',
           }
       const patched = replaceSingleLegWallSitInPlan(basePlan)
-      const plan = withBlock2Active(patched)
+      const activePlan = withBlock2Active(patched)
+      // Saved exercise defaults (own table, row-level upserts) always win over a
+      // program blob that another device pushed from a stale snapshot.
+      const healedPrograms = applyStoredDefaultsToPrograms(
+        activePlan.programs,
+        exerciseDefaultsRef.current,
+      )
+      const healedTemplates = applyStoredDefaultsToTemplates(
+        activePlan.templates,
+        exerciseDefaultsRef.current,
+      )
+      const plan = {
+        ...activePlan,
+        programs: healedPrograms.programs,
+        templates: healedTemplates.templates,
+      }
       if (
         remoteStale ||
         patched.changed ||
+        healedPrograms.changed ||
+        healedTemplates.changed ||
         plan.activeProgramId !== remotePlan.activeProgramId
       ) {
         skipNextPush.current = false
@@ -1256,7 +1314,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setActiveProgramIdState(plan.activeProgramId)
       }
       if (
-        (remote.workoutTemplates || patched.changed) &&
+        (remote.workoutTemplates || patched.changed || healedTemplates.changed) &&
         !localDirtyRef.current
       ) {
         setWorkoutTemplates(plan.templates)
@@ -1438,7 +1496,11 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (localDirtyRef.current) {
         await flushCloud(`before-${reason}`)
       }
-      const remote = await pullAppState()
+      const [remote, remoteDefaults] = await Promise.all([
+        pullAppState(),
+        pullExerciseDefaults(),
+      ])
+      if (remoteDefaults) rememberExerciseDefaults(remoteDefaults)
       if (!remote) {
         if (
           reason === 'load' &&
@@ -1482,6 +1544,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [
       applyRemoteState,
       flushCloud,
+      rememberExerciseDefaults,
       setPhaseState,
       setGoal,
       setMacroPresets,
@@ -2147,6 +2210,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateWorkoutDay,
       addExercise,
       updateExercise,
+      exerciseDefaults,
       persistExerciseDefaults,
       flushCloudNow,
       deleteExercise,
@@ -2243,6 +2307,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateWorkoutDay,
       addExercise,
       updateExercise,
+      exerciseDefaults,
       persistExerciseDefaults,
       flushCloudNow,
       deleteExercise,

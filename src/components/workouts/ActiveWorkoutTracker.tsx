@@ -3,6 +3,7 @@ import {
   Check,
   ChevronDown,
   Dumbbell,
+  Loader2,
   Minus,
   Plus,
   Save,
@@ -14,9 +15,11 @@ import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import {
   defaultsFromExercise,
   formatPerSetDefaultSummary,
-  isDurationTrackedExercise,
+  METRIC_LABEL,
+  resolveExerciseMetric,
   setsMatchDefaults,
   setsValuesKey,
+  type ExerciseDefaultValues,
 } from '../../lib/exerciseDefaults'
 import {
   displayDecimal,
@@ -25,14 +28,17 @@ import {
   parseInteger,
   syncNumericDraft,
 } from '../../lib/numericInput'
-import type { LoggedExercise } from '../../lib/types'
+import type { ExerciseMetric, LoggedExercise } from '../../lib/types'
 import { localDateKey } from '../../lib/types'
 import { Button } from '../ui/button'
 import { IconButton } from '../ui/IconButton'
 import { NumericInput } from '../ui/NumericInput'
+import { MetricToggle } from './MetricToggle'
 
 const inputClass =
   'field px-2 text-center tabular-nums'
+
+type DefaultsToast = { tone: 'ok' | 'error'; message: string }
 
 function formatElapsed(ms: number) {
   const total = Math.max(0, Math.floor(ms / 1000))
@@ -56,12 +62,14 @@ function DraftNumberInput({
   onCommit,
   decimals = 2,
   placeholder,
+  ariaLabel,
   className = inputClass,
 }: {
   value: number | null
   onCommit: (next: number | null) => void
   decimals?: number
   placeholder?: string
+  ariaLabel?: string
   className?: string
 }) {
   const [draft, setDraft] = useState(() => displayDecimal(value, decimals))
@@ -84,27 +92,35 @@ function DraftNumberInput({
         if (parsed != null) onCommit(parsed)
       }}
       placeholder={placeholder}
+      aria-label={ariaLabel}
       className={className}
     />
   )
 }
 
-function formatDefaultSummary(exercise: LoggedExercise) {
-  const durationSeconds = isDurationTrackedExercise({
-    name: exercise.name,
-    targetReps: exercise.targetReps,
-  })
-  return formatPerSetDefaultSummary(
-    defaultsFromExercise({
-      sets: exercise.targetSets,
-      reps: exercise.targetReps,
-      weight: exercise.targetWeight,
-      defaultWeightKg: exercise.defaultWeightKg,
-      defaultReps: exercise.defaultReps,
-      defaultSets: exercise.defaultSets,
-    }),
-    { durationSeconds },
+/** Metric the exercise is currently tracked in (explicit choice, else auto-detected). */
+function currentMetric(exercise: LoggedExercise): ExerciseMetric {
+  return (
+    exercise.metric ??
+    resolveExerciseMetric({
+      name: exercise.name,
+      targetReps: exercise.targetReps,
+      metric: exercise.defaultMetric,
+    })
   )
+}
+
+function savedMetric(exercise: LoggedExercise): ExerciseMetric {
+  return (
+    exercise.defaultMetric ??
+    resolveExerciseMetric({ name: exercise.name, targetReps: exercise.targetReps })
+  )
+}
+
+function formatDefaultSummary(exercise: LoggedExercise, defaults: ExerciseDefaultValues) {
+  return formatPerSetDefaultSummary(defaults, {
+    durationSeconds: savedMetric(exercise) === 'seconds',
+  })
 }
 
 type ExerciseBlockProps = {
@@ -118,17 +134,17 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
     setExerciseDone,
     addSet,
     removeSet,
+    setExerciseMetric,
     saveAsDefaults,
   } = useWorkoutSession()
-  const [defaultsToast, setDefaultsToast] = useState<string | null>(null)
+  const [defaultsToast, setDefaultsToast] = useState<DefaultsToast | null>(null)
   const toastTimer = useRef<number | null>(null)
   const [savedValuesKey, setSavedValuesKey] = useState<string | null>(null)
+  const [savingDefaults, setSavingDefaults] = useState(false)
   const allDone = exercise.sets.length > 0 && exercise.sets.every((s) => s.done)
   const canRemoveSet = exercise.sets.length > 1
-  const durationSeconds = isDurationTrackedExercise({
-    name: exercise.name,
-    targetReps: exercise.targetReps,
-  })
+  const metric = currentMetric(exercise)
+  const durationSeconds = metric === 'seconds'
   const defaults = defaultsFromExercise({
     sets: exercise.targetSets,
     reps: exercise.targetReps,
@@ -136,10 +152,11 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
     defaultWeightKg: exercise.defaultWeightKg,
     defaultReps: exercise.defaultReps,
     defaultSets: exercise.defaultSets,
+    metric: exercise.defaultMetric,
   })
-  const currentValuesKey = setsValuesKey(exercise.sets)
+  const currentValuesKey = `${metric}|${setsValuesKey(exercise.sets)}`
   const showSaveDefaults =
-    !setsMatchDefaults(exercise.sets, defaults) &&
+    (!setsMatchDefaults(exercise.sets, defaults) || metric !== savedMetric(exercise)) &&
     currentValuesKey !== savedValuesKey
 
   useEffect(() => {
@@ -148,20 +165,32 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
     }
   }, [])
 
-  function flash(message: string) {
+  function flash(toast: DefaultsToast) {
     if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
-    setDefaultsToast(message)
-    toastTimer.current = window.setTimeout(() => setDefaultsToast(null), 2200)
+    setDefaultsToast(toast)
+    toastTimer.current = window.setTimeout(
+      () => setDefaultsToast(null),
+      toast.tone === 'error' ? 4500 : 2200,
+    )
   }
 
   async function handleSaveDefaults() {
-    const ok = await saveAsDefaults(index)
-    if (!ok) {
-      flash('שמירת ברירת המחדל נכשלה')
-      return
+    if (savingDefaults) return
+    setSavingDefaults(true)
+    try {
+      const result = await saveAsDefaults(index)
+      if (!result.ok) {
+        flash({ tone: 'error', message: result.error || 'שמירת ברירת המחדל נכשלה' })
+        return
+      }
+      setSavedValuesKey(currentValuesKey)
+      flash({ tone: 'ok', message: 'נשמר בהצלחה ✓' })
+    } catch (err) {
+      console.error('[ActiveWorkoutTracker] save defaults failed', err)
+      flash({ tone: 'error', message: 'שגיאת רשת — ברירת המחדל לא נשמרה' })
+    } finally {
+      setSavingDefaults(false)
     }
-    setSavedValuesKey(currentValuesKey)
-    flash('ברירת המחדל נשמרה בענן')
   }
 
   const setGridClass =
@@ -204,10 +233,18 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
             ) : null}
           </div>
           <p className="mt-1 text-[11px] text-muted">
-            ברירת מחדל: {formatDefaultSummary(exercise)}
+            ברירת מחדל: {formatDefaultSummary(exercise, defaults)}
           </p>
           {defaultsToast ? (
-            <p className="mt-1 text-[11px] font-medium text-emerald-700">{defaultsToast}</p>
+            <p
+              role={defaultsToast.tone === 'error' ? 'alert' : 'status'}
+              className={[
+                'mt-1 text-[11px] font-medium',
+                defaultsToast.tone === 'error' ? 'text-danger' : 'text-emerald-700',
+              ].join(' ')}
+            >
+              {defaultsToast.message}
+            </p>
           ) : null}
         </div>
         <button
@@ -227,7 +264,12 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
       <div className={`mt-3 ${setGridClass} text-[11px] text-muted`}>
         <span className="text-center">#</span>
         <span className="text-center">משקל (ק״ג)</span>
-        <span className="text-center">{durationSeconds ? 'שניות' : 'חזרות'}</span>
+        <span className="flex justify-center">
+          <MetricToggle
+            value={metric}
+            onChange={(next) => setExerciseMetric(index, next)}
+          />
+        </span>
         <span className="text-center">בוצע</span>
         <span className="text-center">הסר</span>
       </div>
@@ -248,11 +290,12 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
               onCommit={(reps) => updateSet(index, setIndex, { reps })}
               placeholder={
                 durationSeconds
-                  ? '30'
-                  : exercise.targetReps.length <= 8
+                  ? 'שנ׳'
+                  : metric === savedMetric(exercise) && exercise.targetReps.length <= 8
                     ? exercise.targetReps
                     : 'חזרות'
               }
+              ariaLabel={`סט ${setIndex + 1} — ${METRIC_LABEL[metric]}`}
             />
             <button
               type="button"
@@ -299,15 +342,21 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
           <Minus className="size-3" strokeWidth={2} />
           הסר סט אחרון
         </button>
-        {showSaveDefaults ? (
+        {showSaveDefaults || savingDefaults ? (
           <button
             type="button"
-            title="שמור את הערכים הנוכחיים כברירת מחדל קבועה לתרגיל"
+            title="שמור סטים, משקל, חזרות/שניות ויחידת המדידה כברירת מחדל קבועה לתרגיל"
+            disabled={savingDefaults}
+            aria-busy={savingDefaults}
             onClick={() => void handleSaveDefaults()}
-            className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-blue-700 hover:underline"
+            className="inline-flex min-h-11 items-center gap-1 text-xs font-semibold text-blue-700 hover:underline disabled:cursor-wait disabled:opacity-60 disabled:hover:no-underline"
           >
-            <Save className="size-3" strokeWidth={2} />
-            שמור כברירת מחדל
+            {savingDefaults ? (
+              <Loader2 className="size-3 animate-spin" strokeWidth={2} />
+            ) : (
+              <Save className="size-3" strokeWidth={2} />
+            )}
+            {savingDefaults ? 'שומר…' : 'שמור כברירת מחדל'}
           </button>
         ) : null}
       </div>
