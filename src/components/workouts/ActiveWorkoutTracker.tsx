@@ -33,6 +33,7 @@ import { localDateKey } from '../../lib/types'
 import { Button } from '../ui/button'
 import { IconButton } from '../ui/IconButton'
 import { NumericInput } from '../ui/NumericInput'
+import { ExerciseNotesAccordion } from './ExerciseNotesAccordion'
 import { MetricToggle } from './MetricToggle'
 
 const inputClass =
@@ -136,6 +137,7 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
     removeSet,
     setExerciseMetric,
     saveAsDefaults,
+    saveExerciseNote,
   } = useWorkoutSession()
   const [defaultsToast, setDefaultsToast] = useState<DefaultsToast | null>(null)
   const toastTimer = useRef<number | null>(null)
@@ -249,6 +251,11 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
           <p className="mt-1 text-[11px] text-muted">
             ברירת מחדל: {formatDefaultSummary(exercise, defaults)}
           </p>
+          <ExerciseNotesAccordion
+            notes={exercise.notes}
+            onSave={(notes) => saveExerciseNote(index, notes)}
+            className="mt-0.5"
+          />
           {defaultsToast ? (
             <p
               role={defaultsToast.tone === 'error' ? 'alert' : 'status'}

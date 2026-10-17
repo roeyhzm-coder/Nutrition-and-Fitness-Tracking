@@ -7,6 +7,7 @@ import { WorkoutLibrary } from '../components/workouts/WorkoutLibrary'
 import { ActivityLogCard } from '../components/workouts/ActivityLogCard'
 import {
   ExerciseDetails,
+  PlanExerciseNotes,
   ExerciseFormFields,
   ExerciseMedia,
 } from '../components/workouts/ExerciseFields'
@@ -97,16 +98,19 @@ export function WorkoutsPage() {
       <li key={ex.id} className="rounded-2xl border border-slate-200 bg-slate-50">
         <div className="flex items-start gap-2 px-3 py-3">
           <ExerciseMedia exercise={ex} />
-          <button
-            type="button"
-            className="min-h-11 min-w-0 flex-1 text-right"
-            onClick={() =>
-              setActiveExerciseId(activeExerciseId === ex.id ? null : ex.id)
-            }
-          >
-            <p className="font-semibold text-text">{ex.name}</p>
-            <ExerciseDetails exercise={ex} />
-          </button>
+          <div className="min-w-0 flex-1">
+            <button
+              type="button"
+              className="min-h-11 w-full text-right"
+              onClick={() =>
+                setActiveExerciseId(activeExerciseId === ex.id ? null : ex.id)
+              }
+            >
+              <p className="font-semibold text-text">{ex.name}</p>
+              <ExerciseDetails exercise={ex} />
+            </button>
+            <PlanExerciseNotes exercise={ex} />
+          </div>
           <IconButton
             label="עריכת תרגיל"
             tone="accent"

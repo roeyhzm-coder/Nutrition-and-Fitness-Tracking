@@ -96,12 +96,17 @@ import {
   type ExerciseDefaultValues,
 } from '../lib/exerciseDefaults'
 import {
+  applyExerciseNotesToPrograms,
+  applyExerciseNotesToTemplates,
   applyStoredDefaultsToPrograms,
   applyStoredDefaultsToTemplates,
+  exerciseDefaultsKey,
   mergeExerciseDefaults,
   pullExerciseDefaults,
   pushExerciseDefaults,
+  pushExerciseNotes,
   storedDefaultsFromValues,
+  storedNotesRow,
   type ExerciseDefaultsMap,
   type ExerciseDefaultsWriteResult,
 } from '../lib/exerciseDefaultsStore'
@@ -230,6 +235,15 @@ type AppDataContextValue = {
   persistExerciseDefaults: (
     exerciseName: string,
     values: ExerciseDefaultValues,
+  ) => Promise<ExerciseDefaultsWriteResult>
+  /**
+   * Save the notes for an exercise name: upserts the note columns of its
+   * `exercise_defaults` row, mirrors the note onto every matching exercise in
+   * programs + library templates, and flushes the app-state blob.
+   */
+  persistExerciseNote: (
+    exerciseName: string,
+    notes: string,
   ) => Promise<ExerciseDefaultsWriteResult>
   /** Force an immediate cloud flush of the current app snapshot. */
   flushCloudNow: (reason?: string) => Promise<boolean>
@@ -723,6 +737,29 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         rememberExerciseDefaults(single)
         void pushExerciseDefaults(row).then((res) => {
           if (!res.ok) setLastSyncNotice({ type: 'error', message: res.error })
+        })
+      }
+      // A note edited here becomes the exercise's saved note; the notes effect
+      // mirrors it onto every other copy (weekdays, programs, templates).
+      if (
+        existing &&
+        'notes' in rawPatch &&
+        (rawPatch.notes ?? '').trim() !== (existing.notes ?? '').trim()
+      ) {
+        const name = rawPatch.name ?? existing.name
+        const noteRow = storedNotesRow(
+          name,
+          rawPatch.notes ?? '',
+          exerciseDefaultsRef.current[exerciseDefaultsKey(name)],
+        )
+        patch = {
+          ...patch,
+          notes: noteRow.notes || undefined,
+          notesUpdatedAt: noteRow.notesUpdatedAt,
+        }
+        rememberExerciseDefaults({ [noteRow.exerciseKey]: noteRow })
+        void pushExerciseNotes(noteRow).then((res) => {
+          if (!res.ok) console.warn('[AppData] exercise note kept in app_state only', res.error)
         })
       }
 
@@ -1253,6 +1290,73 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       workoutTemplates,
     ],
   )
+
+  const persistExerciseNote = useCallback(
+    async (exerciseName: string, notes: string): Promise<ExerciseDefaultsWriteResult> => {
+      const name = exerciseName.trim()
+      if (!name) return { ok: false, error: 'שם התרגיל חסר' }
+
+      const row = storedNotesRow(
+        name,
+        notes,
+        exerciseDefaultsRef.current[exerciseDefaultsKey(name)],
+      )
+      const single: ExerciseDefaultsMap = { [row.exerciseKey]: row }
+      rememberExerciseDefaults(single)
+      localDirtyRef.current = true
+
+      const nextPrograms = applyExerciseNotesToPrograms(workoutPrograms, single)
+        .programs.map(normalizeWorkoutProgram)
+      const nextTemplates = applyExerciseNotesToTemplates(workoutTemplates, single)
+        .templates
+
+      setWorkoutPrograms(nextPrograms)
+      setWorkoutTemplates(nextTemplates)
+      if (snapshotRef.current) {
+        snapshotRef.current = {
+          ...snapshotRef.current,
+          workoutPrograms: nextPrograms,
+          workoutTemplates: nextTemplates,
+        }
+      }
+
+      window.clearTimeout(flushTimerRef.current)
+      const [tableResult, blobOk] = await Promise.all([
+        pushExerciseNotes(row),
+        flushCloud('persist-exercise-note', {
+          workoutPrograms: nextPrograms,
+          workoutTemplates: nextTemplates,
+        }),
+      ])
+      if (tableResult.ok) return tableResult
+      if (blobOk) {
+        console.warn(
+          '[AppData] exercise note upsert failed; note kept in app_state only',
+          tableResult.error,
+        )
+        return { ok: true }
+      }
+      setLastSyncNotice({ type: 'error', message: tableResult.error })
+      return tableResult
+    },
+    [
+      flushCloud,
+      rememberExerciseDefaults,
+      setWorkoutPrograms,
+      setWorkoutTemplates,
+      workoutPrograms,
+      workoutTemplates,
+    ],
+  )
+
+  // Seed the Block 1 / Block 2 coaching notes and mirror saved notes onto every
+  // copy of an exercise (idempotent: only writes when a note actually differs).
+  useEffect(() => {
+    const programs = applyExerciseNotesToPrograms(workoutPrograms, exerciseDefaults)
+    if (programs.changed) setWorkoutPrograms(programs.programs)
+    const templates = applyExerciseNotesToTemplates(workoutTemplates, exerciseDefaults)
+    if (templates.changed) setWorkoutTemplates(templates.templates)
+  }, [exerciseDefaults, setWorkoutPrograms, setWorkoutTemplates, workoutPrograms, workoutTemplates])
 
   const applyRemoteState = useCallback(
     (remote: SyncedAppState) => {
@@ -2212,6 +2316,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateExercise,
       exerciseDefaults,
       persistExerciseDefaults,
+      persistExerciseNote,
       flushCloudNow,
       deleteExercise,
       removeDaySession,
@@ -2309,6 +2414,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateExercise,
       exerciseDefaults,
       persistExerciseDefaults,
+      persistExerciseNote,
       flushCloudNow,
       deleteExercise,
       removeDaySession,

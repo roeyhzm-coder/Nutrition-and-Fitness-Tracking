@@ -21,6 +21,7 @@ import {
   resolveExerciseMetric,
   type ExerciseDefaultValues,
 } from '../lib/exerciseDefaults'
+import { withDefaultNote } from '../data/exerciseNotes'
 import {
   withStoredDefaults,
   type ExerciseDefaultsMap,
@@ -72,6 +73,11 @@ type WorkoutSessionValue = {
   ) => Promise<ExerciseDefaultsWriteResult>
   /** Persist current sets, kg, reps/seconds and metric as the exercise's defaults (Supabase). */
   saveAsDefaults: (exIndex: number) => Promise<ExerciseDefaultsWriteResult>
+  /**
+   * Save an exercise's notes: updates the active workout immediately, then
+   * persists by exercise name (Supabase + every program / template copy).
+   */
+  saveExerciseNote: (exIndex: number, notes: string) => Promise<ExerciseDefaultsWriteResult>
   finishWorkout: () => WorkoutLog | null
   cancelWorkout: () => void
   workoutLogs: WorkoutLog[]
@@ -112,6 +118,7 @@ function loggedAsExercise(logged: LoggedExercise): Exercise {
     defaultReps: logged.defaultReps,
     defaultSets: logged.defaultSets,
     metric: logged.defaultMetric,
+    notes: logged.notes,
   }
 }
 
@@ -193,7 +200,19 @@ function resolveSourceExercise(
   programEx: Exercise | undefined,
   stored: ExerciseDefaultsMap,
 ): Exercise {
-  return withStoredDefaults(programEx ?? loggedAsExercise(logged), stored)
+  return withStoredDefaults(withDefaultNote(programEx ?? loggedAsExercise(logged)), stored)
+}
+
+/** Keep the logged exercise's notes in step with the newest saved / program note. */
+function refreshLoggedNotes(
+  logged: LoggedExercise,
+  programEx: Exercise | undefined,
+  stored: ExerciseDefaultsMap,
+): LoggedExercise {
+  const source = resolveSourceExercise(logged, programEx, stored)
+  return (source.notes ?? '') === (logged.notes ?? '')
+    ? logged
+    : { ...logged, notes: source.notes }
 }
 
 function applyDefaultsIfUnset(
@@ -230,6 +249,7 @@ function seedLoggedExercise(ex: Exercise): LoggedExercise {
     defaultMetric: metric,
     rest: ex.rest,
     imageUrl: ex.imageUrl,
+    notes: ex.notes,
     sets: buildSetsFromDefaults(defaults),
   }
 }
@@ -241,6 +261,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     setConsistencyDayMark,
     exerciseDefaults,
     persistExerciseDefaults,
+    persistExerciseNote,
   } = useAppData()
   const [activeWorkout, setActiveWorkout] = useLocalStorage<ActiveWorkout | null>(
     'tn.activeWorkout.v1',
@@ -290,7 +311,11 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       let changed = false
       const exercises = prev.exercises.map((logged) => {
         const programEx = findProgramExercise(programDays, prev.dayId, logged.exerciseId)
-        const next = applyDefaultsIfUnset(logged, programEx, exerciseDefaults)
+        const next = refreshLoggedNotes(
+          applyDefaultsIfUnset(logged, programEx, exerciseDefaults),
+          programEx,
+          exerciseDefaults,
+        )
         if (next !== logged) changed = true
         return next
       })
@@ -316,7 +341,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
         const live = source.dayId
           ? (findProgramExercise(activeProgram.days, source.dayId, ex.id) ?? ex)
           : ex
-        return withStoredDefaults(live, exerciseDefaults)
+        return withStoredDefaults(withDefaultNote(live), exerciseDefaults)
       })
 
       setActiveWorkout({
@@ -505,6 +530,28 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     [patchLoggedExercise, persistExerciseDefaults],
   )
 
+  const saveExerciseNote = useCallback(
+    async (exIndex: number, notes: string): Promise<ExerciseDefaultsWriteResult> => {
+      const logged = activeWorkoutRef.current?.exercises[exIndex]
+      if (!logged) return { ok: false, error: 'התרגיל לא נמצא באימון הפעיל' }
+      const trimmed = notes.trim()
+      // Every copy of this exercise in the session shares the name-keyed note.
+      setActiveWorkout((prev) => {
+        if (!prev) return prev
+        const next = {
+          ...prev,
+          exercises: prev.exercises.map((ex) =>
+            ex.name === logged.name ? { ...ex, notes: trimmed || undefined } : ex,
+          ),
+        }
+        activeWorkoutRef.current = next
+        return next
+      })
+      return persistExerciseNote(logged.name, trimmed)
+    },
+    [persistExerciseNote, setActiveWorkout],
+  )
+
   const finishWorkout = useCallback(() => {
     if (!activeWorkout) return null
     const completedAt = new Date().toISOString()
@@ -593,6 +640,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       removeSet,
       setExerciseMetric,
       saveAsDefaults,
+      saveExerciseNote,
       finishWorkout,
       cancelWorkout,
       workoutLogs,
@@ -611,6 +659,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       removeSet,
       setExerciseMetric,
       saveAsDefaults,
+      saveExerciseNote,
       finishWorkout,
       cancelWorkout,
       workoutLogs,

@@ -8,6 +8,8 @@ import {
 } from '../../lib/exerciseForm'
 import type { Exercise } from '../../lib/types'
 import { NumericInput } from '../ui/NumericInput'
+import { useAppData } from '../../context/AppDataContext'
+import { ExerciseNotesAccordion } from './ExerciseNotesAccordion'
 import { MetricToggle } from './MetricToggle'
 
 const inputClass = 'field'
@@ -162,10 +164,30 @@ export function ExerciseDetails({ exercise }: { exercise: Exercise }) {
           </span>
         ) : null}
       </div>
-      {exercise.notes ? (
-        <p className="mt-1 text-xs text-muted">{exercise.notes}</p>
-      ) : null}
     </>
+  )
+}
+
+/** Collapsed notes accordion for a plan / template exercise row (saved by name). */
+export function PlanExerciseNotes({
+  exercise,
+  onSaved,
+}: {
+  exercise: Exercise
+  /** Lets an editor holding a local draft mirror the saved note. */
+  onSaved?: (notes: string) => void
+}) {
+  const { persistExerciseNote } = useAppData()
+  return (
+    <ExerciseNotesAccordion
+      notes={exercise.notes}
+      onSave={async (notes) => {
+        const result = await persistExerciseNote(exercise.name, notes)
+        if (result.ok) onSaved?.(notes)
+        return result
+      }}
+      className="mt-0.5"
+    />
   )
 }
 

@@ -1,8 +1,10 @@
+import { withDefaultNote } from '../data/exerciseNotes'
 import { SHARED_OWNER_ALIASES, SHARED_OWNER_ID } from './appStateSync'
 import {
   exercisePatchFromDefaults,
   normalizeDefaultSets,
   parseOptionalNumber,
+  replicateDefaultSets,
   type ExerciseDefaultValues,
 } from './exerciseDefaults'
 import { isSupabaseConfigured, supabase } from './supabase'
@@ -26,6 +28,11 @@ export type StoredExerciseDefaults = {
   sets: number
   defaultSets: ExerciseDefaultSet[]
   updatedAt: string
+  /** True when the row only carries a note (no saved set defaults yet). */
+  notesOnly?: boolean
+  /** User-edited notes; '' = deliberately cleared. Undefined = never edited. */
+  notes?: string
+  notesUpdatedAt?: string
 }
 
 export type ExerciseDefaultsMap = Record<string, StoredExerciseDefaults>
@@ -35,9 +42,22 @@ export type ExerciseDefaultsWriteResult = { ok: true } | { ok: false; error: str
 const TABLE = 'exercise_defaults'
 const MAX_ROWS = 500
 const MAX_SETS = 20
+const MAX_NOTES_LENGTH = 2000
+const BASE_COLUMNS = 'exercise_key, exercise_name, metric, sets, default_sets, updated_at'
+const NOTES_COLUMNS = `${BASE_COLUMNS}, notes, notes_updated_at`
 
 export function exerciseDefaultsKey(name: string): string {
   return name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+function isoOrUndefined(value: unknown): string | undefined {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value))
+    ? new Date(value).toISOString()
+    : undefined
+}
+
+export function clampNotes(notes: string): string {
+  return notes.trim().slice(0, MAX_NOTES_LENGTH)
 }
 
 function isMetric(value: unknown): value is ExerciseMetric {
@@ -57,10 +77,9 @@ function normalizeRow(raw: unknown): StoredExerciseDefaults | null {
   if (!name) return null
   const rawSets = Array.isArray(row.default_sets) ? row.default_sets : []
   const sets = clampSets(row.sets, Math.max(1, rawSets.length))
-  const updatedAt =
-    typeof row.updated_at === 'string' && !Number.isNaN(Date.parse(row.updated_at))
-      ? new Date(row.updated_at).toISOString()
-      : new Date(0).toISOString()
+  const updatedAt = isoOrUndefined(row.updated_at) ?? new Date(0).toISOString()
+  const notesUpdatedAt = isoOrUndefined(row.notes_updated_at)
+  const hasNotes = typeof row.notes === 'string' && notesUpdatedAt != null
   return {
     exerciseKey: exerciseDefaultsKey(name),
     exerciseName: name,
@@ -68,14 +87,61 @@ function normalizeRow(raw: unknown): StoredExerciseDefaults | null {
     sets,
     defaultSets: normalizeDefaultSets(rawSets, sets, null, null),
     updatedAt,
+    // A row inserted by a note save has no default_sets — never overlay its placeholder set.
+    ...(rawSets.length === 0 ? { notesOnly: true } : {}),
+    ...(hasNotes ? { notes: row.notes as string, notesUpdatedAt } : {}),
   }
 }
 
-function isNewer(a: StoredExerciseDefaults, b: StoredExerciseDefaults | undefined) {
-  return !b || a.updatedAt > b.updatedAt
+function newerNotes(a: StoredExerciseDefaults, b: StoredExerciseDefaults | undefined) {
+  return (a.notesUpdatedAt ?? '') > (b?.notesUpdatedAt ?? '')
 }
 
-/** Per key, the most recently updated row wins. */
+/**
+ * Field-wise merge: set defaults follow `updatedAt` (a note-only row never
+ * replaces real defaults) and notes follow `notesUpdatedAt`.
+ */
+export function mergeExerciseRow(
+  current: StoredExerciseDefaults | undefined,
+  incoming: StoredExerciseDefaults,
+): StoredExerciseDefaults {
+  if (!current) return incoming
+  const setsFrom =
+    incoming.notesOnly && !current.notesOnly
+      ? current
+      : current.notesOnly && !incoming.notesOnly
+        ? incoming
+        : incoming.updatedAt > current.updatedAt
+          ? incoming
+          : current
+  const notesFrom = newerNotes(incoming, current) ? incoming : current
+  const setsPart: StoredExerciseDefaults = {
+    exerciseKey: setsFrom.exerciseKey,
+    exerciseName: setsFrom.exerciseName,
+    metric: setsFrom.metric,
+    sets: setsFrom.sets,
+    defaultSets: setsFrom.defaultSets,
+    updatedAt: setsFrom.updatedAt,
+  }
+  return {
+    ...setsPart,
+    ...(current.notesOnly && incoming.notesOnly ? { notesOnly: true } : {}),
+    ...(notesFrom.notesUpdatedAt != null
+      ? { notes: notesFrom.notes ?? '', notesUpdatedAt: notesFrom.notesUpdatedAt }
+      : {}),
+  }
+}
+
+function sameRow(a: StoredExerciseDefaults, b: StoredExerciseDefaults) {
+  return (
+    a.updatedAt === b.updatedAt &&
+    !!a.notesOnly === !!b.notesOnly &&
+    a.notesUpdatedAt === b.notesUpdatedAt &&
+    a.notes === b.notes
+  )
+}
+
+/** Per key, newest set defaults and newest notes win independently. */
 export function mergeExerciseDefaults(
   local: ExerciseDefaultsMap,
   remote: ExerciseDefaultsMap,
@@ -83,12 +149,33 @@ export function mergeExerciseDefaults(
   let changed = false
   const next = { ...local }
   for (const [key, row] of Object.entries(remote)) {
-    if (isNewer(row, next[key])) {
-      next[key] = row
+    const prev = next[key]
+    const merged = mergeExerciseRow(prev, row)
+    if (!prev || !sameRow(merged, prev)) {
+      next[key] = merged
       changed = true
     }
   }
   return changed ? next : local
+}
+
+/** Row recording a note edit; keeps any set defaults already stored for the exercise. */
+export function storedNotesRow(
+  exerciseName: string,
+  notes: string,
+  existing: StoredExerciseDefaults | undefined,
+  notesUpdatedAt = new Date().toISOString(),
+): StoredExerciseDefaults {
+  const base: StoredExerciseDefaults = existing ?? {
+    exerciseKey: exerciseDefaultsKey(exerciseName),
+    exerciseName: exerciseName.trim(),
+    metric: 'reps',
+    sets: 1,
+    defaultSets: replicateDefaultSets(1, null, null),
+    updatedAt: new Date(0).toISOString(),
+    notesOnly: true,
+  }
+  return { ...base, notes: clampNotes(notes), notesUpdatedAt }
 }
 
 export function storedDefaultsFromValues(
@@ -115,20 +202,28 @@ export function storedDefaultsFromValues(
 export async function pullExerciseDefaults(): Promise<ExerciseDefaultsMap | null> {
   if (!isSupabaseConfigured || !supabase) return null
   try {
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('exercise_key, exercise_name, metric, sets, default_sets, updated_at')
-      .in('owner_id', [...SHARED_OWNER_ALIASES])
-      .order('updated_at', { ascending: false })
-      .limit(MAX_ROWS)
+    const client = supabase
+    const query = (columns: string) =>
+      client
+        .from(TABLE)
+        .select(columns)
+        .in('owner_id', [...SHARED_OWNER_ALIASES])
+        .order('updated_at', { ascending: false })
+        .limit(MAX_ROWS)
+    let { data, error } = await query(NOTES_COLUMNS)
+    // Notes columns not migrated yet: still pull the set defaults.
+    if (error && (error.code === '42703' || /notes/i.test(error.message))) {
+      console.warn('[exerciseDefaults] notes columns missing; pulling defaults only')
+      ;({ data, error } = await query(BASE_COLUMNS))
+    }
     if (error) {
       console.error('[exerciseDefaults] pull failed', error)
       return null
     }
     const map: ExerciseDefaultsMap = {}
-    for (const raw of data ?? []) {
+    for (const raw of (data ?? []) as unknown[]) {
       const row = normalizeRow(raw)
-      if (row && isNewer(row, map[row.exerciseKey])) map[row.exerciseKey] = row
+      if (row) map[row.exerciseKey] = mergeExerciseRow(map[row.exerciseKey], row)
     }
     return map
   } catch (err) {
@@ -171,6 +266,42 @@ export async function pushExerciseDefaults(
   }
 }
 
+/**
+ * Upsert only the note columns, so a note save never touches the exercise's
+ * set defaults (a new row gets the table's empty defaults → note-only).
+ */
+export async function pushExerciseNotes(
+  row: StoredExerciseDefaults,
+): Promise<ExerciseDefaultsWriteResult> {
+  if (!isSupabaseConfigured || !supabase) {
+    return { ok: false, error: 'Supabase אינו מוגדר' }
+  }
+  try {
+    const { error } = await supabase.from(TABLE).upsert(
+      {
+        owner_id: SHARED_OWNER_ID,
+        exercise_key: row.exerciseKey,
+        exercise_name: row.exerciseName,
+        notes: row.notes ?? '',
+        notes_updated_at: row.notesUpdatedAt ?? new Date().toISOString(),
+      },
+      { onConflict: 'owner_id,exercise_key' },
+    )
+    if (error) {
+      console.error('[exerciseDefaults] notes upsert failed', error)
+      const denied = error.code === '42501' || /row-level security|permission/i.test(error.message)
+      return {
+        ok: false,
+        error: denied ? 'אין הרשאה לשמור הערה (RLS)' : `שגיאת שמירת הערה: ${error.message}`,
+      }
+    }
+    return { ok: true }
+  } catch (err) {
+    console.error('[exerciseDefaults] notes upsert threw', err)
+    return { ok: false, error: 'שגיאת רשת — ההערה לא נשמרה בענן' }
+  }
+}
+
 /** Exercise patch derived from a stored row; free-text labels fall back to `ex`. */
 export function exercisePatchFromStored(
   row: StoredExerciseDefaults,
@@ -202,38 +333,76 @@ export function withStoredDefaults<T extends Exercise>(
 ): T {
   const row = map[exerciseDefaultsKey(ex.name)]
   if (!row) return ex
-  if (ex.defaultsUpdatedAt && ex.defaultsUpdatedAt >= row.updatedAt) return ex
-  return { ...ex, ...exercisePatchFromStored(row, ex) }
+  const withSets =
+    row.notesOnly || (ex.defaultsUpdatedAt && ex.defaultsUpdatedAt >= row.updatedAt)
+      ? ex
+      : { ...ex, ...exercisePatchFromStored(row, ex) }
+  return withStoredNotes(withSets, map)
 }
 
-function overlayList(exercises: Exercise[], map: ExerciseDefaultsMap) {
+/** Overlay the user's saved note for this exercise name when it is newer. */
+export function withStoredNotes<T extends Exercise>(ex: T, map: ExerciseDefaultsMap): T {
+  const row = map[exerciseDefaultsKey(ex.name)]
+  if (!row?.notesUpdatedAt) return ex
+  if (ex.notesUpdatedAt && ex.notesUpdatedAt >= row.notesUpdatedAt) return ex
+  return { ...ex, notes: row.notes || undefined, notesUpdatedAt: row.notesUpdatedAt }
+}
+
+type ExerciseOverlay = (ex: Exercise) => Exercise
+
+/** Program-seeded note first, then the user's saved defaults / note. */
+const fullOverlay =
+  (map: ExerciseDefaultsMap): ExerciseOverlay =>
+  (ex) =>
+    withStoredDefaults(withDefaultNote(ex), map)
+
+const notesOverlay =
+  (map: ExerciseDefaultsMap): ExerciseOverlay =>
+  (ex) =>
+    withStoredNotes(withDefaultNote(ex), map)
+
+function overlayList(exercises: Exercise[], overlay: ExerciseOverlay) {
   let changed = false
   const next = exercises.map((ex) => {
-    const patched = withStoredDefaults(ex, map)
+    const patched = overlay(ex)
     if (patched !== ex) changed = true
     return patched
   })
   return { exercises: changed ? next : exercises, changed }
 }
 
-/** Apply stored defaults to every matching exercise in every program day. */
+/** Apply stored defaults + notes to every matching exercise in every program day. */
 export function applyStoredDefaultsToPrograms(
   programs: WorkoutProgram[],
   map: ExerciseDefaultsMap,
 ): { programs: WorkoutProgram[]; changed: boolean } {
-  if (!Object.keys(map).length) return { programs, changed: false }
+  return overlayPrograms(programs, fullOverlay(map))
+}
+
+/** Seed program notes and apply saved notes only (set defaults untouched). */
+export function applyExerciseNotesToPrograms(
+  programs: WorkoutProgram[],
+  map: ExerciseDefaultsMap,
+): { programs: WorkoutProgram[]; changed: boolean } {
+  return overlayPrograms(programs, notesOverlay(map))
+}
+
+function overlayPrograms(
+  programs: WorkoutProgram[],
+  overlay: ExerciseOverlay,
+): { programs: WorkoutProgram[]; changed: boolean } {
   let changed = false
   const next = programs.map((program) => {
     let programChanged = false
     const days = program.days.map((day) => {
       let dayChanged = false
       const sessions = (day.sessions ?? []).map((session) => {
-        const res = overlayList(session.exercises, map)
+        const res = overlayList(session.exercises, overlay)
         if (!res.changed) return session
         dayChanged = true
         return { ...session, exercises: res.exercises }
       })
-      const standalone = overlayList(day.exercises ?? [], map)
+      const standalone = overlayList(day.exercises ?? [], overlay)
       if (standalone.changed) dayChanged = true
       if (!dayChanged) return day
       programChanged = true
@@ -250,10 +419,23 @@ export function applyStoredDefaultsToTemplates(
   templates: WorkoutTemplate[],
   map: ExerciseDefaultsMap,
 ): { templates: WorkoutTemplate[]; changed: boolean } {
-  if (!Object.keys(map).length) return { templates, changed: false }
+  return overlayTemplates(templates, fullOverlay(map))
+}
+
+export function applyExerciseNotesToTemplates(
+  templates: WorkoutTemplate[],
+  map: ExerciseDefaultsMap,
+): { templates: WorkoutTemplate[]; changed: boolean } {
+  return overlayTemplates(templates, notesOverlay(map))
+}
+
+function overlayTemplates(
+  templates: WorkoutTemplate[],
+  overlay: ExerciseOverlay,
+): { templates: WorkoutTemplate[]; changed: boolean } {
   let changed = false
   const next = templates.map((template) => {
-    const res = overlayList(template.exercises, map)
+    const res = overlayList(template.exercises, overlay)
     if (!res.changed) return template
     changed = true
     return { ...template, exercises: res.exercises, updatedAt: new Date().toISOString() }

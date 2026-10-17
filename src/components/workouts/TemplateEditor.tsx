@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { Exercise, WorkoutDay, WorkoutTemplate } from '../../lib/types'
 import { uid } from '../../lib/types'
+import { useAppData } from '../../context/AppDataContext'
+import { exerciseDefaultsKey } from '../../lib/exerciseDefaultsStore'
 import type { ExerciseForm } from '../../lib/exerciseForm'
 import {
   EMPTY_EXERCISE_FORM,
@@ -15,6 +17,7 @@ import { Modal } from '../ui/Modal'
 import {
   ExerciseDetails,
   ExerciseFormFields,
+  PlanExerciseNotes,
   ExerciseMedia,
 } from './ExerciseFields'
 
@@ -64,6 +67,20 @@ export function TemplateEditor({
   const [editingEx, setEditingEx] = useState<Exercise | null>(null)
   const [exForm, setExForm] = useState<ExerciseForm>(EMPTY_EXERCISE_FORM)
   const [applyOpen, setApplyOpen] = useState(false)
+  const { persistExerciseNote } = useAppData()
+
+  /** Notes are name-keyed: keep every draft copy of the exercise in step. */
+  function mirrorNote(exerciseName: string, notes: string) {
+    const key = exerciseDefaultsKey(exerciseName)
+    const notesUpdatedAt = new Date().toISOString()
+    setExercises((prev) =>
+      prev.map((e) =>
+        exerciseDefaultsKey(e.name) === key
+          ? { ...e, notes: notes.trim() || undefined, notesUpdatedAt }
+          : e,
+      ),
+    )
+  }
 
   useEffect(() => {
     if (!open) return
@@ -101,8 +118,14 @@ export function TemplateEditor({
     const payload: Exercise = {
       id: editingEx?.id ?? uid(),
       ...formToExercise(exForm),
+      notesUpdatedAt: editingEx?.notesUpdatedAt,
     }
     if (!payload.name) return
+    // A note edited in the form is saved by name, like the accordion.
+    if (editingEx && (payload.notes ?? '') !== (editingEx.notes ?? '').trim()) {
+      payload.notesUpdatedAt = new Date().toISOString()
+      void persistExerciseNote(payload.name, payload.notes ?? '')
+    }
     setExercises((prev) => {
       const exists = prev.some((e) => e.id === payload.id)
       return exists
@@ -167,17 +190,25 @@ export function TemplateEditor({
                   className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"
                 >
                   <ExerciseMedia exercise={ex} />
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-right"
-                    onClick={() => {
-                      setEditingEx(ex)
-                      setExForm(exerciseToForm(ex))
-                    }}
-                  >
-                    <p className="font-medium text-text">{ex.name}</p>
-                    <ExerciseDetails exercise={ex} />
-                  </button>
+                  <div className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      className="w-full text-right"
+                      onClick={() => {
+                        setEditingEx(ex)
+                        setExForm(exerciseToForm(ex))
+                      }}
+                    >
+                      <p className="font-medium text-text">{ex.name}</p>
+                      <ExerciseDetails exercise={ex} />
+                    </button>
+                    {ex.name.trim() ? (
+                      <PlanExerciseNotes
+                        exercise={ex}
+                        onSaved={(notes) => mirrorNote(ex.name, notes)}
+                      />
+                    ) : null}
+                  </div>
                   <IconButton label="העלה" onClick={() => move(index, -1)}>
                     <ArrowUp className="size-3.5" strokeWidth={1.75} />
                   </IconButton>

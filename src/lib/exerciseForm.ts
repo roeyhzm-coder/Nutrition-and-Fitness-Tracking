@@ -30,7 +30,7 @@ export type ExerciseForm = {
 export function formMetric(form: ExerciseForm): ExerciseMetric {
   return (
     form.metric ??
-    resolveExerciseMetric({ name: form.name, reps: form.reps, notes: form.notes })
+    resolveExerciseMetric({ name: form.name, reps: form.reps })
   )
 }
 

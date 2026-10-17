@@ -427,7 +427,10 @@ export type Exercise = {
   metric?: ExerciseMetric
   /** ISO time the defaults on this definition were last edited (conflict resolution). */
   defaultsUpdatedAt?: string
+  /** Coaching cues shown in the collapsed notes accordion. */
   notes?: string
+  /** ISO time the user last edited `notes`; unset = program-seeded note. */
+  notesUpdatedAt?: string
   /** Demo video / external link */
   mediaUrl?: string
   imageUrl?: string
@@ -525,6 +528,8 @@ export type LoggedExercise = {
   defaultMetric?: ExerciseMetric
   rest?: string
   imageUrl?: string
+  /** Latest exercise notes, refreshed from the saved per-exercise notes. */
+  notes?: string
   sets: LoggedSet[]
 }
 

@@ -12,6 +12,8 @@ export type ExerciseDefaultValues = {
   /** Free-text labels stored on the Exercise definition. */
   weightLabel?: string
   repsLabel?: string
+  /** Exercise notes carried alongside the defaults (persisted separately). */
+  notes?: string
 }
 
 const DURATION_LABEL_RE = /שניות|seconds?|secs?\b|hold|isometric|תליי[הה]|החזקה/i
@@ -20,18 +22,18 @@ const DURATION_SUFFIX_RE = /\s*(שניות|שנ׳|seconds?|secs?)\s*$/i
 
 /**
  * Timed / isometric work tracks duration (seconds) in the numeric `reps` field.
- * Detected from exercise name, prescribed reps label, or notes.
+ * Detected from exercise name or prescribed reps label. Notes are coaching
+ * cues ("ירידה איטית 3 שניות") and never switch a rep exercise to seconds.
  */
 export function isDurationTrackedExercise(ex: {
   name?: string
   reps?: string
   targetReps?: string
-  notes?: string
   metric?: ExerciseMetric
 }): boolean {
   if (ex.metric) return ex.metric === 'seconds'
   if (ex.name && isHoldExercise(ex.name)) return true
-  const blob = [ex.reps, ex.targetReps, ex.notes].filter(Boolean).join(' ')
+  const blob = [ex.reps, ex.targetReps].filter(Boolean).join(' ')
   return blob.length > 0 && DURATION_LABEL_RE.test(blob)
 }
 
@@ -57,7 +59,7 @@ export type ExerciseDefaultsSource = Pick<
   | 'defaultSets'
   | 'default_sets'
 > &
-  Partial<Pick<Exercise, 'metric'>>
+  Partial<Pick<Exercise, 'metric' | 'notes'>>
 
 /** Pulls the first numeric kg value from free-text weight. */
 export function parseKg(text?: string): number | null {
@@ -220,6 +222,7 @@ export function defaultsFromExercise(ex: ExerciseDefaultsSource): ExerciseDefaul
     metric: ex.metric,
     weightLabel: ex.weight,
     repsLabel: ex.reps,
+    notes: ex.notes,
   }
 }
 
