@@ -1,5 +1,5 @@
 import { useState, type MouseEvent } from 'react'
-import { Pencil, Settings2 } from 'lucide-react'
+import { CalendarRange, Pencil, Settings2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import {
@@ -20,6 +20,7 @@ import {
   type WeekStartDay,
 } from '../../lib/weeklyConsistency'
 import { Button } from '../ui/button'
+import { AllTimeWeeksTracker } from './AllTimeWeeksTracker'
 import { Card } from '../ui/Card'
 import {
   DropdownMenu,
@@ -166,7 +167,7 @@ export function WeeklyConsistencyTracker() {
   const options = consistencyWorkoutOptions(workoutTemplates)
 
   const preview = buildRelativeWeeklyConsistency(setLogs, goal.startDate, {
-    weeksBack: 3,
+    weeksBack: 2,
     target: targetPerWeek,
     dayMarks: consistencyDayMarks,
     weekStartsOn,
@@ -308,33 +309,21 @@ export function WeeklyConsistencyTracker() {
           ))}
         </ul>
         <Button
-          className="mt-3 w-full"
+          className="mt-3 w-full gap-2"
           variant="surface"
           onClick={() => setHistoryOpen(true)}
         >
-          הצג היסטוריה מלאה
+          <CalendarRange className="size-4" strokeWidth={1.75} />
+          מעקב שבועות מלא מהיום הראשון
         </Button>
       </Card>
 
-      <Modal
+      <AllTimeWeeksTracker
         open={historyOpen}
-        title="היסטוריית עקביות מלאה"
         onClose={() => setHistoryOpen(false)}
-        wide
-      >
-        <ul className="max-h-[70vh] space-y-2 overflow-y-auto">
-          {allWeeks.map((week) => (
-            <WeekRow
-              key={week.weekKey}
-              week={week}
-              scheduledName={(date) => scheduledFor(date).name}
-              onToggleDay={handleToggleDay}
-              onEditDay={handleEditDay}
-              onEditCount={openEdit}
-            />
-          ))}
-        </ul>
-      </Modal>
+        weeks={allWeeks}
+        onSetCount={(week, n) => setWeekConsistencyCount(week.start, n)}
+      />
 
       <Modal
         open={!!pickerDate}
