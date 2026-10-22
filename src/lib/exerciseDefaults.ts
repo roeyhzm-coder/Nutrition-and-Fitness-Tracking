@@ -1,5 +1,51 @@
 import { isHoldExercise } from './blockStrength'
-import type { Exercise, ExerciseDefaultSet, ExerciseMetric, LoggedSet } from './types'
+import type {
+  Exercise,
+  ExerciseDefaultSet,
+  ExerciseMetric,
+  LoggedSet,
+  WorkoutLog,
+} from './types'
+
+/**
+ * Deterministic identity of an exercise across templates, weekdays and blocks.
+ * Defaults are always matched by this key — never by array position.
+ */
+export function canonicalExerciseKey(name: string): string {
+  return name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase()
+}
+
+const BLOCK_KEY_PREFIX = 'block:'
+
+/** Key of a block-specific default (`blockId + canonicalExerciseKey`). */
+export function blockExerciseKey(blockId: string, name: string): string {
+  return `${BLOCK_KEY_PREFIX}${blockId}|${canonicalExerciseKey(name)}`
+}
+
+export function isBlockExerciseKey(key: string): boolean {
+  return key.startsWith(BLOCK_KEY_PREFIX)
+}
+
+const PER_SET_PRESCRIPTION_RE =
+  /סט\s*(\d+)\s*:\s*(\d+)(?:\s*[-–]\s*\d+)?\s*(?:\(\s*(\d+(?:\.\d+)?)\s*ק)?/g
+
+/**
+ * Per-set prescriptions written as free text, e.g.
+ * `סט 1: 6 (17.5 ק"ג), סט 2: 4 (25 ק"ג), סט 3: 2-3 (32.5 ק"ג)`.
+ * Returns null unless at least two sets are spelled out.
+ */
+export function parsePerSetPrescription(text?: string): ExerciseDefaultSet[] | null {
+  if (!text?.trim()) return null
+  const rows = [...text.matchAll(PER_SET_PRESCRIPTION_RE)].map((m) => ({
+    setNumber: Number(m[1]),
+    reps: Number(m[2]),
+    weightKg: m[3] != null ? Number(m[3]) : null,
+  }))
+  if (rows.length < 2) return null
+  return rows
+    .sort((a, b) => a.setNumber - b.setNumber)
+    .map((row, i) => ({ ...row, setNumber: i + 1 }))
+}
 
 /** Structured defaults used to seed active-workout sets. */
 export type ExerciseDefaultValues = {
@@ -128,7 +174,7 @@ function normalizeDefaultSetRow(raw: unknown, index: number): ExerciseDefaultSet
   return {
     setNumber: parseOptionalNumber(row.setNumber ?? row.set_number) ?? index + 1,
     weightKg: parseOptionalNumber(row.weightKg ?? row.weight_kg ?? row.weight),
-    reps: parseOptionalNumber(row.reps),
+    reps: parseOptionalNumber(row.reps ?? row.seconds),
   }
 }
 
@@ -199,16 +245,20 @@ export function formatPerSetDefaultSummary(
 /** Resolve defaults from an exercise definition (program / template). */
 export function defaultsFromExercise(ex: ExerciseDefaultsSource): ExerciseDefaultValues {
   const sets = Math.max(1, ex.sets || 1)
+  const explicitSets = ex.defaultSets ?? ex.default_sets
+  // A spelled-out pyramid beats the single number pulled from the weight label
+  // (which used to copy the first kg — e.g. 17.5 — onto every set).
+  const prescribed = explicitSets?.length ? null : parsePerSetPrescription(ex.reps)
   const weightKg =
     ex.defaultWeightKg != null && Number.isFinite(ex.defaultWeightKg)
       ? ex.defaultWeightKg
-      : parseKg(ex.weight)
+      : (prescribed?.[0]?.weightKg ?? parseKg(ex.weight))
   const reps =
     ex.defaultReps != null && Number.isFinite(ex.defaultReps)
       ? ex.defaultReps
       : parseDefaultReps(ex.reps)
   const defaultSets = normalizeDefaultSets(
-    ex.defaultSets ?? ex.default_sets,
+    explicitSets?.length ? explicitSets : prescribed,
     sets,
     weightKg,
     reps,
@@ -355,5 +405,58 @@ export function exercisePatchFromDefaults(
     defaultSets,
     default_sets: defaultSets,
     ...(defaults.metric ? { metric: defaults.metric } : {}),
+  }
+}
+
+/** The saved-default fields every stored row (global or block) carries. */
+export type StoredDefaultsValues = {
+  metric: ExerciseMetric
+  sets: number
+  defaultSets: ExerciseDefaultSet[]
+  updatedAt: string
+}
+
+/** Exercise patch derived from a stored row; free-text labels fall back to `ex`. */
+export function exercisePatchFromStoredValues(
+  row: StoredDefaultsValues,
+  ex?: Pick<Exercise, 'weight' | 'reps'>,
+): Partial<Exercise> {
+  const first = row.defaultSets[0]
+  return {
+    ...exercisePatchFromDefaults({
+      sets: row.sets,
+      weightKg: first?.weightKg ?? null,
+      reps: first?.reps ?? null,
+      defaultSets: row.defaultSets,
+      metric: row.metric,
+      weightLabel: ex?.weight,
+      repsLabel: ex?.reps,
+    }),
+    metric: row.metric,
+    defaultsUpdatedAt: row.updatedAt,
+  }
+}
+
+/**
+ * Per-set values from the most recent completed workout that logged this
+ * exact exercise (matched by canonical key).
+ */
+export function defaultsFromHistory(
+  logs: WorkoutLog[],
+  exerciseName: string,
+): { values: ExerciseDefaultValues; metric?: ExerciseMetric; completedAt: string } | null {
+  const key = canonicalExerciseKey(exerciseName)
+  let best: { log: WorkoutLog; sets: LoggedSet[]; metric?: ExerciseMetric } | null = null
+  for (const log of logs) {
+    if (best && log.completedAt <= best.log.completedAt) continue
+    const logged = log.exercises.find((ex) => canonicalExerciseKey(ex.name) === key)
+    const sets = logged?.sets.filter((s) => s.weightKg != null || s.reps != null) ?? []
+    if (sets.length) best = { log, sets, metric: logged?.metric ?? logged?.defaultMetric }
+  }
+  if (!best) return null
+  return {
+    values: defaultsFromLoggedSets(best.sets, best.metric),
+    metric: best.metric,
+    completedAt: best.log.completedAt,
   }
 }

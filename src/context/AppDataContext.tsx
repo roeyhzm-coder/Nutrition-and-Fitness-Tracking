@@ -137,6 +137,7 @@ import type {
   WorkoutProgram,
   WorkoutTemplate,
 } from '../lib/types'
+import { weightEntryDateKey } from '../lib/weightLog'
 import {
   dayAllExercises,
   normalizeGoal,
@@ -235,6 +236,7 @@ type AppDataContextValue = {
   persistExerciseDefaults: (
     exerciseName: string,
     values: ExerciseDefaultValues,
+    opts?: { blockId?: string | null },
   ) => Promise<ExerciseDefaultsWriteResult>
   /**
    * Save the notes for an exercise name: upserts the note columns of its
@@ -302,6 +304,11 @@ type AppDataContextValue = {
     note?: string
     loggedAt?: string
   }) => void
+  /** Edit a weigh-in's value and/or date (YYYY-MM-DD). */
+  updateWeight: (id: string, patch: { weightKg?: number; loggedAt?: string }) => void
+  deleteWeight: (id: string) => void
+  /** Re-insert a deleted weigh-in (undo). */
+  restoreWeight: (entry: WeightEntry) => void
   addBodyFat: (input: { bodyFatPct: number; loggedAt?: string }) => void
   addFood: (entry: Omit<FoodLogEntry, 'id' | 'loggedAt'>) => void
   updateFood: (
@@ -727,15 +734,14 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (existing && hasDefaultsFields(rawPatch)) {
         const merged = { ...existing, ...rawPatch }
         const updatedAt = rawPatch.defaultsUpdatedAt ?? new Date().toISOString()
-        const row = storedDefaultsFromValues(
-          merged.name,
-          { ...defaultsFromExercise(merged), metric: resolveExerciseMetric(merged) },
-          updatedAt,
-        )
-        single = { [row.exerciseKey]: row }
+        const values = { ...defaultsFromExercise(merged), metric: resolveExerciseMetric(merged) }
+        const row = storedDefaultsFromValues(merged.name, values, updatedAt)
+        // This block's own default too, so it outranks saves made in other blocks.
+        const blockRow = storedDefaultsFromValues(merged.name, values, updatedAt, activeProgram.id)
+        single = { [row.exerciseKey]: row, [blockRow.exerciseKey]: blockRow }
         patch = { ...rawPatch, metric: row.metric, defaultsUpdatedAt: updatedAt }
         rememberExerciseDefaults(single)
-        void pushExerciseDefaults(row).then((res) => {
+        void pushExerciseDefaults([row, blockRow]).then((res) => {
           if (!res.ok) setLastSyncNotice({ type: 'error', message: res.error })
         })
       }
@@ -1235,21 +1241,26 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     async (
       exerciseName: string,
       values: ExerciseDefaultValues,
+      opts?: { blockId?: string | null },
     ): Promise<ExerciseDefaultsWriteResult> => {
       const name = exerciseName.trim()
       if (!name) return { ok: false, error: 'שם התרגיל חסר' }
 
-      const row = storedDefaultsFromValues(name, values)
-      const single: ExerciseDefaultsMap = { [row.exerciseKey]: row }
-      rememberExerciseDefaults(single)
+      // One timestamp for the global row and the block-specific row.
+      const updatedAt = new Date().toISOString()
+      const row = storedDefaultsFromValues(name, values, updatedAt)
+      const rows = opts?.blockId
+        ? [row, storedDefaultsFromValues(name, values, updatedAt, opts.blockId)]
+        : [row]
+      rememberExerciseDefaults(Object.fromEntries(rows.map((r) => [r.exerciseKey, r])))
       localDirtyRef.current = true
 
       // Mirror onto every copy of this exercise (all weekdays, all programs, and
-      // library templates) — previously only the one day's copy was patched, so
-      // the same exercise on another weekday kept its old defaults.
-      const nextPrograms = applyStoredDefaultsToPrograms(workoutPrograms, single)
+      // library templates). The full map keeps each block's own row in front.
+      const map = exerciseDefaultsRef.current
+      const nextPrograms = applyStoredDefaultsToPrograms(workoutPrograms, map)
         .programs.map(normalizeWorkoutProgram)
-      const nextTemplates = applyStoredDefaultsToTemplates(workoutTemplates, single)
+      const nextTemplates = applyStoredDefaultsToTemplates(workoutTemplates, map)
         .templates
 
       setWorkoutPrograms(nextPrograms)
@@ -1264,7 +1275,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
 
       window.clearTimeout(flushTimerRef.current)
       const [tableResult, blobOk] = await Promise.all([
-        pushExerciseDefaults(row),
+        pushExerciseDefaults(rows),
         flushCloud('persist-exercise-defaults', {
           workoutPrograms: nextPrograms,
           workoutTemplates: nextTemplates,
@@ -1739,6 +1750,55 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       ])
     },
     [setWeightLogs],
+  )
+
+  /** Apply a weigh-in edit and flush right away so a cloud pull cannot revert it. */
+  const commitWeightLogs = useCallback(
+    (reason: string, fn: (prev: WeightEntry[]) => WeightEntry[]) => {
+      setWeightLogs((prev) => {
+        const next = fn(prev)
+        if (next !== prev) scheduleFlush(reason, { weightLogs: next })
+        return next
+      })
+    },
+    [setWeightLogs, scheduleFlush],
+  )
+
+  const updateWeight = useCallback(
+    (id: string, patch: { weightKg?: number; loggedAt?: string }) => {
+      commitWeightLogs('updateWeight', (prev) =>
+        prev.map((e) => {
+          if (e.id !== id) return e
+          const weightKg =
+            patch.weightKg != null && patch.weightKg > 0 ? patch.weightKg : e.weightKg
+          // Same local day keeps the original timestamp; a new day lands at local noon.
+          const loggedAt =
+            !patch.loggedAt || patch.loggedAt === weightEntryDateKey(e)
+              ? e.loggedAt
+              : toLoggedAt(patch.loggedAt)
+          return { ...e, weightKg, loggedAt }
+        }),
+      )
+    },
+    [commitWeightLogs],
+  )
+
+  const deleteWeight = useCallback(
+    (id: string) => {
+      commitWeightLogs('deleteWeight', (prev) =>
+        prev.some((e) => e.id === id) ? prev.filter((e) => e.id !== id) : prev,
+      )
+    },
+    [commitWeightLogs],
+  )
+
+  const restoreWeight = useCallback(
+    (entry: WeightEntry) => {
+      commitWeightLogs('restoreWeight', (prev) =>
+        prev.some((e) => e.id === entry.id) ? prev : [...prev, entry],
+      )
+    },
+    [commitWeightLogs],
   )
 
   const recordBodyMeasurement = useCallback(
@@ -2347,6 +2407,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       syncNow,
       addSetLog,
       addWeight,
+      updateWeight,
+      deleteWeight,
+      restoreWeight,
       addBodyFat,
       addFood,
       updateFood,
@@ -2445,6 +2508,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       syncNow,
       addSetLog,
       addWeight,
+      updateWeight,
+      deleteWeight,
+      restoreWeight,
       addBodyFat,
       addFood,
       updateFood,

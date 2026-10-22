@@ -200,7 +200,7 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
         return
       }
       setSavedValuesKey(currentValuesKey)
-      flash({ tone: 'ok', message: 'נשמר בהצלחה ✓' })
+      flash({ tone: 'ok', message: 'נשמר כברירת מחדל ✓' })
     } catch (err) {
       console.error('[ActiveWorkoutTracker] save defaults failed', err)
       flash({ tone: 'error', message: 'שגיאת רשת — ברירת המחדל לא נשמרה' })

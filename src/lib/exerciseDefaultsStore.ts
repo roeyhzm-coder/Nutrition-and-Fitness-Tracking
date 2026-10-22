@@ -1,7 +1,10 @@
 import { withDefaultNote } from '../data/exerciseNotes'
 import { SHARED_OWNER_ALIASES, SHARED_OWNER_ID } from './appStateSync'
 import {
-  exercisePatchFromDefaults,
+  blockExerciseKey,
+  canonicalExerciseKey,
+  exercisePatchFromStoredValues,
+  isBlockExerciseKey,
   normalizeDefaultSets,
   parseOptionalNumber,
   replicateDefaultSets,
@@ -46,9 +49,8 @@ const MAX_NOTES_LENGTH = 2000
 const BASE_COLUMNS = 'exercise_key, exercise_name, metric, sets, default_sets, updated_at'
 const NOTES_COLUMNS = `${BASE_COLUMNS}, notes, notes_updated_at`
 
-export function exerciseDefaultsKey(name: string): string {
-  return name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase()
-}
+/** Global key of an exercise's saved defaults (see canonicalExerciseKey). */
+export const exerciseDefaultsKey = canonicalExerciseKey
 
 function isoOrUndefined(value: unknown): string | undefined {
   return typeof value === 'string' && !Number.isNaN(Date.parse(value))
@@ -80,8 +82,13 @@ function normalizeRow(raw: unknown): StoredExerciseDefaults | null {
   const updatedAt = isoOrUndefined(row.updated_at) ?? new Date(0).toISOString()
   const notesUpdatedAt = isoOrUndefined(row.notes_updated_at)
   const hasNotes = typeof row.notes === 'string' && notesUpdatedAt != null
+  // Block-specific rows keep their composite key; global rows re-derive it.
+  const exerciseKey =
+    typeof row.exercise_key === 'string' && isBlockExerciseKey(row.exercise_key)
+      ? row.exercise_key
+      : exerciseDefaultsKey(name)
   return {
-    exerciseKey: exerciseDefaultsKey(name),
+    exerciseKey,
     exerciseName: name,
     metric: isMetric(row.metric) ? row.metric : 'reps',
     sets,
@@ -182,10 +189,13 @@ export function storedDefaultsFromValues(
   exerciseName: string,
   values: ExerciseDefaultValues,
   updatedAt = new Date().toISOString(),
+  blockId?: string | null,
 ): StoredExerciseDefaults {
   const sets = clampSets(values.sets, Math.max(1, values.defaultSets.length))
   return {
-    exerciseKey: exerciseDefaultsKey(exerciseName),
+    exerciseKey: blockId
+      ? blockExerciseKey(blockId, exerciseName)
+      : exerciseDefaultsKey(exerciseName),
     exerciseName: exerciseName.trim(),
     metric: values.metric ?? 'reps',
     sets,
@@ -232,23 +242,33 @@ export async function pullExerciseDefaults(): Promise<ExerciseDefaultsMap | null
   }
 }
 
+/** Row with each set's weight, reps and (for timed work) seconds spelled out. */
+function defaultSetsPayload(row: StoredExerciseDefaults) {
+  return row.defaultSets.map((s) => ({
+    ...s,
+    seconds: row.metric === 'seconds' ? s.reps : null,
+  }))
+}
+
+/** Upsert one or more rows (e.g. a block-specific + global pair) in one request. */
 export async function pushExerciseDefaults(
-  row: StoredExerciseDefaults,
+  rows: StoredExerciseDefaults | StoredExerciseDefaults[],
 ): Promise<ExerciseDefaultsWriteResult> {
   if (!isSupabaseConfigured || !supabase) {
     return { ok: false, error: 'Supabase אינו מוגדר' }
   }
+  const list = Array.isArray(rows) ? rows : [rows]
   try {
     const { error } = await supabase.from(TABLE).upsert(
-      {
+      list.map((row) => ({
         owner_id: SHARED_OWNER_ID,
         exercise_key: row.exerciseKey,
         exercise_name: row.exerciseName,
         metric: row.metric,
         sets: row.sets,
-        default_sets: row.defaultSets,
+        default_sets: defaultSetsPayload(row),
         updated_at: row.updatedAt,
-      },
+      })),
       { onConflict: 'owner_id,exercise_key' },
     )
     if (error) {
@@ -303,34 +323,26 @@ export async function pushExerciseNotes(
 }
 
 /** Exercise patch derived from a stored row; free-text labels fall back to `ex`. */
-export function exercisePatchFromStored(
-  row: StoredExerciseDefaults,
-  ex?: Pick<Exercise, 'weight' | 'reps'>,
-): Partial<Exercise> {
-  const first = row.defaultSets[0]
-  return {
-    ...exercisePatchFromDefaults({
-      sets: row.sets,
-      weightKg: first?.weightKg ?? null,
-      reps: first?.reps ?? null,
-      defaultSets: row.defaultSets,
-      metric: row.metric,
-      weightLabel: ex?.weight,
-      repsLabel: ex?.reps,
-    }),
-    metric: row.metric,
-    defaultsUpdatedAt: row.updatedAt,
-  }
-}
+export const exercisePatchFromStored = exercisePatchFromStoredValues
 
 /**
- * Overlay the stored defaults for this exercise name, unless the definition
- * itself was edited more recently (e.g. in the program editor).
+ * Overlay the stored defaults for this exercise. A block-specific row for
+ * lockId always wins; otherwise the global row applies unless the
+ * definition itself was edited more recently (e.g. in the program editor).
  */
 export function withStoredDefaults<T extends Exercise>(
   ex: T,
   map: ExerciseDefaultsMap,
+  blockId?: string | null,
 ): T {
+  const block = blockId ? map[blockExerciseKey(blockId, ex.name)] : undefined
+  if (block && !block.notesOnly) {
+    const withBlock =
+      ex.defaultsUpdatedAt === block.updatedAt
+        ? ex
+        : { ...ex, ...exercisePatchFromStored(block, ex) }
+    return withStoredNotes(withBlock, map)
+  }
   const row = map[exerciseDefaultsKey(ex.name)]
   if (!row) return ex
   const withSets =
@@ -348,23 +360,23 @@ export function withStoredNotes<T extends Exercise>(ex: T, map: ExerciseDefaults
   return { ...ex, notes: row.notes || undefined, notesUpdatedAt: row.notesUpdatedAt }
 }
 
-type ExerciseOverlay = (ex: Exercise) => Exercise
+type ExerciseOverlay = (ex: Exercise, blockId?: string) => Exercise
 
 /** Program-seeded note first, then the user's saved defaults / note. */
 const fullOverlay =
   (map: ExerciseDefaultsMap): ExerciseOverlay =>
-  (ex) =>
-    withStoredDefaults(withDefaultNote(ex), map)
+  (ex, blockId) =>
+    withStoredDefaults(withDefaultNote(ex), map, blockId)
 
 const notesOverlay =
   (map: ExerciseDefaultsMap): ExerciseOverlay =>
   (ex) =>
     withStoredNotes(withDefaultNote(ex), map)
 
-function overlayList(exercises: Exercise[], overlay: ExerciseOverlay) {
+function overlayList(exercises: Exercise[], overlay: ExerciseOverlay, blockId?: string) {
   let changed = false
   const next = exercises.map((ex) => {
-    const patched = overlay(ex)
+    const patched = overlay(ex, blockId)
     if (patched !== ex) changed = true
     return patched
   })
@@ -397,12 +409,12 @@ function overlayPrograms(
     const days = program.days.map((day) => {
       let dayChanged = false
       const sessions = (day.sessions ?? []).map((session) => {
-        const res = overlayList(session.exercises, overlay)
+        const res = overlayList(session.exercises, overlay, program.id)
         if (!res.changed) return session
         dayChanged = true
         return { ...session, exercises: res.exercises }
       })
-      const standalone = overlayList(day.exercises ?? [], overlay)
+      const standalone = overlayList(day.exercises ?? [], overlay, program.id)
       if (standalone.changed) dayChanged = true
       if (!dayChanged) return day
       programChanged = true

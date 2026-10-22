@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "db:sql": "node scripts/run-supabase-sql.mjs",
-    "seed:foods": "npx --yes tsx scripts/seed-israeli-foods.ts"
+    "seed:foods": "npx --yes tsx scripts/seed-israeli-foods.ts",
+    "verify:defaults": "vite build --config scripts/vite.verify.config.ts && node node_modules/.verify/verify-exercise-defaults.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

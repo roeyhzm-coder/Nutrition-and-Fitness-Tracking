@@ -551,7 +551,14 @@ export type WorkoutLog = {
   exercises: LoggedExercise[]
 }
 
-export type ActiveWorkout = Omit<WorkoutLog, 'completedAt'>
+export type ActiveWorkout = Omit<WorkoutLog, 'completedAt'> & {
+  /**
+   * Weekday this session was started from. When that day's template changes
+   * mid-session, the workout re-aligns to the new lineup. Unset for library /
+   * ad-hoc workouts.
+   */
+  linkedDayId?: string
+}
 
 export type WorkoutTemplate = {
   id: string

@@ -23,10 +23,15 @@ import {
 } from '../lib/exerciseDefaults'
 import { withDefaultNote } from '../data/exerciseNotes'
 import {
-  withStoredDefaults,
+  withStoredNotes,
   type ExerciseDefaultsMap,
   type ExerciseDefaultsWriteResult,
 } from '../lib/exerciseDefaultsStore'
+import {
+  reconcileWorkoutExercises,
+  resolveExerciseDefaults,
+  type ExerciseDefaultsContext,
+} from '../lib/exerciseDefaultsResolve'
 import type {
   ActiveWorkout,
   Exercise,
@@ -155,6 +160,21 @@ function updateLoggedExercise(
   }
 }
 
+/**
+ * Patch the exercise by identity. Async results (save as default, metric)
+ * must never land on whatever exercise now sits at the old index.
+ */
+function updateLoggedExerciseById(
+  workout: ActiveWorkout,
+  exerciseId: string,
+  fn: (ex: LoggedExercise) => LoggedExercise,
+): ActiveWorkout {
+  return {
+    ...workout,
+    exercises: workout.exercises.map((ex) => (ex.exerciseId === exerciseId ? fn(ex) : ex)),
+  }
+}
+
 function workoutLabel(day: WorkoutDay) {
   return day.sessions.map((s) => s.name).join(' + ') || day.focus || day.title
 }
@@ -191,16 +211,13 @@ function loggedTargetsFromDefaults(
   }
 }
 
-/**
- * Resolution order for an exercise's defaults:
- * saved `exercise_defaults` row (newest) → live program copy → logged snapshot.
- */
-function resolveSourceExercise(
+/** Live program copy (else the logged snapshot) with its seeded / saved note. */
+function sourceExercise(
   logged: LoggedExercise,
   programEx: Exercise | undefined,
   stored: ExerciseDefaultsMap,
 ): Exercise {
-  return withStoredDefaults(withDefaultNote(programEx ?? loggedAsExercise(logged)), stored)
+  return withStoredNotes(withDefaultNote(programEx ?? loggedAsExercise(logged)), stored)
 }
 
 /** Keep the logged exercise's notes in step with the newest saved / program note. */
@@ -209,7 +226,7 @@ function refreshLoggedNotes(
   programEx: Exercise | undefined,
   stored: ExerciseDefaultsMap,
 ): LoggedExercise {
-  const source = resolveSourceExercise(logged, programEx, stored)
+  const source = sourceExercise(logged, programEx, stored)
   return (source.notes ?? '') === (logged.notes ?? '')
     ? logged
     : { ...logged, notes: source.notes }
@@ -218,24 +235,28 @@ function refreshLoggedNotes(
 function applyDefaultsIfUnset(
   logged: LoggedExercise,
   programEx: Exercise | undefined,
-  stored: ExerciseDefaultsMap,
+  ctx: ExerciseDefaultsContext,
 ): LoggedExercise {
   if (!loggedSetsAreUnset(logged.sets)) return logged
-  const source = resolveSourceExercise(logged, programEx, stored)
-  const defaults = defaultsFromExercise(source)
-  const metric = resolveExerciseMetric(source)
+  const resolved = resolveExerciseDefaults(sourceExercise(logged, programEx, ctx.stored), ctx)
+  const defaults = defaultsFromExercise(resolved.exercise)
   return {
     ...logged,
     ...loggedTargetsFromDefaults(defaults),
-    metric,
-    defaultMetric: metric,
+    metric: resolved.metric,
+    defaultMetric: resolved.metric,
     sets: buildSetsFromDefaults(defaults),
   }
 }
 
-function seedLoggedExercise(ex: Exercise): LoggedExercise {
+/** Fresh logged exercise hydrated through the strict defaults priority. */
+function hydrateLoggedExercise(ex: Exercise, ctx: ExerciseDefaultsContext): LoggedExercise {
+  const resolved = resolveExerciseDefaults(withStoredNotes(withDefaultNote(ex), ctx.stored), ctx)
+  return seedLoggedExercise(resolved.exercise, resolved.metric)
+}
+
+function seedLoggedExercise(ex: Exercise, metric = resolveExerciseMetric(ex)): LoggedExercise {
   const defaults = defaultsFromExercise(ex)
-  const metric = resolveExerciseMetric(ex)
   return {
     exerciseId: ex.id,
     name: ex.name,
@@ -308,20 +329,38 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     if (!activeWorkoutId) return
     setActiveWorkout((prev) => {
       if (!prev || prev.id !== activeWorkoutId) return prev
-      let changed = false
-      const exercises = prev.exercises.map((logged) => {
+      const ctx: ExerciseDefaultsContext = {
+        blockId: prev.programId,
+        stored: exerciseDefaults,
+        logs: workoutLogs,
+      }
+      // Day's template switched (e.g. דחיפה → משיכה): drop the old lineup's
+      // uncommitted sets and hydrate the new exercises by their own keys.
+      const linkedDay = prev.linkedDayId
+        ? programDays?.find((d) => d.id === prev.linkedDayId)
+        : undefined
+      const lineup = linkedDay && !linkedDay.isRest ? dayAllExercises(linkedDay) : []
+      const realigned = lineup.length
+        ? reconcileWorkoutExercises(prev.exercises, lineup, (ex) => hydrateLoggedExercise(ex, ctx))
+        : null
+      const base = realigned
+        ? { ...prev, workoutName: workoutLabel(linkedDay!), exercises: realigned }
+        : prev
+
+      let changed = !!realigned
+      const exercises = base.exercises.map((logged) => {
         const programEx = findProgramExercise(programDays, prev.dayId, logged.exerciseId)
         const next = refreshLoggedNotes(
-          applyDefaultsIfUnset(logged, programEx, exerciseDefaults),
+          applyDefaultsIfUnset(logged, programEx, ctx),
           programEx,
           exerciseDefaults,
         )
         if (next !== logged) changed = true
         return next
       })
-      return changed ? { ...prev, exercises } : prev
+      return changed ? { ...base, exercises } : prev
     })
-  }, [activeWorkoutId, programDays, exerciseDefaults, setActiveWorkout])
+  }, [activeWorkoutId, programDays, exerciseDefaults, workoutLogs, setActiveWorkout])
 
   const startFlexibleWorkout = useCallback(
     (source: FlexibleWorkoutSource) => {
@@ -333,15 +372,20 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
         source.estimatedCalories != null && Number.isFinite(source.estimatedCalories)
           ? Math.max(0, Math.round(source.estimatedCalories))
           : null
+      const ctx: ExerciseDefaultsContext = {
+        blockId: activeProgram.id,
+        stored: exerciseDefaults,
+        logs: workoutLogs,
+      }
 
       // Prefer the latest program copy (callers may pass a stale day snapshot),
-      // then overlay the exercise's saved defaults by name — the same exercise on
-      // another weekday or in a library template gets the newest saved values.
-      const liveExercises = source.exercises.map((ex) => {
+      // then hydrate each exercise by canonical key: block default → global
+      // default → last logged session → seed.
+      const exercises = source.exercises.map((ex) => {
         const live = source.dayId
           ? (findProgramExercise(activeProgram.days, source.dayId, ex.id) ?? ex)
           : ex
-        return withStoredDefaults(withDefaultNote(live), exerciseDefaults)
+        return hydrateLoggedExercise(live, ctx)
       })
 
       setActiveWorkout({
@@ -355,10 +399,11 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
         startedAt: new Date().toISOString(),
         performedOn: today,
         estimatedCalories: calories,
-        exercises: liveExercises.map(seedLoggedExercise),
+        exercises,
+        ...(source.dayId ? { linkedDayId: source.dayId } : {}),
       })
     },
-    [activeWorkout, activeProgram, exerciseDefaults, setActiveWorkout],
+    [activeWorkout, activeProgram, exerciseDefaults, workoutLogs, setActiveWorkout],
   )
 
   const startWorkout = useCallback(
@@ -470,12 +515,12 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     [setActiveWorkout],
   )
 
-  /** Functional update of one logged exercise that also refreshes the ref. */
+  /** Functional update of one logged exercise (by identity) that also refreshes the ref. */
   const patchLoggedExercise = useCallback(
-    (exIndex: number, fn: (ex: LoggedExercise) => LoggedExercise) => {
+    (exerciseId: string, fn: (ex: LoggedExercise) => LoggedExercise) => {
       setActiveWorkout((prev) => {
         if (!prev) return prev
-        const next = updateLoggedExercise(prev, exIndex, fn)
+        const next = updateLoggedExerciseById(prev, exerciseId, fn)
         activeWorkoutRef.current = next
         return next
       })
@@ -485,23 +530,26 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
 
   const setExerciseMetric = useCallback(
     async (exIndex: number, metric: ExerciseMetric): Promise<ExerciseDefaultsWriteResult> => {
-      const logged = activeWorkoutRef.current?.exercises[exIndex]
-      if (!logged) return { ok: false, error: 'התרגיל לא נמצא באימון הפעיל' }
+      const workout = activeWorkoutRef.current
+      const logged = workout?.exercises[exIndex]
+      if (!workout || !logged) return { ok: false, error: 'התרגיל לא נמצא באימון הפעיל' }
 
-      patchLoggedExercise(exIndex, (ex) => ({ ...ex, metric }))
+      patchLoggedExercise(logged.exerciseId, (ex) => ({ ...ex, metric }))
       if (logged.defaultMetric === metric) return { ok: true }
 
       // Same saved sets / kg / values — only the unit changes.
       const defaults: ExerciseDefaultValues = { ...loggedExerciseDefaults(logged), metric }
-      const result = await persistExerciseDefaults(logged.name, defaults)
+      const result = await persistExerciseDefaults(logged.name, defaults, {
+        blockId: workout.programId,
+      })
       if (!result.ok) return result
 
       const targets = loggedTargetsFromDefaults(defaults)
-      patchLoggedExercise(exIndex, (current) =>
-        current.name === logged.name
-          ? { ...current, ...targets, defaultMetric: metric }
-          : current,
-      )
+      patchLoggedExercise(logged.exerciseId, (current) => ({
+        ...current,
+        ...targets,
+        defaultMetric: metric,
+      }))
       return result
     },
     [patchLoggedExercise, persistExerciseDefaults],
@@ -513,13 +561,16 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       const logged = workout?.exercises[exIndex]
       if (!workout || !logged) return { ok: false, error: 'התרגיל לא נמצא באימון הפעיל' }
 
+      // Every set's own weight + reps/seconds, saved for this block and globally.
       const metric = logged.metric ?? resolveExerciseMetric(loggedAsExercise(logged))
       const defaults = defaultsFromLoggedSets(logged.sets, metric)
-      const result = await persistExerciseDefaults(logged.name, defaults)
+      const result = await persistExerciseDefaults(logged.name, defaults, {
+        blockId: workout.programId,
+      })
       if (!result.ok) return result
 
       const targets = loggedTargetsFromDefaults(defaults)
-      patchLoggedExercise(exIndex, (current) => ({
+      patchLoggedExercise(logged.exerciseId, (current) => ({
         ...current,
         ...targets,
         metric,
@@ -571,8 +622,10 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     if (!exercises.length) return null
 
     const performedOn = activeWorkout.performedOn || localDateKey()
+    const { linkedDayId, ...session } = activeWorkout
+    void linkedDayId
     const log: WorkoutLog = {
-      ...activeWorkout,
+      ...session,
       blockNumber:
         activeWorkout.blockNumber ??
         deriveBlockNumber(activeWorkout.programId, activeWorkout.programName),
