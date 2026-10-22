@@ -5,6 +5,7 @@ import { isDurationTrackedExercise } from '../../lib/exerciseDefaults'
 import type { LoggedExercise, WorkoutLog } from '../../lib/types'
 import { parseLocalDateKey } from '../../lib/types'
 import { workoutPerformedOn } from '../../lib/caloriesBurned'
+import { Accordion, AccordionContent, AccordionItem } from '../ui/accordion'
 import { Card } from '../ui/Card'
 import { IconButton } from '../ui/IconButton'
 
@@ -107,10 +108,20 @@ function LogItem({ log }: { log: WorkoutLog }) {
   )
 }
 
-export function WorkoutHistoryCard({ limit }: { limit?: number }) {
+type WorkoutHistoryCardProps = {
+  /** Show only the newest N workouts (no way to reach older ones). */
+  limit?: number
+  /** Show the newest N openly; every older workout sits in a closed accordion. */
+  collapseAfter?: number
+}
+
+export function WorkoutHistoryCard({ limit, collapseAfter }: WorkoutHistoryCardProps) {
   const { workoutLogs } = useWorkoutSession()
+  const [olderOpen, setOlderOpen] = useState(false)
   const sorted = [...workoutLogs].sort((a, b) => b.completedAt.localeCompare(a.completedAt))
   const shown = limit ? sorted.slice(0, limit) : sorted
+  const recent = collapseAfter ? shown.slice(0, collapseAfter) : shown
+  const older = collapseAfter ? shown.slice(collapseAfter) : []
 
   return (
     <Card title={`היסטוריית אימונים · ${workoutLogs.length}`}>
@@ -119,11 +130,47 @@ export function WorkoutHistoryCard({ limit }: { limit?: number }) {
           עדיין אין אימונים שמורים. התחל אימון מהלוח השבועי כדי לתעד ביצוע.
         </p>
       ) : (
-        <ul className="space-y-2">
-          {shown.map((log) => (
-            <LogItem key={log.id} log={log} />
-          ))}
-        </ul>
+        <>
+          <ul className="space-y-2">
+            {recent.map((log) => (
+              <LogItem key={log.id} log={log} />
+            ))}
+          </ul>
+          {older.length > 0 ? (
+            <Accordion
+              type="single"
+              collapsible
+              value={olderOpen ? 'older' : ''}
+              onValueChange={(v) => setOlderOpen(v === 'older')}
+            >
+              <AccordionItem value="older" className="border-0">
+                <AccordionContent className="px-0 pt-2 pb-0">
+                  <ul className="space-y-2">
+                    {older.map((log) => (
+                      <LogItem key={log.id} log={log} />
+                    ))}
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          ) : null}
+          {older.length > 0 ? (
+            <button
+              type="button"
+              aria-expanded={olderOpen}
+              onClick={() => setOlderOpen((v) => !v)}
+              className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl border border-blue-200 bg-blue-50 px-4 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+            >
+              {olderOpen
+                ? 'הסתר היסטוריה קודמת'
+                : `הצג את כל היסטוריית האימונים (עוד ${older.length} אימונים)`}
+              <ChevronDown
+                className={`size-4 shrink-0 transition-transform duration-200 ${olderOpen ? 'rotate-180' : ''}`}
+                strokeWidth={2}
+              />
+            </button>
+          ) : null}
+        </>
       )}
     </Card>
   )

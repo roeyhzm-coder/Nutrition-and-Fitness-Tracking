@@ -390,7 +390,7 @@ export function WorkoutsPage() {
           />
         ) : null}
 
-        <WorkoutHistoryCard limit={10} />
+        <WorkoutHistoryCard collapseAfter={3} />
         <ActivityLogCard />
         <WeeklyPlanEditor />
       </div>
