@@ -19,6 +19,10 @@ export type FitnessTipsDoc = {
   categories: TipCategory[]
   /** ISO timestamp of the last local edit; the epoch marks the untouched seed. */
   updatedAt: string
+  /** `updatedAt` of the version last confirmed in the cloud (the merge base). */
+  syncedAt?: string
+  /** Tombstones (ids + titles) of entries deleted here but not yet pushed — kept out of merges. */
+  pendingDeletes?: string[]
 }
 
 export const FITNESS_TIPS_STORAGE_KEY = 'tn.fitnessTips.v1'
@@ -152,6 +156,10 @@ export function loadLocalTips(): FitnessTipsDoc {
         return {
           categories: normalizeCategories(parsed.categories),
           updatedAt: parsed.updatedAt,
+          syncedAt: typeof parsed.syncedAt === 'string' ? parsed.syncedAt : undefined,
+          pendingDeletes: Array.isArray(parsed.pendingDeletes)
+            ? parsed.pendingDeletes.filter((id): id is string => typeof id === 'string')
+            : [],
         }
       }
     }
@@ -214,6 +222,53 @@ export function subscribeFitnessTips(onChange: () => void): () => void {
   return () => {
     void supabase!.removeChannel(channel)
   }
+}
+
+/** True when this device holds edits the cloud has not confirmed yet. */
+export function hasUnsyncedChanges(doc: FitnessTipsDoc): boolean {
+  return doc.updatedAt !== SEED_UPDATED_AT && doc.updatedAt !== doc.syncedAt
+}
+
+function titleKey(title: string) {
+  return title.trim().toLowerCase()
+}
+
+function sameKey(a: { id: string; title: string }, b: { id: string; title: string }) {
+  return a.id === b.id || titleKey(a.title) === titleKey(b.title)
+}
+
+/** Tombstone keys for a deleted entry: its id plus its title (seeded ids differ per device). */
+export function deletionKeys(entry: { id: string; title: string }): string[] {
+  return [entry.id, `title:${titleKey(entry.title)}`]
+}
+
+/**
+ * Combines unsynced local edits with a newer cloud version instead of letting
+ * either side overwrite the other. Categories and tips match by id or by title
+ * (each device seeds its own ids); on a clash the local copy wins, local order
+ * is kept, cloud-only entries are appended, and local unsynced deletes stay deleted.
+ */
+export function mergeTipCategories(
+  local: TipCategory[],
+  remote: TipCategory[],
+  pendingDeletes: readonly string[] = [],
+): TipCategory[] {
+  const tombstones = new Set(pendingDeletes)
+  const isDeleted = (e: { id: string; title: string }) =>
+    deletionKeys(e).some((k) => tombstones.has(k))
+  const merged = local.map((cat) => {
+    const twin = remote.find((r) => sameKey(r, cat))
+    if (!twin) return cat
+    const extra = twin.items.filter(
+      (ri) => !isDeleted(ri) && !cat.items.some((li) => sameKey(li, ri)),
+    )
+    return extra.length ? { ...cat, items: [...cat.items, ...extra] } : cat
+  })
+  for (const cat of remote) {
+    if (isDeleted(cat) || merged.some((m) => sameKey(m, cat))) continue
+    merged.push({ ...cat, items: cat.items.filter((i) => !isDeleted(i)) })
+  }
+  return merged
 }
 
 export function moveInArray<T>(list: T[], index: number, delta: -1 | 1): T[] {

@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "db:sql": "node scripts/run-supabase-sql.mjs",
     "seed:foods": "npx --yes tsx scripts/seed-israeli-foods.ts",
-    "verify:defaults": "vite build --config scripts/vite.verify.config.ts && node node_modules/.verify/verify-exercise-defaults.mjs"
+    "verify:defaults": "vite build --config scripts/vite.verify.config.ts && node node_modules/.verify/verify-exercise-defaults.mjs",
+    "verify:tips": "vite build --config scripts/vite.verify-tips.config.ts && node node_modules/.verify-tips/verify-fitness-tips.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

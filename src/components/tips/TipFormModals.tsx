@@ -140,24 +140,49 @@ export function TipItemModal({ target, categories, onClose, onSave }: TipItemMod
   )
 }
 
+const CATEGORY_SUGGESTIONS = [
+  'פוזינג אקטיבי',
+  'דגשים לרגליים',
+  'דגשים לכתפיים וידיים',
+  'בטן וליבה',
+  'קרדיו והתאוששות',
+  'מתיחות אחרי אימון',
+]
+
 type CategoryModalProps = {
   /** `null` closed, `''` new category, otherwise the category being renamed. */
   category: TipCategory | '' | null
+  /** All current categories, for duplicate-name checks and suggestions. */
+  categories: TipCategory[]
   onClose: () => void
   onSave: (title: string) => void
 }
 
-export function CategoryModal({ category, onClose, onSave }: CategoryModalProps) {
+const normalize = (title: string) => title.trim().toLowerCase()
+
+export function CategoryModal({ category, categories, onClose, onSave }: CategoryModalProps) {
   const [title, setTitle] = useState('')
 
   useEffect(() => {
     if (category != null) setTitle(category === '' ? '' : category.title)
   }, [category])
 
+  const editingId = category ? category.id : null
+  const taken = new Set(
+    categories.filter((c) => c.id !== editingId).map((c) => normalize(c.title)),
+  )
+  const trimmed = title.trim()
+  const duplicate = trimmed.length > 0 && taken.has(normalize(trimmed))
+  const unchanged = category ? trimmed === category.title : false
+  const suggestions = category
+    ? []
+    : CATEGORY_SUGGESTIONS.filter((s) => !taken.has(normalize(s)))
+
   function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    const next = title.trim()
-    if (next) onSave(next)
+    if (!trimmed || duplicate) return
+    if (unchanged) onClose()
+    else onSave(trimmed)
   }
 
   return (
@@ -167,19 +192,57 @@ export function CategoryModal({ category, onClose, onSave }: CategoryModalProps)
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className="space-y-4" dir="rtl">
-        <input
-          className="field"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          maxLength={CATEGORY_TITLE_MAX}
-          placeholder="למשל: דגשים לרגליים"
-          aria-label="שם הקטגוריה"
-          autoFocus
-          required
-        />
+        <div className="space-y-1.5">
+          <input
+            className="field"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={CATEGORY_TITLE_MAX}
+            placeholder="למשל: פוזינג אקטיבי"
+            aria-label="שם הקטגוריה"
+            aria-invalid={duplicate}
+            autoFocus
+            required
+          />
+          {duplicate ? (
+            <p role="alert" className="text-[11px] font-medium text-danger">
+              כבר קיימת קטגוריה בשם הזה
+            </p>
+          ) : null}
+        </div>
+
+        {suggestions.length > 0 ? (
+          <div className="space-y-1.5">
+            <p className="text-[11px] font-semibold text-muted">הצעות מהירות</p>
+            <div className="flex flex-wrap gap-1.5">
+              {suggestions.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setTitle(s)}
+                  aria-pressed={trimmed === s}
+                  className={[
+                    'rounded-full border px-3 py-1.5 text-xs font-medium transition',
+                    trimmed === s
+                      ? 'border-blue-300 bg-blue-50 text-blue-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50/60',
+                  ].join(' ')}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div className="flex gap-2">
-          <Button type="submit" variant="accent" className="flex-1" disabled={!title.trim()}>
-            שמור
+          <Button
+            type="submit"
+            variant="accent"
+            className="flex-1"
+            disabled={!trimmed || duplicate}
+          >
+            {category ? 'שמור' : 'צור קטגוריה'}
           </Button>
           <Button type="button" variant="ghost" onClick={onClose}>
             ביטול
