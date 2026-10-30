@@ -3,7 +3,7 @@ import {
   LayoutDashboard,
   Dumbbell,
   UtensilsCrossed,
-  CalendarCheck,
+  Lightbulb,
   UserRound,
 } from 'lucide-react'
 
@@ -11,7 +11,7 @@ const tabs = [
   { to: '/', label: 'דשבורד', icon: LayoutDashboard },
   { to: '/workouts', label: 'אימונים', icon: Dumbbell },
   { to: '/nutrition', label: 'תזונה ומתכונים', icon: UtensilsCrossed },
-  { to: '/routines', label: 'שגרה', icon: CalendarCheck },
+  { to: '/tips', label: 'כושר דגשים', icon: Lightbulb },
   { to: '/profile', label: 'פרופיל ומדדים', icon: UserRound },
 ]
 

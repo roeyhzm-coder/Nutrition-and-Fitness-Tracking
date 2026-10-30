@@ -7,6 +7,7 @@ import { WorkoutsPage } from './pages/WorkoutsPage'
 import { NutritionPage } from './pages/NutritionPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { RoutinesPage } from './pages/RoutinesPage'
+import { TipsPage } from './pages/TipsPage'
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
               <Route index element={<DashboardPage />} />
               <Route path="workouts" element={<WorkoutsPage />} />
               <Route path="nutrition" element={<NutritionPage />} />
+              <Route path="tips" element={<TipsPage />} />
               <Route path="routines" element={<RoutinesPage />} />
               <Route path="profile" element={<ProfilePage />} />
               <Route path="habits" element={<Navigate to="/routines" replace />} />
