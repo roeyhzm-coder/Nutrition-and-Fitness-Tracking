@@ -19,8 +19,8 @@ import {
 } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Button } from '../components/ui/button'
-import { TipBody } from '../components/tips/TipBody'
 import { TipActionsMenu } from '../components/tips/TipActionsMenu'
+import { TipItemAccordion } from '../components/tips/TipItemAccordion'
 import {
   CategoryModal,
   TipItemModal,
@@ -112,6 +112,8 @@ export function TipsPage() {
     return new Set(categories[0] ? [categories[0].id] : [])
   })
   const userToggled = useRef(readOpenState() != null)
+  // Tips start collapsed each visit; this is view state only and never synced.
+  const [openItemIds, setOpenItemIds] = useState<Set<string>>(() => new Set())
   const [itemTarget, setItemTarget] = useState<TipDraftTarget | null>(null)
   const [categoryTarget, setCategoryTarget] = useState<TipCategory | '' | null>(null)
   const [undo, setUndo] = useState<Undo | null>(null)
@@ -147,6 +149,15 @@ export function TipsPage() {
 
   function open(id: string) {
     if (!openIds.has(id)) updateOpen(new Set(openIds).add(id))
+  }
+
+  function toggleItem(id: string) {
+    setOpenItemIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   function offerUndo(next: Undo) {
@@ -349,18 +360,12 @@ export function TipsPage() {
                           </p>
                         ) : null}
                         {category.items.map((item, ii) => (
-                          <article
+                          <TipItemAccordion
                             key={item.id}
-                            className="rounded-xl border border-slate-200/80 bg-white p-3"
-                          >
-                            <div className="flex items-start gap-2">
-                              <h3 className="min-w-0 flex-1 pt-1.5 text-sm font-bold text-slate-900">
-                                {item.title}
-                              </h3>
-                              <TipActionsMenu
-                                label={`פעולות לדגש ${item.title}`}
-                                className="-me-1.5 -mt-0.5"
-                                actions={[
+                            item={item}
+                            isOpen={openItemIds.has(item.id)}
+                            onToggle={() => toggleItem(item.id)}
+                            actions={[
                                   {
                                     label: 'ערוך',
                                     icon: Pencil,
@@ -394,14 +399,7 @@ export function TipsPage() {
                                     },
                                   },
                                 ]}
-                              />
-                            </div>
-                            {item.body.trim() ? (
-                              <div className="mt-1">
-                                <TipBody body={item.body} />
-                              </div>
-                            ) : null}
-                          </article>
+                          />
                         ))}
                         <button
                           type="button"
@@ -457,6 +455,7 @@ export function TipsPage() {
         onSave={(categoryId, input) => {
           tips.saveItem(categoryId, input)
           open(categoryId)
+          if (input.id) setOpenItemIds((prev) => new Set(prev).add(input.id as string))
           setItemTarget(null)
         }}
       />
