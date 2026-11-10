@@ -39,9 +39,12 @@ import {
   WORK_STYLE_LABELS,
 } from './types'
 import {
+  buildRelativeWeeklyConsistency,
   parseDayMark,
   relativeWeekNumber,
   type ConsistencyDayMarks,
+  type ConsistencyWeekNotes,
+  type WeekStartDay,
 } from './weeklyConsistency'
 import { workoutPerformedOn } from './caloriesBurned'
 import {
@@ -258,6 +261,37 @@ function completedDateKeys(input: {
     if (parseDayMark(mark)?.done) dates.add(date)
   }
   return dates
+}
+
+/** User-written reasons for each noted week (same numbering/counts as the tracker). */
+function formatWeekNotes(input: {
+  setLogs: SetLog[]
+  phaseStart: string
+  target: number
+  dayMarks: ConsistencyDayMarks
+  weekNotes: ConsistencyWeekNotes
+  weekStartsOn: WeekStartDay
+}): string {
+  const fmt = (d: Date) =>
+    d.toLocaleDateString('he-IL', { day: 'numeric', month: 'short' })
+  return buildRelativeWeeklyConsistency(input.setLogs, input.phaseStart, {
+    weeksBack: 'all',
+    target: input.target,
+    dayMarks: input.dayMarks,
+    weekStartsOn: input.weekStartsOn,
+    weekNotes: input.weekNotes,
+  })
+    .filter((week) => week.note)
+    .sort((a, b) => a.weekNumber - b.weekNumber)
+    .map((week) => {
+      const status =
+        week.completed >= week.target
+          ? 'עמד ביעד'
+          : `חסרו ${week.target - week.completed}`
+      const note = (week.note ?? '').replace(/\s*\n+\s*/g, ' / ')
+      return `- שבוע ${week.weekNumber} (${fmt(week.start)} – ${fmt(week.end)}): ${week.completed}/${week.target} אימונים (${status}) · הערה: ${note}`
+    })
+    .join('\n')
 }
 
 type Adherence = { scheduled: number; completed: number; pct: number }
@@ -696,6 +730,8 @@ export function buildAiExportPrompt(input: {
   routines?: Routine[]
   focusTracks?: FocusTrack[]
   consistencyDayMarks?: ConsistencyDayMarks
+  consistencyWeekNotes?: ConsistencyWeekNotes
+  weekStartsOn?: WeekStartDay
   savedMeals?: SavedMeal[]
   recipes?: Recipe[]
   workoutPrograms?: WorkoutProgram[]
@@ -851,6 +887,14 @@ export function buildAiExportPrompt(input: {
     scheduledDays,
     completedDates,
   )
+  const weekNotesSection = formatWeekNotes({
+    setLogs: input.setLogs,
+    phaseStart,
+    target: goal.weeklyWorkoutTarget || 5,
+    dayMarks: input.consistencyDayMarks ?? {},
+    weekNotes: input.consistencyWeekNotes ?? {},
+    weekStartsOn: input.weekStartsOn ?? 0,
+  })
   const adherenceLines = [
     weekAdherence ? formatAdherenceLine('השבוע הנוכחי', weekAdherence) : '',
     monthAdherence
@@ -927,6 +971,11 @@ ${PHASE_BLUEPRINT.join('\n')}
         ]
           .filter(Boolean)
           .join('\n')
+      : '',
+    weekNotesSection
+      ? `## הערות שבועיות — סיבות לחריגות (נכתבו על ידי המתאמן)
+התייחס לסיבות אלו בניתוח העקביות: זהה דפוסים חוזרים (עבודה, שינה, פציעה, נסיעות) והצע התאמות מעשיות לתוכנית.
+${weekNotesSection}`
       : '',
     routinesSection ? `## שגרות והרגלים\n${routinesSection}` : '',
     habitLines.length ? `## הרגלים\n${habitLines.join('\n')}` : '',

@@ -4,6 +4,11 @@ import { buildAiExportPrompt, parseImportJson } from '../../lib/exportPrompt'
 import { buildExportJson, downloadTextFile } from '../../lib/dynamicExport'
 import { extractBodyMeasurementsHistory } from '../../lib/bodyMeasurements'
 import { localDateKey } from '../../lib/types'
+import {
+  parseWeekStartDay,
+  WEEK_START_STORAGE_KEY,
+  type WeekStartDay,
+} from '../../lib/weeklyConsistency'
 import { useAppData } from '../../context/AppDataContext'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
@@ -28,6 +33,7 @@ export function AiExportPanel() {
     routines,
     focusTracks,
     consistencyDayMarks,
+    consistencyWeekNotes,
     savedMeals,
     recipes,
     workoutPrograms,
@@ -43,6 +49,11 @@ export function AiExportPanel() {
     LAST_AI_EXPORT_KEY,
     null,
   )
+  const [storedWeekStart] = useLocalStorage<WeekStartDay>(
+    WEEK_START_STORAGE_KEY,
+    0,
+  )
+  const weekStartsOn = parseWeekStartDay(storedWeekStart)
 
   const prompt = useMemo(
     () =>
@@ -66,6 +77,8 @@ export function AiExportPanel() {
         routines,
         focusTracks,
         consistencyDayMarks,
+        consistencyWeekNotes,
+        weekStartsOn,
         savedMeals,
         recipes,
         workoutPrograms,
@@ -91,6 +104,8 @@ export function AiExportPanel() {
       routines,
       focusTracks,
       consistencyDayMarks,
+      consistencyWeekNotes,
+      weekStartsOn,
       savedMeals,
       recipes,
       workoutPrograms,
