@@ -150,8 +150,11 @@ import {
 } from '../lib/types'
 import {
   marksForWeekCount,
+  mergeWeekNotes,
+  WEEK_NOTE_MAX_LENGTH,
   type ConsistencyDayAssignment,
   type ConsistencyDayMarks,
+  type ConsistencyWeekNotes,
 } from '../lib/weeklyConsistency'
 
 type RecipesSyncStatus = 'idle' | 'loading' | 'synced' | 'error'
@@ -173,6 +176,9 @@ type AppDataContextValue = {
   toggleConsistencyDay: (date: string) => void
   setConsistencyDayMark: (date: string, mark: ConsistencyDayAssignment) => void
   setWeekConsistencyCount: (weekStart: Date, count: number) => void
+  consistencyWeekNotes: ConsistencyWeekNotes
+  /** Save (or clear, with empty text) the note stored under a week-start date key. */
+  setWeekNote: (noteKey: string, text: string) => void
   weightLogs: WeightEntry[]
   bodyMeasurements: BodyMeasurement[]
   recordBodyMeasurement: (input: {
@@ -560,6 +566,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [setLogs, setSetLogs] = useLocalStorage<SetLog[]>('tn.setLogs', [])
   const [consistencyDayMarks, setConsistencyDayMarks] =
     useLocalStorage<ConsistencyDayMarks>('tn.consistencyDayMarks.v1', {})
+  const [consistencyWeekNotes, setConsistencyWeekNotes] =
+    useLocalStorage<ConsistencyWeekNotes>('tn.consistencyWeekNotes.v1', {})
   const [weightLogs, setWeightLogs] = useLocalStorage<WeightEntry[]>(
     'tn.weightLogs',
     [],
@@ -1108,6 +1116,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [setConsistencyDayMarks],
   )
 
+  const setWeekNote = useCallback(
+    (noteKey: string, text: string) => {
+      const trimmed = text.trim().slice(0, WEEK_NOTE_MAX_LENGTH)
+      setConsistencyWeekNotes((prev) => {
+        if ((prev[noteKey]?.text ?? '') === trimmed) return prev
+        return {
+          ...prev,
+          [noteKey]: { text: trimmed, updatedAt: new Date().toISOString() },
+        }
+      })
+    },
+    [setConsistencyWeekNotes],
+  )
+
   const ingestRemoteRecipes = useCallback(
     (remote: Recipe[]) => {
       markCatalogSeeded()
@@ -1177,6 +1199,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     workoutPrograms,
     workoutTemplates,
     consistencyDayMarks,
+    consistencyWeekNotes,
     foodCategories,
     savedMeals,
     recipes,
@@ -1437,6 +1460,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (remote.consistencyDayMarks) {
         setConsistencyDayMarks(remote.consistencyDayMarks)
       }
+      if (remote.consistencyWeekNotes) {
+        const remoteNotes = remote.consistencyWeekNotes
+        setConsistencyWeekNotes((local) => mergeWeekNotes(local, remoteNotes))
+      }
       if (remote.foodCategories !== undefined && remote.foodCategories.length) {
         setFoodCategories(remote.foodCategories)
       }
@@ -1526,6 +1553,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setActiveProgramIdState,
       setWorkoutTemplates,
       setConsistencyDayMarks,
+      setConsistencyWeekNotes,
       setFoodCategories,
       setSavedMeals,
       setRecipes,
@@ -1707,6 +1735,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     workoutPrograms,
     workoutTemplates,
     consistencyDayMarks,
+    consistencyWeekNotes,
     foodCategories,
     savedMeals,
     recipes,
@@ -2343,6 +2372,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toggleConsistencyDay,
       setConsistencyDayMark,
       setWeekConsistencyCount,
+      consistencyWeekNotes,
+      setWeekNote,
       weightLogs,
       bodyMeasurements,
       recordBodyMeasurement,
@@ -2444,6 +2475,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       toggleConsistencyDay,
       setConsistencyDayMark,
       setWeekConsistencyCount,
+      consistencyWeekNotes,
+      setWeekNote,
       weightLogs,
       bodyMeasurements,
       recordBodyMeasurement,

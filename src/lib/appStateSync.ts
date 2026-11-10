@@ -24,7 +24,12 @@ import {
   profileMeasurementColumns,
 } from './types'
 import { normalizeMacroPresets } from '../data/defaults'
-import type { ConsistencyDayMarks } from './weeklyConsistency'
+import {
+  splitConsistencyPayload,
+  WEEK_NOTES_MARKS_KEY,
+  type ConsistencyDayMarks,
+  type ConsistencyWeekNotes,
+} from './weeklyConsistency'
 import {
   pullBodyMeasurements,
   pushBodyMeasurements,
@@ -111,6 +116,8 @@ export type SyncedAppState = {
   /** Undefined when the remote table lacks the workout_templates column. */
   workoutTemplates?: WorkoutTemplate[]
   consistencyDayMarks: ConsistencyDayMarks
+  /** Undefined when the remote payload predates week notes (keep local). */
+  consistencyWeekNotes?: ConsistencyWeekNotes
   foodCategories: FoodCategory[]
   /** Undefined when the remote table lacks the extended columns. */
   savedMeals?: SavedMeal[]
@@ -266,6 +273,7 @@ function parseRow(
     : isPhase(data.phase)
       ? data.phase
       : 'maintain'
+  const consistency = splitConsistencyPayload(data.consistency_day_marks)
 
   return {
     phase,
@@ -278,8 +286,8 @@ function parseRow(
     workoutTemplates: flags.hasTemplates
       ? ((data.workout_templates as WorkoutTemplate[] | null) ?? [])
       : undefined,
-    consistencyDayMarks:
-      (data.consistency_day_marks as ConsistencyDayMarks) ?? {},
+    consistencyDayMarks: consistency.marks,
+    consistencyWeekNotes: consistency.notes,
     foodCategories: (data.food_categories as FoodCategory[]) ?? [],
     ...(flags.hasExtended
       ? {
@@ -457,7 +465,10 @@ function buildNutritionPayloads(
     active_program_id: state.activeProgramId,
     workout_programs: state.workoutPrograms,
     workout_templates: state.workoutTemplates ?? [],
-    consistency_day_marks: state.consistencyDayMarks,
+    consistency_day_marks: {
+      ...state.consistencyDayMarks,
+      [WEEK_NOTES_MARKS_KEY]: state.consistencyWeekNotes ?? {},
+    },
     food_categories: state.foodCategories,
     user_profile: state.profile ?? null,
     activity_logs: state.activityLogs ?? [],

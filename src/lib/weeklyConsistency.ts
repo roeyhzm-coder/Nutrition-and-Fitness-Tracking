@@ -27,9 +27,72 @@ export type WeekConsistency = {
   target: number
   dates: string[]
   daySlots: DaySlot[]
+  /** Storage key for this week's note (an existing note's key, else the week-start date). */
+  noteKey: string
+  /** Free-text memo for the week (e.g. why it deviated from the target). */
+  note?: string
 }
 
 export type ConsistencyDayMarks = Record<string, ConsistencyDayMark>
+
+/** A per-week memo. Empty `text` is a tombstone so deletions sync across devices. */
+export type WeekNote = { text: string; updatedAt: string }
+
+/** Week-start date (YYYY-MM-DD) → note. */
+export type ConsistencyWeekNotes = Record<string, WeekNote>
+
+export const WEEK_NOTE_MAX_LENGTH = 500
+
+/**
+ * Week notes ride inside the existing `consistency_day_marks` JSON column under
+ * this reserved (non-date) key, so no schema migration or RLS change is needed.
+ */
+export const WEEK_NOTES_MARKS_KEY = '__weekNotes'
+
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
+
+export function parseWeekNotes(raw: unknown): ConsistencyWeekNotes {
+  const out: ConsistencyWeekNotes = {}
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!DATE_KEY_RE.test(key) || !value || typeof value !== 'object') continue
+    const { text, updatedAt } = value as { text?: unknown; updatedAt?: unknown }
+    if (typeof text !== 'string' || typeof updatedAt !== 'string') continue
+    out[key] = { text: text.slice(0, WEEK_NOTE_MAX_LENGTH), updatedAt }
+  }
+  return out
+}
+
+/** Split a raw `consistency_day_marks` payload into day marks and week notes. */
+export function splitConsistencyPayload(raw: unknown): {
+  marks: ConsistencyDayMarks
+  notes: ConsistencyWeekNotes | undefined
+} {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { marks: {}, notes: undefined }
+  }
+  const { [WEEK_NOTES_MARKS_KEY]: rawNotes, ...marks } = raw as Record<
+    string,
+    unknown
+  >
+  return {
+    marks: marks as ConsistencyDayMarks,
+    notes: rawNotes === undefined ? undefined : parseWeekNotes(rawNotes),
+  }
+}
+
+/** Per-key last-write-wins merge (tombstones included). */
+export function mergeWeekNotes(
+  local: ConsistencyWeekNotes,
+  remote: ConsistencyWeekNotes,
+): ConsistencyWeekNotes {
+  const next: ConsistencyWeekNotes = { ...local }
+  for (const [key, note] of Object.entries(remote)) {
+    const mine = next[key]
+    if (!mine || note.updatedAt > mine.updatedAt) next[key] = note
+  }
+  return next
+}
 
 export function parseDayMark(
   mark: ConsistencyDayMark | undefined,
@@ -147,10 +210,12 @@ export function buildRelativeWeeklyConsistency(
     target?: number
     dayMarks?: ConsistencyDayMarks
     weekStartsOn?: WeekStartDay
+    weekNotes?: ConsistencyWeekNotes
   },
 ): WeekConsistency[] {
   const target = options?.target ?? 5
   const marks = options?.dayMarks ?? {}
+  const notes = options?.weekNotes ?? {}
   const weekStartsOn = parseWeekStartDay(options?.weekStartsOn ?? 0)
   const phaseStart = parseDateOnly(phaseStartDate)
   const today = new Date()
@@ -205,6 +270,15 @@ export function buildRelativeWeeklyConsistency(
 
     const dates = slots.filter((s) => s.done).map((s) => s.date)
 
+    // Notes are anchored to a date, so changing the week-start day keeps them
+    // attached to the week that now contains that date.
+    const startKey = toKey(start)
+    const noteKey =
+      (notes[startKey]?.text ? startKey : undefined) ??
+      slots.map((s) => s.date).find((date) => notes[date]?.text) ??
+      startKey
+    const note = notes[noteKey]?.text || undefined
+
     weeks.push({
       weekKey: `${phaseStartDate}-w${weekIndex + 1}`,
       weekNumber: weekIndex + 1,
@@ -214,6 +288,8 @@ export function buildRelativeWeeklyConsistency(
       target,
       dates,
       daySlots: slots,
+      noteKey,
+      note,
     })
   }
 

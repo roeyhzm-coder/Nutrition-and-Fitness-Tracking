@@ -1,10 +1,15 @@
-import { useState } from 'react'
-import { ChevronLeft, ChevronRight, Pencil } from 'lucide-react'
-import type { WeekConsistency } from '../../lib/weeklyConsistency'
+import { useState, type KeyboardEvent } from 'react'
+import { ChevronLeft, ChevronRight, Pencil, StickyNote } from 'lucide-react'
+import {
+  WEEK_NOTE_MAX_LENGTH,
+  type WeekConsistency,
+} from '../../lib/weeklyConsistency'
 import { Modal } from '../ui/Modal'
 
 export const WEEKS_PER_PAGE = 10
 const COUNT_OPTIONS = [0, 1, 2, 3, 4, 5] as const
+
+type EditMode = 'count' | 'note'
 
 /** Blue intensity scale for 0–5 (5+ uses the gradient). */
 export function weekCountTone(count: number): string {
@@ -22,18 +27,103 @@ function rangeLabel(week: WeekConsistency) {
   return `${fmt(week.start)} – ${fmt(week.end)}`
 }
 
-function TrackerRow({
+function WeekNoteEditor({
   week,
-  editing,
-  onToggleEdit,
-  onSetCount,
+  onSave,
+  onCancel,
 }: {
   week: WeekConsistency
-  editing: boolean
-  onToggleEdit: () => void
+  onSave: (text: string) => void
+  onCancel: () => void
+}) {
+  const [draft, setDraft] = useState(week.note ?? '')
+  const unchanged = draft.trim() === (week.note ?? '')
+  const inputId = `week-note-${week.weekKey}`
+
+  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Escape') {
+      e.stopPropagation()
+      onCancel()
+    } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      if (!unchanged) onSave(draft)
+    }
+  }
+
+  return (
+    <form
+      className="mt-2 space-y-2 rounded-xl bg-white p-2 text-slate-900 shadow-sm ring-1 ring-black/5"
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!unchanged) onSave(draft)
+      }}
+    >
+      <label htmlFor={inputId} className="sr-only">
+        הערה לשבוע {week.weekNumber}
+      </label>
+      <textarea
+        id={inputId}
+        dir="rtl"
+        autoFocus
+        rows={3}
+        maxLength={WEEK_NOTE_MAX_LENGTH}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={onKeyDown}
+        placeholder={`למשל: ${week.completed}/${week.target} בגלל משמרות עבודה עמוסות`}
+        className="block w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-sm leading-relaxed text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-200"
+      />
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[11px] tabular-nums text-slate-400">
+          {draft.length}/{WEEK_NOTE_MAX_LENGTH}
+        </span>
+        <div className="flex items-center gap-1.5">
+          {week.note ? (
+            <button
+              type="button"
+              onClick={() => onSave('')}
+              className="min-h-9 rounded-lg px-2.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
+            >
+              מחק
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onCancel}
+            className="min-h-9 rounded-lg px-2.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
+          >
+            ביטול
+          </button>
+          <button
+            type="submit"
+            disabled={unchanged}
+            className="min-h-9 rounded-lg bg-blue-600 px-3.5 text-xs font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            שמור
+          </button>
+        </div>
+      </div>
+    </form>
+  )
+}
+
+function TrackerRow({
+  week,
+  editMode,
+  onToggleEdit,
+  onSetCount,
+  onSaveNote,
+}: {
+  week: WeekConsistency
+  editMode: EditMode | null
+  onToggleEdit: (mode: EditMode) => void
   onSetCount: (count: number) => void
+  onSaveNote: (text: string) => void
 }) {
   const muted = week.completed >= 3 ? 'text-white/80' : 'text-current opacity-70'
+  const editingCount = editMode === 'count'
+  const editingNote = editMode === 'note'
+  const hasNote = !!week.note
 
   return (
     <li className={`rounded-xl px-3 py-2 transition-colors ${weekCountTone(week.completed)}`}>
@@ -48,8 +138,33 @@ function TrackerRow({
           </span>
           <button
             type="button"
-            onClick={onToggleEdit}
-            aria-expanded={editing}
+            onClick={() => onToggleEdit('note')}
+            aria-expanded={editingNote}
+            aria-label={
+              hasNote
+                ? `עריכת הערה לשבוע ${week.weekNumber}`
+                : `הוספת הערה לשבוע ${week.weekNumber}`
+            }
+            title={hasNote ? week.note : 'הוספת הערה'}
+            className={[
+              'flex size-8 items-center justify-center rounded-full transition',
+              hasNote
+                ? 'bg-amber-300 text-amber-950 shadow-sm hover:bg-amber-200'
+                : 'bg-black/5 hover:bg-black/10',
+              editingNote ? 'ring-2 ring-amber-400' : '',
+            ].join(' ')}
+          >
+            <StickyNote
+              className="size-3.5"
+              strokeWidth={2}
+              fill={hasNote ? 'currentColor' : 'none'}
+              fillOpacity={hasNote ? 0.25 : 0}
+            />
+          </button>
+          <button
+            type="button"
+            onClick={() => onToggleEdit('count')}
+            aria-expanded={editingCount}
             aria-label={`עריכת מספר אימונים לשבוע ${week.weekNumber}`}
             className="flex size-8 items-center justify-center rounded-full bg-black/5 transition hover:bg-black/10"
           >
@@ -57,7 +172,7 @@ function TrackerRow({
           </button>
         </div>
       </div>
-      {editing ? (
+      {editingCount ? (
         <div className="mt-2 grid grid-cols-6 gap-1" role="radiogroup">
           {COUNT_OPTIONS.map((n) => {
             const active = Math.min(week.completed, 5) === n
@@ -81,6 +196,21 @@ function TrackerRow({
           })}
         </div>
       ) : null}
+      {editingNote ? (
+        <WeekNoteEditor
+          week={week}
+          onSave={onSaveNote}
+          onCancel={() => onToggleEdit('note')}
+        />
+      ) : hasNote ? (
+        <button
+          type="button"
+          onClick={() => onToggleEdit('note')}
+          className={`mt-1 line-clamp-2 block w-full whitespace-pre-line text-right text-xs leading-snug ${muted}`}
+        >
+          {week.note}
+        </button>
+      ) : null}
     </li>
   )
 }
@@ -90,15 +220,19 @@ export function AllTimeWeeksTracker({
   onClose,
   weeks,
   onSetCount,
+  onSaveNote,
 }: {
   open: boolean
   onClose: () => void
   /** Any order; displayed ascending from week 1. */
   weeks: WeekConsistency[]
   onSetCount: (week: WeekConsistency, count: number) => void
+  onSaveNote: (week: WeekConsistency, text: string) => void
 }) {
   const [page, setPage] = useState(0)
-  const [editingKey, setEditingKey] = useState<string | null>(null)
+  const [editing, setEditing] = useState<{ key: string; mode: EditMode } | null>(
+    null,
+  )
 
   const ordered = [...weeks].sort((a, b) => a.weekNumber - b.weekNumber)
   const pageCount = Math.max(1, Math.ceil(ordered.length / WEEKS_PER_PAGE))
@@ -107,28 +241,39 @@ export function AllTimeWeeksTracker({
     current * WEEKS_PER_PAGE,
     current * WEEKS_PER_PAGE + WEEKS_PER_PAGE,
   )
+  const notedCount = ordered.filter((w) => w.note).length
 
   function goTo(next: number) {
-    setEditingKey(null)
+    setEditing(null)
     setPage(Math.max(0, Math.min(pageCount - 1, next)))
+  }
+
+  function toggle(weekKey: string, mode: EditMode) {
+    setEditing((cur) =>
+      cur?.key === weekKey && cur.mode === mode ? null : { key: weekKey, mode },
+    )
   }
 
   return (
     <Modal open={open} title="מעקב שבועות מלא" onClose={onClose}>
       <div dir="rtl" className="w-full max-w-md space-y-3">
         <p className="text-xs text-muted">
-          {ordered.length} שבועות מהיום הראשון. עיפרון לעדכון ספירה שנשכחה.
+          {ordered.length} שבועות מהיום הראשון
+          {notedCount ? ` · ${notedCount} עם הערה` : ''}. עיפרון לעדכון ספירה
+          שנשכחה, פתק לתיעוד סיבת חריגה.
         </p>
         <ul className="space-y-1.5">
           {visible.map((week) => (
             <TrackerRow
               key={week.weekKey}
               week={week}
-              editing={editingKey === week.weekKey}
-              onToggleEdit={() =>
-                setEditingKey((k) => (k === week.weekKey ? null : week.weekKey))
-              }
+              editMode={editing?.key === week.weekKey ? editing.mode : null}
+              onToggleEdit={(mode) => toggle(week.weekKey, mode)}
               onSetCount={(n) => onSetCount(week, n)}
+              onSaveNote={(text) => {
+                onSaveNote(week, text)
+                setEditing(null)
+              }}
             />
           ))}
         </ul>

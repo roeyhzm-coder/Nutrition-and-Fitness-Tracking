@@ -150,6 +150,8 @@ export function WeeklyConsistencyTracker() {
     consistencyDayMarks,
     setConsistencyDayMark,
     setWeekConsistencyCount,
+    consistencyWeekNotes,
+    setWeekNote,
     activeProgram,
     workoutTemplates,
   } = useAppData()
@@ -178,6 +180,7 @@ export function WeeklyConsistencyTracker() {
     target: targetPerWeek,
     dayMarks: consistencyDayMarks,
     weekStartsOn,
+    weekNotes: consistencyWeekNotes,
   })
 
   function scheduledFor(date: string): ConsistencyWorkoutOption {
@@ -323,6 +326,7 @@ export function WeeklyConsistencyTracker() {
         onClose={() => setHistoryOpen(false)}
         weeks={allWeeks}
         onSetCount={(week, n) => setWeekConsistencyCount(week.start, n)}
+        onSaveNote={(week, text) => setWeekNote(week.noteKey, text)}
       />
 
       <Modal
