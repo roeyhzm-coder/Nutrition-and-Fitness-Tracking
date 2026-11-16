@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
 import { defineConfig } from 'vite'
@@ -7,8 +8,24 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 const rootDir = dirname(fileURLToPath(import.meta.url))
 
+function resolveBuildId(): string {
+  const vercelSha = process.env.VERCEL_GIT_COMMIT_SHA
+  if (vercelSha) return vercelSha.slice(0, 7)
+  try {
+    return execSync('git rev-parse --short HEAD', { cwd: rootDir }).toString().trim()
+  } catch {
+    return 'dev'
+  }
+}
+
+/** Visible build stamp so a device can confirm which deploy it is running. */
+const BUILD_STAMP = `${resolveBuildId()} · ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`
+
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __BUILD_STAMP__: JSON.stringify(BUILD_STAMP),
+  },
   resolve: {
     alias: {
       '@': resolve(rootDir, './src'),
@@ -43,7 +60,7 @@ export default defineConfig({
         ],
       },
       workbox: {
-        cacheId: 'tn-app-sync-2026-10-04d',
+        cacheId: 'tn-app-2026-11-16',
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,

@@ -19,9 +19,9 @@ export function BottomNav() {
   return (
     <nav
       aria-label="ניווט ראשי"
-      className="fixed inset-x-3 bottom-[max(0.75rem,calc(env(safe-area-inset-bottom)+0.5rem))] z-40"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(1.5rem,calc(env(safe-area-inset-bottom,0px)+0.75rem))]"
     >
-      <ul className="mx-auto grid max-w-3xl grid-cols-5 gap-0.5 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-lg shadow-slate-200/70 backdrop-blur-md">
+      <ul className="pointer-events-auto mx-auto grid max-w-3xl grid-cols-5 gap-0.5 rounded-2xl border border-slate-200 bg-white/95 p-1.5 shadow-lg shadow-slate-200/70 backdrop-blur-md">
         {tabs.map(({ to, label, icon: Icon }) => (
           <li key={to} className="min-w-0">
             <NavLink

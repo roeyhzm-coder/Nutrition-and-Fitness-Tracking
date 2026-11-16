@@ -39,6 +39,9 @@ export function ProfilePage() {
         <section id="export">
           <AiExportPanel />
         </section>
+        <p className="pt-2 text-center text-[11px] tabular-nums text-muted">
+          גרסה <span dir="ltr">{__BUILD_STAMP__}</span>
+        </p>
       </div>
     </>
   )
