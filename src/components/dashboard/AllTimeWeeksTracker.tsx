@@ -71,7 +71,7 @@ function WeekNoteEditor({
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={onKeyDown}
         placeholder={`למשל: ${week.completed}/${week.target} בגלל משמרות עבודה עמוסות`}
-        className="block w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-sm leading-relaxed text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-200"
+        className="block w-full resize-none rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-sm leading-relaxed text-slate-900 placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-200"
       />
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] tabular-nums text-slate-400">
@@ -130,7 +130,7 @@ function TrackerRow({
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 text-right">
           <p className="text-sm font-semibold">שבוע {week.weekNumber}</p>
-          <p className={`text-[11px] ${muted}`}>{rangeLabel(week)}</p>
+          <p className={`truncate text-[11px] ${muted}`}>{rangeLabel(week)}</p>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="min-w-6 text-center text-lg font-extrabold tabular-nums">
@@ -149,9 +149,9 @@ function TrackerRow({
             className={[
               'flex size-8 items-center justify-center rounded-full transition',
               hasNote
-                ? 'bg-amber-300 text-amber-950 shadow-sm hover:bg-amber-200'
+                ? 'bg-white text-blue-600 shadow-sm ring-1 ring-blue-200 hover:bg-blue-50'
                 : 'bg-black/5 hover:bg-black/10',
-              editingNote ? 'ring-2 ring-amber-400' : '',
+              editingNote ? 'ring-2 ring-blue-400' : '',
             ].join(' ')}
           >
             <StickyNote
@@ -202,14 +202,6 @@ function TrackerRow({
           onSave={onSaveNote}
           onCancel={() => onToggleEdit('note')}
         />
-      ) : hasNote ? (
-        <button
-          type="button"
-          onClick={() => onToggleEdit('note')}
-          className={`mt-1 line-clamp-2 block w-full whitespace-pre-line text-right text-xs leading-snug ${muted}`}
-        >
-          {week.note}
-        </button>
       ) : null}
     </li>
   )

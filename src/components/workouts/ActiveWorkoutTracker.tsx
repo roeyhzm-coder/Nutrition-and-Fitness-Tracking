@@ -427,7 +427,7 @@ export function ActiveWorkoutTracker() {
       {toast ? (
         <div
           role="status"
-          className="fixed inset-x-3 bottom-28 z-[60] mx-auto max-w-md rounded-2xl bg-emerald-600 px-4 py-3.5 text-center text-sm font-bold text-white shadow-xl shadow-emerald-600/30"
+          className="fixed inset-x-3 bottom-[calc(7rem+env(safe-area-inset-bottom))] z-[60] mx-auto max-w-md rounded-2xl bg-emerald-600 px-4 py-3.5 text-center text-sm font-bold text-white shadow-xl shadow-emerald-600/30"
         >
           {toast}
         </div>
@@ -443,7 +443,7 @@ function MinimizedBar({ onOpen }: { onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="fixed inset-x-3 bottom-28 z-40 mx-auto flex max-w-3xl min-h-14 items-center justify-between rounded-3xl bg-blue-600 px-5 py-3.5 text-white shadow-xl shadow-blue-600/25"
+      className="fixed inset-x-3 bottom-[calc(7rem+env(safe-area-inset-bottom))] z-40 mx-auto flex max-w-3xl min-h-14 items-center justify-between rounded-3xl bg-blue-600 px-5 py-3.5 text-white shadow-xl shadow-blue-600/25"
     >
       <span className="font-semibold">אימון פעיל · {activeWorkout!.workoutName}</span>
       <span className="text-sm tabular-nums">{elapsed} · המשך</span>
@@ -467,7 +467,7 @@ function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-50" dir="rtl">
-      <div className="mx-auto max-w-3xl pb-48">
+      <div className="mx-auto max-w-3xl pb-[calc(12rem+env(safe-area-inset-bottom))]">
         <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur-md">
           <div className="flex items-center gap-2">
             <div className="min-w-0 flex-1">
