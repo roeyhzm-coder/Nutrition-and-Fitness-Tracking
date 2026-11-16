@@ -427,7 +427,7 @@ export function ActiveWorkoutTracker() {
       {toast ? (
         <div
           role="status"
-          className="fixed inset-x-3 bottom-[calc(8rem+env(safe-area-inset-bottom,0px))] z-[60] mx-auto max-w-md rounded-2xl bg-emerald-600 px-4 py-3.5 text-center text-sm font-bold text-white shadow-xl shadow-emerald-600/30"
+          className="fixed inset-x-3 bottom-[calc(9rem+env(safe-area-inset-bottom,0px))] z-[60] mx-auto max-w-md rounded-2xl bg-emerald-600 px-4 py-3.5 text-center text-sm font-bold text-white shadow-xl shadow-emerald-600/30"
         >
           {toast}
         </div>
@@ -443,7 +443,7 @@ function MinimizedBar({ onOpen }: { onOpen: () => void }) {
     <button
       type="button"
       onClick={onOpen}
-      className="fixed inset-x-3 bottom-[calc(8rem+env(safe-area-inset-bottom,0px))] z-40 mx-auto flex max-w-3xl min-h-14 items-center justify-between rounded-3xl bg-blue-600 px-5 py-3.5 text-white shadow-xl shadow-blue-600/25"
+      className="fixed inset-x-3 bottom-[calc(9rem+env(safe-area-inset-bottom,0px))] z-40 mx-auto flex max-w-3xl min-h-14 items-center justify-between rounded-3xl bg-blue-600 px-5 py-3.5 text-white shadow-xl shadow-blue-600/25"
     >
       <span className="font-semibold">אימון פעיל · {activeWorkout!.workoutName}</span>
       <span className="text-sm tabular-nums">{elapsed} · המשך</span>

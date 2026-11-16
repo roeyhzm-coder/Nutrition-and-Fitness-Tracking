@@ -15,7 +15,7 @@ export function SyncNoticeToast() {
   return (
     <div
       className={[
-        'pointer-events-none fixed inset-x-0 bottom-[calc(7.5rem+env(safe-area-inset-bottom,0px))] z-[60] mx-auto w-[min(92%,28rem)] rounded-2xl px-4 py-2.5 text-center text-sm font-semibold shadow-lg',
+        'pointer-events-none fixed inset-x-0 bottom-[calc(8.5rem+env(safe-area-inset-bottom,0px))] z-[60] mx-auto w-[min(92%,28rem)] rounded-2xl px-4 py-2.5 text-center text-sm font-semibold shadow-lg',
         lastSyncNotice.type === 'error'
           ? 'bg-red-600 text-white'
           : 'bg-emerald-600 text-white',

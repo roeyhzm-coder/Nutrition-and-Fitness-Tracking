@@ -430,7 +430,7 @@ export function TipsPage() {
       {undo ? (
         <div
           role="status"
-          className="fixed inset-x-4 bottom-[calc(7.5rem+env(safe-area-inset-bottom,0px))] z-40 mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-sm text-white shadow-xl shadow-slate-900/20"
+          className="fixed inset-x-4 bottom-[calc(8.5rem+env(safe-area-inset-bottom,0px))] z-40 mx-auto flex max-w-md items-center justify-between gap-3 rounded-2xl bg-slate-900 px-4 py-3 text-sm text-white shadow-xl shadow-slate-900/20"
           dir="rtl"
         >
           <span className="min-w-0 truncate">
