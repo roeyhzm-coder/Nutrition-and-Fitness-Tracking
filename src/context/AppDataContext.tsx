@@ -59,7 +59,7 @@ import {
   officialBlockForProgram,
   officialDayFor,
   replaceSingleLegWallSitInPlan,
-  withBlock2Active,
+  withDefaultBlockActive,
 } from '../data/workouts'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import {
@@ -167,6 +167,13 @@ import {
   type MorningRoutineId,
   type MorningRoutineState,
 } from '../lib/morningRoutine'
+import {
+  createDefaultSkillTree,
+  mergeSkillTree,
+  normalizeSkillTree,
+  SKILL_TREE_STORAGE_KEY,
+  type SkillTreeState,
+} from '../lib/skillTree'
 
 type RecipesSyncStatus = 'idle' | 'loading' | 'synced' | 'error'
 
@@ -206,6 +213,10 @@ type AppDataContextValue = {
   ) => void
   resetMorningRoutine: (id: MorningRoutineId) => void
   setMorningAiReview: (intervalDays: number, lastReviewAt: string) => void
+  /** Skill tree: master goals + milestone nodes (progress derived from logs). */
+  skillTree: SkillTreeState
+  /** Apply a pure edit (see lib/skillTree upsert/delete/move helpers). */
+  updateSkillTree: (fn: (prev: SkillTreeState) => SkillTreeState) => void
   weightLogs: WeightEntry[]
   bodyMeasurements: BodyMeasurement[]
   recordBodyMeasurement: (input: {
@@ -433,7 +444,7 @@ function migrateStoredPlan() {
   }
   const ensured = isStalePlan(stored) ? ensureOfficialPlan(stored) : stored
   const patched = replaceSingleLegWallSitInPlan(ensured)
-  const plan = withBlock2Active(patched)
+  const plan = withDefaultBlockActive(patched)
   const shouldWrite =
     isStalePlan(stored) ||
     patched.changed ||
@@ -607,6 +618,18 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setMorningRoutineRaw((raw) => fn(normalizeMorningState(raw)))
     },
     [setMorningRoutineRaw],
+  )
+  const [skillTreeDefault] = useState(createDefaultSkillTree)
+  const [skillTreeRaw, setSkillTreeRaw] = useLocalStorage<SkillTreeState>(
+    SKILL_TREE_STORAGE_KEY,
+    skillTreeDefault,
+  )
+  const skillTree = useMemo(() => normalizeSkillTree(skillTreeRaw), [skillTreeRaw])
+  const updateSkillTree = useCallback(
+    (fn: (prev: SkillTreeState) => SkillTreeState) => {
+      setSkillTreeRaw((raw) => fn(normalizeSkillTree(raw)))
+    },
+    [setSkillTreeRaw],
   )
   const [weightLogs, setWeightLogs] = useLocalStorage<WeightEntry[]>(
     'tn.weightLogs',
@@ -1337,6 +1360,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     consistencyDayMarks,
     consistencyWeekNotes,
     morningRoutine,
+    skillTree,
     foodCategories,
     savedMeals,
     recipes,
@@ -1557,7 +1581,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
               remotePlan.activeProgramId || remotePlan.programs[0]?.id || '',
           }
       const patched = replaceSingleLegWallSitInPlan(basePlan)
-      const activePlan = withBlock2Active(patched)
+      const activePlan = withDefaultBlockActive(patched)
       // Saved exercise defaults (own table, row-level upserts) always win over a
       // program blob that another device pushed from a stale snapshot.
       const healedPrograms = applyStoredDefaultsToPrograms(
@@ -1606,6 +1630,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setMorningRoutineRaw((local) =>
           mergeMorningState(normalizeMorningState(local), remoteMorning),
         )
+      }
+      if (remote.skillTree) {
+        const remoteTree = remote.skillTree
+        setSkillTreeRaw((local) => mergeSkillTree(normalizeSkillTree(local), remoteTree))
       }
       if (remote.foodCategories !== undefined && remote.foodCategories.length) {
         setFoodCategories(remote.foodCategories)
@@ -1715,6 +1743,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setConsistencyDayMarks,
       setConsistencyWeekNotes,
       setMorningRoutineRaw,
+      setSkillTreeRaw,
       setFoodCategories,
       setSavedMeals,
       setRecipes,
@@ -1898,6 +1927,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     consistencyDayMarks,
     consistencyWeekNotes,
     morningRoutine,
+    skillTree,
     foodCategories,
     savedMeals,
     recipes,
@@ -2543,6 +2573,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateMorningRoutine,
       resetMorningRoutine,
       setMorningAiReview,
+      skillTree,
+      updateSkillTree,
       weightLogs,
       bodyMeasurements,
       recordBodyMeasurement,
@@ -2653,6 +2685,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       updateMorningRoutine,
       resetMorningRoutine,
       setMorningAiReview,
+      skillTree,
+      updateSkillTree,
       weightLogs,
       bodyMeasurements,
       recordBodyMeasurement,

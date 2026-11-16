@@ -20,6 +20,7 @@ import {
 import { PageHeader } from '../components/layout/PageHeader'
 import { MorningRoutinePanel } from '../components/morning/MorningRoutinePanel'
 import { Button } from '../components/ui/button'
+import { SegmentedTabs } from '../components/ui/SegmentedTabs'
 import { TipActionsMenu } from '../components/tips/TipActionsMenu'
 import { TipItemAccordion } from '../components/tips/TipItemAccordion'
 import {
@@ -489,32 +490,7 @@ export function TipsPage() {
         }
       />
       <div className="space-y-4 px-4 py-5" dir="rtl">
-        <div
-          role="tablist"
-          aria-label="תצוגה"
-          className="grid grid-cols-2 gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm shadow-slate-200/60"
-        >
-          {TABS.map((option) => {
-            const active = option.id === tab
-            return (
-              <button
-                key={option.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => select(option.id)}
-                className={[
-                  'min-h-10 rounded-xl text-sm font-bold transition',
-                  active
-                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/25'
-                    : 'text-muted hover:bg-slate-50 hover:text-text',
-                ].join(' ')}
-              >
-                {option.label}
-              </button>
-            )
-          })}
-        </div>
+        <SegmentedTabs label="תצוגה" options={TABS} value={tab} onChange={select} />
         {tab === 'morning' ? <MorningRoutinePanel /> : <TipsNotesPanel />}
       </div>
     </>

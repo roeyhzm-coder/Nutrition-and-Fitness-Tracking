@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { CalendarRange, ChevronDown, GitBranch, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { SkillTreePanel } from '../components/skills/SkillTreePanel'
+import { SegmentedTabs, type SegmentedOption } from '../components/ui/SegmentedTabs'
 import { PageHeader } from '../components/layout/PageHeader'
 import { SetLogger } from '../components/workouts/SetLogger'
 import { ProgramManager } from '../components/workouts/ProgramManager'
@@ -31,7 +34,45 @@ import {
   formToExercise,
 } from '../lib/exerciseForm'
 
+type WorkoutsView = 'plan' | 'skills'
+
+const VIEW_OPTIONS: readonly SegmentedOption<WorkoutsView>[] = [
+  { id: 'plan', label: 'תוכנית אימונים', icon: <CalendarRange className="size-4" strokeWidth={2} /> },
+  { id: 'skills', label: 'עץ מיומנויות', icon: <GitBranch className="size-4" strokeWidth={2} /> },
+]
+
+/** אימונים: workout plan (default) ⇄ skill tree, same sub-tab pattern as /tips. */
 export function WorkoutsPage() {
+  const [params, setParams] = useSearchParams()
+  const view: WorkoutsView = params.get('view') === 'skills' ? 'skills' : 'plan'
+
+  function select(next: WorkoutsView) {
+    const nextParams = new URLSearchParams(params)
+    if (next === 'plan') nextParams.delete('view')
+    else nextParams.set('view', next)
+    setParams(nextParams, { replace: true })
+    window.scrollTo({ top: 0 })
+  }
+
+  const tabs = (
+    <SegmentedTabs label="תצוגת אימונים" options={VIEW_OPTIONS} value={view} onChange={select} />
+  )
+
+  if (view === 'skills') {
+    return (
+      <>
+        <PageHeader title="אימונים" subtitle="עץ מיומנויות ואבני דרך" />
+        <div className="space-y-5 px-4 py-5">
+          {tabs}
+          <SkillTreePanel />
+        </div>
+      </>
+    )
+  }
+  return <WorkoutPlanView tabs={tabs} />
+}
+
+function WorkoutPlanView({ tabs }: { tabs: ReactNode }) {
   const {
     workoutDays,
     activeProgram,
@@ -167,6 +208,7 @@ export function WorkoutsPage() {
       <>
         <PageHeader title="אימונים" subtitle="אין ימי אימון" />
         <div className="space-y-5 px-4 py-5">
+          {tabs}
           <ProgramManager />
           <FocusTracksCard />
           <ActivityLogCard />
@@ -200,6 +242,7 @@ export function WorkoutsPage() {
       />
 
       <div className="space-y-5 px-4 py-5">
+        {tabs}
         <WorkoutCompletedBadge />
         <FocusTracksCard />
         <WorkoutLibrary

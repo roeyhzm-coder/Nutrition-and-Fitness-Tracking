@@ -12,6 +12,7 @@ import { useAppData } from '../../context/AppDataContext'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import { morningExportEntities } from '../../lib/morningExport'
+import { skillTreeExportEntities } from '../../lib/skillTreeExport'
 import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
 
@@ -42,6 +43,7 @@ export function AiExportPanel() {
     bodyMeasurements,
     importMealsAndRecipes,
     morningRoutine,
+    skillTree,
   } = useAppData()
   const { workoutLogs } = useWorkoutSession()
   const [copied, setCopied] = useState(false)
@@ -80,6 +82,7 @@ export function AiExportPanel() {
         workoutPrograms,
         bodyMeasurements,
         morningRoutine,
+        skillTree,
       }),
     [
       setLogs,
@@ -108,6 +111,7 @@ export function AiExportPanel() {
       workoutPrograms,
       bodyMeasurements,
       morningRoutine,
+      skillTree,
     ],
   )
 
@@ -131,6 +135,14 @@ export function AiExportPanel() {
       lifestyleLogs,
       bodyMeasurements,
       ...morningExportEntities(morningRoutine, weekStartsOn),
+      ...skillTreeExportEntities(skillTree, {
+        workoutLogs,
+        setLogs,
+        weightLogs,
+        bodyMeasurements,
+        morningRoutine,
+        programDays: workoutDays,
+      }),
     })
     downloadTextFile(
       `body-and-training-export-${localDateKey()}.json`,

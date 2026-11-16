@@ -32,6 +32,258 @@ function template(
   }
 }
 
+const B3_UPDATED_AT = '2026-11-16T00:00:00.000Z'
+
+type B3Set = [weightKg: number | null, reps: number]
+
+/**
+ * Block 3 exercise with per-set defaults. Stamped so older global "save as
+ * default" rows of a same-named exercise don't override the new prescription.
+ */
+function b3(
+  ex: Omit<SeedExercise, 'defaultSets' | 'defaultsUpdatedAt'>,
+  perSet?: B3Set[],
+): SeedExercise {
+  if (!perSet?.length) return ex
+  const [firstWeight, firstReps] = perSet[0]
+  return {
+    ...ex,
+    defaultWeightKg: firstWeight,
+    defaultReps: firstReps,
+    defaultSets: perSet.map(([weightKg, reps], i) => ({ setNumber: i + 1, weightKg, reps })),
+    defaultsUpdatedAt: B3_UPDATED_AT,
+  }
+}
+
+function repeatSet(count: number, weightKg: number | null, reps: number): B3Set[] {
+  return Array.from({ length: count }, (): B3Set => [weightKg, reps])
+}
+
+const LATERAL_RAISES: SeedExercise = b3(
+  {
+    name: 'הרחקות לצדדים (Lateral Raises)',
+    sets: 3,
+    reps: '10-12',
+    rest: '1 דקה',
+    weight: '6-8 ק"ג',
+    metric: 'reps',
+  },
+  repeatSet(3, 6, 10),
+)
+
+/** Block 3 (12 weeks): deload weeks 5 & 10, benchmark testing in week 12. */
+const BLOCK_3_TEMPLATES: WorkoutTemplate[] = [
+  template('tpl-b3-pull', 'משיכה 3', [
+    b3(
+      {
+        name: 'מתח כבד בפרונציה (פירמידה הפוכה)',
+        sets: 3,
+        reps: 'סט 1: 3 (27.5 ק"ג), סט 2: 5 (22.5 ק"ג), סט 3: 7 (17.5 ק"ג)',
+        rest: '3-4 דקות',
+        weight: '27.5 / 22.5 / 17.5 ק"ג',
+        metric: 'reps',
+        notes: 'פירמידה הפוכה: הסט הכבד ראשון (27.5×3), אחריו 22.5×5 ו-17.5×7. טווח תנועה מלא.',
+      },
+      [
+        [27.5, 3],
+        [22.5, 5],
+        [17.5, 7],
+      ],
+    ),
+    b3(
+      {
+        name: 'חתירת פרונט לבר מקופל (Tuck Front Lever Rows)',
+        sets: 3,
+        reps: '6-8',
+        rest: '2-3 דקות',
+        weight: BW,
+        metric: 'reps',
+        notes: 'כשסוגרים 3x8 עוברים ל-Advanced Tuck.',
+      },
+      repeatSet(3, null, 6),
+    ),
+    b3(
+      {
+        name: 'מתח חזה מתפרץ בפרונציה (Chest To Bar)',
+        sets: 2,
+        reps: '4-5',
+        rest: '2-3 דקות',
+        weight: BW,
+        metric: 'reps',
+        notes: 'עלייה מתפרצת עד נגיעת חזה בבר בכל חזרה.',
+      },
+      repeatSet(2, null, 4),
+    ),
+    b3(
+      {
+        name: 'תלייה אקטיבית בשכמות ביד אחת',
+        sets: 3,
+        reps: '15-20 שניות לכל יד',
+        rest: '1-2 דקות',
+        weight: BW,
+        metric: 'seconds',
+        notes: 'כשסוגרים 3x20 עוברים ל-3x25. שכמה אסופה למטה, Core מוחזק.',
+      },
+      repeatSet(3, null, 15),
+    ),
+    b3(
+      {
+        name: 'כפיפת מרפקים בישיבה בשיפוע + החזקה סטטית ב-90 מעלות',
+        sets: 2,
+        reps: '6-8 + החזקה 10 שניות',
+        rest: '1-2 דקות',
+        weight: '16-18 ק"ג',
+        metric: 'reps',
+        notes: 'בסוף כל סט — החזקה סטטית של 10 שניות ב-90 מעלות.',
+      },
+      repeatSet(2, 16, 6),
+    ),
+    b3(
+      {
+        name: 'הרמת רגליים ישרות למוט (Toes To Bar)',
+        sets: 3,
+        reps: '6-8',
+        rest: '1-2 דקות',
+        weight: BW,
+        metric: 'reps',
+        notes: 'כשסוגרים 3x8 מוסיפים החזקה של 2 שניות למעלה.',
+      },
+      repeatSet(3, null, 6),
+    ),
+  ]),
+  template('tpl-b3-push', 'דחיפה ורגליים 3', [
+    b3(
+      {
+        name: 'מקבילים כבד (פירמידה הפוכה)',
+        sets: 3,
+        reps: 'סט 1: 2 (25 ק"ג), סט 2: 4 (20 ק"ג), סט 3: 6 (15 ק"ג)',
+        rest: '3-4 דקות',
+        weight: '25 / 20 / 15 ק"ג',
+        metric: 'reps',
+        notes: 'פירמידה הפוכה: 25×2, 20×4, 15×6. כתפיים מטה, טווח מלא.',
+      },
+      [
+        [25, 2],
+        [20, 4],
+        [15, 6],
+      ],
+    ),
+    b3(
+      {
+        name: 'סקוואט בולגרי עם משקולות יד',
+        sets: 3,
+        reps: '6-8 לכל רגל',
+        rest: '2 דקות',
+        weight: '8-10 ק"ג בכל יד',
+        metric: 'reps',
+      },
+      repeatSet(3, 8, 6),
+    ),
+    b3(
+      {
+        name: 'לחיצת כתפיים Pike ברגליים מוגבהות (Elevated Pike Push-ups)',
+        sets: 3,
+        reps: '5-8',
+        rest: '2 דקות',
+        weight: BW,
+        metric: 'reps',
+      },
+      repeatSet(3, null, 5),
+    ),
+    b3(
+      {
+        name: 'שכיבות סמיכה פסאודו-פלאנש (Pseudo Planche Push-ups)',
+        sets: 2,
+        reps: '6-8',
+        rest: '2 דקות',
+        weight: BW,
+        metric: 'reps',
+      },
+      repeatSet(2, null, 6),
+    ),
+    b3(
+      {
+        name: 'שכיבות סמיכה מתפרצות בשיפוע שלילי (ניתוק מלא)',
+        sets: 2,
+        reps: '6-8',
+        rest: '1-2 דקות',
+        weight: BW,
+        metric: 'reps',
+        notes: 'רגליים מוגבהות, ניתוק מלא של הידיים בכל חזרה.',
+      },
+      repeatSet(2, null, 6),
+    ),
+    b3(
+      {
+        name: 'דדליפט רומני ברגל אחת עם משקולת (Single-Leg RDL)',
+        sets: 2,
+        reps: '6-8 לכל רגל',
+        rest: '1-2 דקות',
+        weight: '12-16 ק"ג',
+        metric: 'reps',
+      },
+      repeatSet(2, 12, 6),
+    ),
+    LATERAL_RAISES,
+  ]),
+  template('tpl-b3-combo', 'משולב 3', [
+    b3(
+      {
+        name: 'מתח מתפרץ גבוה (High Pull-ups)',
+        sets: 3,
+        reps: '3-4',
+        rest: '2-3 דקות',
+        weight: BW,
+        metric: 'reps',
+        notes: 'משיכה מתפרצת לגובה בטן עליונה — הבסיס ל-Muscle-Up.',
+      },
+      repeatSet(3, null, 3),
+    ),
+    b3(
+      {
+        name: 'מתח בסופינציה עם משקל',
+        sets: 3,
+        reps: '4-6',
+        rest: '3 דקות',
+        weight: '22.5-25 ק"ג',
+        metric: 'reps',
+      },
+      repeatSet(3, 22.5, 4),
+    ),
+    b3(
+      {
+        name: 'מקבילים עם משקל (טווח מלא)',
+        sets: 3,
+        reps: '6-8',
+        rest: '2-3 דקות',
+        weight: '10-12.5 ק"ג',
+        metric: 'reps',
+      },
+      repeatSet(3, 10, 6),
+    ),
+    b3({
+      name: 'לחיצת כתפיים בעמידה/ישיבה עם משקולות יד',
+      sets: 3,
+      reps: '6-8',
+      rest: '2 דקות',
+      weight: 'מתאים',
+      metric: 'reps',
+    }),
+    b3(
+      {
+        name: 'פשיטת מרפקים בשכיבה על ספסל (Skull Crushers)',
+        sets: 3,
+        reps: '8-10',
+        rest: '1-2 דקות',
+        weight: '8-12 ק"ג',
+        metric: 'reps',
+      },
+      repeatSet(3, 8, 8),
+    ),
+    LATERAL_RAISES,
+  ]),
+]
+
 /** Built-in library templates (stable ids for seeding). */
 export const SEED_WORKOUT_TEMPLATES: WorkoutTemplate[] = [
   template('tpl-b1-pull', 'משיכה 1', [
@@ -341,6 +593,7 @@ export const SEED_WORKOUT_TEMPLATES: WorkoutTemplate[] = [
     },
     { name: 'קיק / טכניקה', sets: 4, reps: '25–50מ׳' },
   ]),
+  ...BLOCK_3_TEMPLATES,
 ]
 
 const LEGACY_TEMPLATE_IDS = new Set(['tpl-push', 'tpl-pull'])
@@ -348,8 +601,11 @@ const LEGACY_TEMPLATE_NAMES = new Set(['אימון דחיפה', 'אימון מש
 const OBSOLETE_PROGRAM_IDS = new Set(['program-bulk', 'program-cut'])
 const OBSOLETE_PROGRAM_NAMES = new Set(['תוכנית מסה', 'תוכנית חיטוב'])
 
-export const OFFICIAL_PROGRAM_IDS = ['program-block-1', 'program-block-2'] as const
-export const DEFAULT_ACTIVE_PROGRAM_ID = 'program-block-2' as const
+export const OFFICIAL_PROGRAM_IDS = ['program-block-1', 'program-block-2', 'program-block-3'] as const
+export const DEFAULT_ACTIVE_PROGRAM_ID = 'program-block-3' as const
+export const DEFAULT_ACTIVE_BLOCK_NAME = 'בלוק 3'
+
+export type OfficialBlock = 1 | 2 | 3
 const OFFICIAL_TEMPLATE_IDS = [
   'tpl-b1-pull',
   'tpl-b1-push',
@@ -357,6 +613,9 @@ const OFFICIAL_TEMPLATE_IDS = [
   'tpl-b2-pull',
   'tpl-b2-push',
   'tpl-b2-combo',
+  'tpl-b3-pull',
+  'tpl-b3-push',
+  'tpl-b3-combo',
 ]
 
 /** Bump to force the official plan onto existing local + Supabase state again. */
@@ -475,20 +734,21 @@ type DayKind = keyof typeof FOCUS_BY_KIND | 'rest'
 /** Weekly schedule from the PDF, Sunday → Saturday. */
 const OFFICIAL_WEEK: DayKind[] = ['pull', 'push', 'pull', 'push', 'rest', 'combo', 'rest']
 
-export function officialBlockForProgram(programId: string): 1 | 2 {
+export function officialBlockForProgram(programId: string): OfficialBlock {
+  if (programId === 'program-block-3') return 3
   return programId === 'program-block-2' ? 2 : 1
 }
 
 /** Fresh official weekday from the built-in weekly schedule. */
 export function officialDayFor(
   dayNumber: number,
-  block: 1 | 2 = 1,
+  block: OfficialBlock = 1,
 ): WorkoutDay {
   const days = weekDays(block)
   return days.find((d) => d.dayNumber === dayNumber) ?? days[0]
 }
 
-function weekDays(block: 1 | 2): WorkoutDay[] {
+function weekDays(block: OfficialBlock): WorkoutDay[] {
   return OFFICIAL_WEEK.map((kind, i) => {
     const dayNumber = i + 1
     const base = { id: `day-${dayNumber}`, dayNumber, title: WEEKDAYS[i], exercises: [] }
@@ -508,7 +768,7 @@ export const DEFAULT_WORKOUT_DAYS: WorkoutDay[] = weekDays(1)
 
 export function createOfficialPrograms(): WorkoutProgram[] {
   const now = new Date().toISOString()
-  return ([1, 2] as const).map((block, i) => ({
+  return ([1, 2, 3] as const).map((block, i) => ({
     id: OFFICIAL_PROGRAM_IDS[i],
     name: `בלוק ${block}`,
     days: weekDays(block),
@@ -572,12 +832,12 @@ export function ensureOfficialPlan(state: WorkoutPlanState): WorkoutPlanState {
   }
 }
 
-/** Prefer Block 2 as the live training block. */
+/** Prefer Block 3 as the live training block. */
 export function resolveActiveProgramId(state: WorkoutPlanState): string {
   if (state.programs.some((p) => p.id === DEFAULT_ACTIVE_PROGRAM_ID)) {
     return DEFAULT_ACTIVE_PROGRAM_ID
   }
-  const named = state.programs.find((p) => p.name.trim() === 'בלוק 2')
+  const named = state.programs.find((p) => p.name.trim() === DEFAULT_ACTIVE_BLOCK_NAME)
   if (named) return named.id
   if (state.programs.some((p) => p.id === state.activeProgramId)) {
     return state.activeProgramId
@@ -585,7 +845,7 @@ export function resolveActiveProgramId(state: WorkoutPlanState): string {
   return state.programs[0]?.id ?? ''
 }
 
-export function withBlock2Active(state: WorkoutPlanState): WorkoutPlanState {
+export function withDefaultBlockActive(state: WorkoutPlanState): WorkoutPlanState {
   const activeProgramId = resolveActiveProgramId(state)
   if (activeProgramId === state.activeProgramId) return state
   return { ...state, activeProgramId }

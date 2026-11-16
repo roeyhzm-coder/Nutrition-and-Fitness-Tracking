@@ -20,7 +20,7 @@ import type {
   WorkoutLog,
   WorkoutProgram,
 } from './types'
-import { DEFAULT_ACTIVE_PROGRAM_ID } from '../data/workouts'
+import { DEFAULT_ACTIVE_BLOCK_NAME, DEFAULT_ACTIVE_PROGRAM_ID } from '../data/workouts'
 import type { BodyMeasurement } from './bodyMeasurements'
 import { extractBodyMeasurementsHistory } from './bodyMeasurements'
 import {
@@ -49,6 +49,9 @@ import {
 import { workoutPerformedOn } from './caloriesBurned'
 import type { MorningRoutineState } from './morningRoutine'
 import { formatAiReviewSchedule, formatMorningRoutineSection } from './morningExport'
+import { normalizeMorningState } from './morningRoutine'
+import type { SkillTreeState } from './skillTree'
+import { formatSkillTreeSection } from './skillTreeExport'
 import {
   buildActiveBlockStrengthRows,
   buildStrengthRowsFromLogs,
@@ -739,6 +742,7 @@ export function buildAiExportPrompt(input: {
   workoutPrograms?: WorkoutProgram[]
   bodyMeasurements?: BodyMeasurement[]
   morningRoutine?: MorningRoutineState
+  skillTree?: SkillTreeState
 }): string {
   const phaseStart = input.goal.startDate
   const { profile, goal, macroTargets } = input
@@ -834,13 +838,13 @@ export function buildAiExportPrompt(input: {
   const programs = input.workoutPrograms ?? []
   const activeProgram =
     programs.find((program) => program.id === DEFAULT_ACTIVE_PROGRAM_ID) ??
-    programs.find((program) => program.name.trim() === 'בלוק 2') ??
+    programs.find((program) => program.name.trim() === DEFAULT_ACTIVE_BLOCK_NAME) ??
     programs.find((program) => program.id === (input.activeProgramId ?? '')) ??
     programs.find(
       (program) => program.name.trim() === (input.activeProgramName?.trim() ?? ''),
     )
   const activeProgramId = activeProgram?.id ?? input.activeProgramId ?? DEFAULT_ACTIVE_PROGRAM_ID
-  const activeProgramName = activeProgram?.name.trim() || input.activeProgramName?.trim() || 'בלוק 2'
+  const activeProgramName = activeProgram?.name.trim() || input.activeProgramName?.trim() || DEFAULT_ACTIVE_BLOCK_NAME
   const activeDays = activeProgram?.days?.length
     ? activeProgram.days
     : input.workoutDays
@@ -993,6 +997,16 @@ ${weekNotesSection}`
     tracksSection ? `## מסלולי מיקוד\n${tracksSection}` : '',
     workoutLogsSection
       ? `## אימונים אחרונים (עד ${RECENT_WORKOUT_DAYS} ימים)\n${workoutLogsSection}`
+      : '',
+    input.skillTree
+      ? formatSkillTreeSection(input.skillTree, {
+          workoutLogs,
+          setLogs: input.setLogs,
+          weightLogs: input.weightLogs,
+          bodyMeasurements: input.bodyMeasurements ?? [],
+          morningRoutine: input.morningRoutine ?? normalizeMorningState(null),
+          programDays: activeDays,
+        })
       : '',
     strengthSection,
     `## תזונה ובריאות
