@@ -118,11 +118,6 @@ function fmtSigned(value: number | null | undefined, digits = 2) {
   return `${sign}${value.toFixed(digits)}`
 }
 
-function fmtText(value: string | null | undefined) {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : NA
-}
-
 function fmtMinutes(total: number) {
   if (total <= 0) return ''
   const h = Math.floor(total / 60)
@@ -297,6 +292,93 @@ function formatWeekNotes(input: {
       return `- שבוע ${week.weekNumber} (${fmt(week.start)} – ${fmt(week.end)}): ${week.completed}/${week.target} אימונים (${status}) · הערה: ${note}`
     })
     .join('\n')
+}
+
+export type WeeklyCountRow = {
+  week: number
+  start: string
+  end: string
+  completed: number
+  target: number
+  note: string | null
+}
+
+/** Every relative week of the phase with its completed / target workouts (same as the tracker). */
+export function buildWeeklyCountRows(input: {
+  setLogs: SetLog[]
+  phaseStart: string
+  target: number
+  dayMarks: ConsistencyDayMarks
+  weekNotes: ConsistencyWeekNotes
+  weekStartsOn: WeekStartDay
+}): WeeklyCountRow[] {
+  return buildRelativeWeeklyConsistency(input.setLogs, input.phaseStart, {
+    weeksBack: 'all',
+    target: input.target,
+    dayMarks: input.dayMarks,
+    weekStartsOn: input.weekStartsOn,
+    weekNotes: input.weekNotes,
+  })
+    .sort((a, b) => a.weekNumber - b.weekNumber)
+    .map((week) => ({
+      week: week.weekNumber,
+      start: localDateKey(week.start),
+      end: localDateKey(week.end),
+      completed: week.completed,
+      target: week.target,
+      note: week.note?.trim() || null,
+    }))
+}
+
+function formatWeeklyCounts(rows: WeeklyCountRow[]): string {
+  if (!rows.length) return ''
+  const hit = rows.filter((r) => r.completed >= r.target).length
+  return `- ספירה שבועית (שבוע: בוצע/יעד): ${rows.map((r) => `${r.week}: ${r.completed}/${r.target}`).join(' · ')} | עמד ביעד ב-${hit}/${rows.length} שבועות`
+}
+
+function prescription(ex: WorkoutDay['exercises'][number]): string {
+  const sets = ex.defaultSets?.length
+    ? ex.defaultSets
+        .map((s) => `${s.weightKg != null && s.weightKg > 0 ? `${s.weightKg}ק״ג` : 'מ״ג'}×${s.reps ?? '?'}`)
+        .join(' / ')
+    : ''
+  return [
+    `${ex.sets} סטים × ${ex.reps.trim() || '?'}`,
+    sets ? `סטים: ${sets}` : ex.weight?.trim() ? `משקל: ${ex.weight.trim()}` : '',
+    ex.rest?.trim() ? `מנוחה ${ex.rest.trim()}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+/** Full prescribed plan of the active block; identical days are merged (e.g. "א׳/ג׳"). */
+function formatActiveProgramPlan(days: WorkoutDay[], programName: string): string {
+  const groups = new Map<string, { labels: string[]; body: string }>()
+  for (const day of [...days].sort((a, b) => a.dayNumber - b.dayNumber)) {
+    const lists = [
+      ...(day.sessions ?? []).map((s) => ({ name: s.name.trim(), exercises: s.exercises })),
+      ...(day.exercises?.length ? [{ name: day.focus.trim() || day.title, exercises: day.exercises }] : []),
+    ].filter((l) => l.exercises.length)
+    if (day.isRest || !lists.length) continue
+    const body = lists
+      .map((l) =>
+        [`#### ${l.name || 'אימון'}`, ...l.exercises.map((ex, i) => `${i + 1}. ${ex.name} — ${prescription(ex)}`)].join(
+          '\n',
+        ),
+      )
+      .join('\n')
+    const label = WEEKDAY_SHORT[day.dayNumber - 1] ?? day.title
+    const group = groups.get(body)
+    if (group) group.labels.push(label)
+    else groups.set(body, { labels: [label], body })
+  }
+  if (!groups.size) return ''
+  return [
+    `## תוכנית האימונים הפעילה — ${programName} (מרשם מלא)`,
+    ...[...groups.values()].map(
+      (g) => `### ${g.labels.length > 1 ? 'ימים' : 'יום'} ${g.labels.join('/')}\n${g.body}`,
+    ),
+  ].join('\n')
 }
 
 type Adherence = { scheduled: number; completed: number; pct: number }
@@ -777,6 +859,11 @@ export function buildAiExportPrompt(input: {
       .find((row) => row.bodyFatPercentage != null)?.bodyFatPercentage ??
     profile.estimatedBodyFatPct ??
     null
+  const latestWaist =
+    [...(input.bodyMeasurements ?? [])]
+      .filter((row) => row.waistCircumferenceCm != null)
+      .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
+      .at(-1) ?? null
   const heightCm = profile.heightCm ?? 182
   const bmi = calcBmi(currentWeight, heightCm)
   const weightDelta =
@@ -902,7 +989,27 @@ export function buildAiExportPrompt(input: {
     weekNotes: input.consistencyWeekNotes ?? {},
     weekStartsOn: input.weekStartsOn ?? 0,
   })
+  const weeklyCountRows = buildWeeklyCountRows({
+    setLogs: input.setLogs,
+    phaseStart,
+    target: goal.weeklyWorkoutTarget || 5,
+    dayMarks: input.consistencyDayMarks ?? {},
+    weekNotes: input.consistencyWeekNotes ?? {},
+    weekStartsOn: input.weekStartsOn ?? 0,
+  })
+  const planSection = formatActiveProgramPlan(activeDays, activeProgramName)
+  const healthLines = [
+    profile.avoidFoods?.trim() ? `- מאכלים שנמנעים מהם: ${profile.avoidFoods.trim()}` : '',
+    profile.supplements?.trim() ? `- תוספי תזונה: ${profile.supplements.trim()}` : '',
+    profile.injuries?.trim() ? `- רגישויות מפרקיות / פציעות: ${profile.injuries.trim()}` : '',
+  ].filter(Boolean)
+  const lifestyleProfile = [
+    profile.avgSleepHours != null ? `שעות שינה ממוצעות: ${fmtNum(profile.avgSleepHours, 1)} ש׳` : '',
+    profile.activityLevel ? `רמת פעילות: ${ACTIVITY_LEVEL_LABELS[profile.activityLevel]}` : '',
+    profile.workStyle ? `עבודה: ${WORK_STYLE_LABELS[profile.workStyle]}` : '',
+  ].filter(Boolean)
   const adherenceLines = [
+    formatWeeklyCounts(weeklyCountRows),
     weekAdherence ? formatAdherenceLine('השבוע הנוכחי', weekAdherence) : '',
     monthAdherence
       ? formatAdherenceLine('30 הימים האחרונים', monthAdherence)
@@ -948,8 +1055,7 @@ export function buildAiExportPrompt(input: {
 ## מדדי גוף ומטרות (Biometrics & Goals)
 - גיל: ${fmtNum(profile.age)} | מין: ${profile.sex ? SEX_LABELS[profile.sex] : NA} | גובה: ${fmtNum(heightCm)} ס״מ
 - משקל התחלתי: ${fmtNum(startWeight, 2)} ק״ג | משקל עדכני: ${fmtNum(currentWeight, 2)} ק״ג (שינוי: ${fmtSigned(weightDelta)} ק״ג)
-- אחוז שומן מוערך: ${fmtNum(latestFat, 2)}% | BMI: ${fmtNum(bmi, 1)}
-- שעות שינה ממוצעות: ${fmtNum(profile.avgSleepHours, 1)} ש׳ | רמת פעילות: ${profile.activityLevel ? ACTIVITY_LEVEL_LABELS[profile.activityLevel] : NA} | עבודה: ${profile.workStyle ? WORK_STYLE_LABELS[profile.workStyle] : NA}
+- אחוז שומן מוערך: ${fmtNum(latestFat, 2)}% | היקף מותן: ${latestWaist ? `${fmtNum(latestWaist.waistCircumferenceCm, 1)} ס״מ (${latestWaist.recordedAt.slice(0, 10)})` : NA} | BMI: ${fmtNum(bmi, 1)}${lifestyleProfile.length ? `\n- ${lifestyleProfile.join(' | ')}` : ''}
 
 ## מטרת על ארוכת טווח (Master Plan)
 - יעד: ${masterName} (${fmtNum(masterWeight, 1)} ק״ג ו-${fmtNum(masterFat, 0)}% שומן)
@@ -995,6 +1101,8 @@ ${weekNotesSection}`
     routinesSection ? `## שגרות והרגלים\n${routinesSection}` : '',
     habitLines.length ? `## הרגלים\n${habitLines.join('\n')}` : '',
     tracksSection ? `## מסלולי מיקוד\n${tracksSection}` : '',
+    planSection,
+    strengthSection,
     workoutLogsSection
       ? `## אימונים אחרונים (עד ${RECENT_WORKOUT_DAYS} ימים)\n${workoutLogsSection}`
       : '',
@@ -1008,11 +1116,7 @@ ${weekNotesSection}`
           programDays: activeDays,
         })
       : '',
-    strengthSection,
-    `## תזונה ובריאות
-- מאכלים שנמנעים מהם: ${fmtText(profile.avoidFoods)}
-- תוספי תזונה: ${fmtText(profile.supplements)}
-- רגישויות מפרקיות / פציעות: ${fmtText(profile.injuries)}`,
+    healthLines.length ? `## תזונה ובריאות\n${healthLines.join('\n')}` : '',
     foodLogsSection
       ? `## יומן מזון (עד ${RECENT_WORKOUT_DAYS} ימים)\n${foodLogsSection}`
       : '',

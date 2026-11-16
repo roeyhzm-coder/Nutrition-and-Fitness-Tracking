@@ -473,65 +473,70 @@ function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
   const performedOn = workout.performedOn || localDateKey()
 
   return (
-    <div className="no-scrollbar fixed inset-0 z-50 h-dvh overflow-x-hidden overflow-y-auto overscroll-contain bg-slate-50" dir="rtl">
-      <div className="mx-auto w-full max-w-3xl pb-[calc(12rem+env(safe-area-inset-bottom,0px))]">
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-3 backdrop-blur-md">
-          <div className="flex items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs text-muted">{workout.programName}</p>
-              <h1 className="truncate font-display text-lg font-bold text-text">
-                {workout.workoutName}
-              </h1>
+    <div
+      className="fixed inset-0 z-50 flex h-dvh max-h-dvh flex-col overflow-hidden bg-slate-50"
+      dir="rtl"
+    >
+      <div className="mx-auto w-full max-w-3xl shrink-0">
+          <header className="shrink-0 border-b border-slate-200 bg-white/95 px-4 pt-[calc(0.75rem+env(safe-area-inset-top,0px))] pb-3 backdrop-blur-md">
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-muted">{workout.programName}</p>
+                <h1 className="truncate font-display text-lg font-bold text-text">
+                  {workout.workoutName}
+                </h1>
+              </div>
+              <span className="rounded-2xl bg-slate-100 px-3 py-2 font-mono text-sm tabular-nums text-text">
+                {elapsed}
+              </span>
+              <IconButton label="מזער" onClick={onMinimize}>
+                <ChevronDown className="size-4" strokeWidth={1.75} />
+              </IconButton>
+              <IconButton
+                label="בטל אימון"
+                tone="danger"
+                onClick={() => {
+                  if (window.confirm('לבטל את האימון? הנתונים שהוזנו לא יישמרו.')) onCancel()
+                }}
+              >
+                <X className="size-4" strokeWidth={1.75} />
+              </IconButton>
             </div>
-            <span className="rounded-2xl bg-slate-100 px-3 py-2 font-mono text-sm tabular-nums text-text">
-              {elapsed}
-            </span>
-            <IconButton label="מזער" onClick={onMinimize}>
-              <ChevronDown className="size-4" strokeWidth={1.75} />
-            </IconButton>
-            <IconButton
-              label="בטל אימון"
-              tone="danger"
-              onClick={() => {
-                if (window.confirm('לבטל את האימון? הנתונים שהוזנו לא יישמרו.')) onCancel()
-              }}
-            >
-              <X className="size-4" strokeWidth={1.75} />
-            </IconButton>
-          </div>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
-            <div
-              className="h-full rounded-full bg-blue-600 transition-all"
-              style={{ width: `${allSets.length ? (doneSets / allSets.length) * 100 : 0}%` }}
-            />
-          </div>
-          <p className="mt-1 text-[11px] text-muted">
-            {doneSets} / {allSets.length} סטים בוצעו
-          </p>
-        </header>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100 ring-1 ring-slate-200">
+              <div
+                className="h-full rounded-full bg-blue-600 transition-all"
+                style={{ width: `${allSets.length ? (doneSets / allSets.length) * 100 : 0}%` }}
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-muted">
+              {doneSets} / {allSets.length} סטים בוצעו
+            </p>
+          </header>
+      </div>
 
-        <ul className="space-y-4 px-4 py-5">
+      <main className="no-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
+        <ul className="mx-auto max-w-3xl space-y-4 px-4 pt-5 pb-40">
           {workout.exercises.map((ex, i) => (
             <ExerciseBlock key={`${ex.exerciseId}-${i}`} exercise={ex} index={i} />
           ))}
         </ul>
-      </div>
+      </main>
 
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-md">
-        <div className="mx-auto max-w-3xl space-y-3">
-          <div>
-            <label className="block text-[11px] text-muted">
-              עבור איזה יום האימון הזה מבוצע / הושלם?
-              <input
-                type="date"
-                value={performedOn}
-                onChange={(e) => {
-                  if (e.target.value) setPerformedOn(e.target.value)
-                }}
-                className="field mt-1"
-              />
-            </label>
-          </div>
+      {/* In-flow footer (not fixed): always fully above the screen edge and
+          the Android navigation bar, which edge-to-edge PWAs draw over. */}
+      <footer className="shrink-0 border-t border-slate-200 bg-white px-4 pt-2.5 pb-[max(2.5rem,calc(env(safe-area-inset-bottom,0px)+1.5rem))] shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.18)]">
+        <div className="mx-auto max-w-3xl space-y-2">
+          <label className="flex items-center gap-2 text-[11px] leading-tight text-muted">
+            <span className="min-w-0 flex-1">עבור איזה יום האימון הזה מבוצע / הושלם?</span>
+            <input
+              type="date"
+              value={performedOn}
+              onChange={(e) => {
+                if (e.target.value) setPerformedOn(e.target.value)
+              }}
+              className="field w-40 shrink-0 py-2"
+            />
+          </label>
           <Button
             variant="accent"
             className="w-full py-3"
@@ -541,7 +546,7 @@ function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
             סיים אימון ושמור ({doneSets} סטים)
           </Button>
         </div>
-      </div>
+      </footer>
     </div>
   )
 }

@@ -1,17 +1,20 @@
 /**
  * Data-driven Skill Tree ("עץ מיומנויות ואבני דרך").
  *
- * Master goals (branches) hold milestone nodes. Every node owns one or more
- * measures; each measure is linked to a real data source (workout logs,
- * morning routine, body metrics or a manual benchmark) and is scored from
- * baseline → target. Synced inside the `consistency_day_marks` JSON under the
- * reserved key `__skillTree` (per-entity last-write-wins, tombstones on delete).
+ * Master tracks (branches) hold ordered tiers (nodes, Tier 1 → 5). Each tier
+ * has a status (mastered / active / queued / locked), measures linked to real
+ * data (workout logs, morning routine or a manual benchmark) scored from
+ * baseline → target, and a "slot recipe" describing which exercise in which
+ * workout it replaces (Smart Slot Swap). Synced inside the
+ * `consistency_day_marks` JSON under the reserved key `__skillTree`
+ * (per-entity last-write-wins, tombstones on delete).
  */
 
 import type { BodyMeasurement } from './bodyMeasurements'
 import type { MorningRoutineState } from './morningRoutine'
 import type { SetLog, WeightEntry, WorkoutDay, WorkoutLog } from './types'
 import { dayAllExercises, localDateKey, parseLocalDateKey, uid, WEEKDAY_SHORT } from './types'
+import { LEGACY_SEED_IDS, SKILL_SEED_MIGRATED_AT, seedSkillBranches, seedSkillNodes } from './skillTreeSeed'
 
 export type SkillBranchStatus = 'active_focus' | 'queued_next_block' | 'completed'
 export type SkillSourceType =
@@ -25,6 +28,8 @@ export type SkillMetricType =
   | 'duration_seconds'
   | 'body_stat'
   | 'max_reps'
+  /** Distance to the floor (cm) — lower is better (splits / mobility). */
+  | 'gap_cm'
 export type SkillBodyStat = 'weight' | 'waist' | 'bodyFat'
 export type SkillIconKey =
   | 'muscleUp'
@@ -35,6 +40,37 @@ export type SkillIconKey =
   | 'target'
   | 'flame'
   | 'trophy'
+  | 'flag'
+  | 'leg'
+  | 'stretch'
+
+export type SkillTierStatus = 'mastered' | 'active' | 'queued' | 'locked'
+
+export type SkillSlotRole =
+  | 'explosive_skill_slot'
+  | 'primary_strength_slot'
+  | 'horizontal_secondary_slot'
+  | 'accessory_core_slot'
+  | 'mobility_finisher_slot'
+
+/** Which workout a slot lives in (resolved against the active program / morning routine). */
+export type SkillSlotTarget = 'pull' | 'push' | 'combo' | 'morningA' | 'morningB'
+
+export type SkillSlotExercise = {
+  name: string
+  sets: number
+  reps: string
+  rest: string
+  notes: string
+}
+
+/** "מתכון שיבוץ לאימון": replace `replaces` (aliases, `|`) or append when empty / not found. */
+export type SkillSlotRecipe = {
+  target: SkillSlotTarget
+  role: SkillSlotRole
+  replaces: string
+  exercises: SkillSlotExercise[]
+}
 
 /**
  * Structured metric value. Meaning per metric:
@@ -79,9 +115,14 @@ export type SkillNode = {
   /** Free note (e.g. how the baseline was measured). */
   note: string
   order: number
-  isActiveInCurrentBlock: boolean
-  nextProgressionStep: string
+  tierStatus: SkillTierStatus
+  /** What must be mastered before this tier (free text, shown in the blueprint). */
+  prerequisites: string
   measures: SkillMeasure[]
+  /** Smart Slot Swap recipe(s): where this tier's exercises go in the weekly plan. */
+  slots: SkillSlotRecipe[]
+  /** ISO time the slots were written into the plan (null = not applied yet). */
+  slotsAppliedAt: string | null
   progressions: SkillProgression[]
   updatedAt: string
   deleted?: boolean
@@ -115,10 +156,36 @@ export { SKILL_TREE_PAYLOAD_KEY } from './weeklyConsistency'
 const EPOCH = '1970-01-01T00:00:00.000Z'
 
 export const SKILL_STATUS_LABELS: Record<SkillBranchStatus, string> = {
-  active_focus: 'בפוקוס בבלוק 3',
-  queued_next_block: 'בלוקים הבאים',
+  active_focus: 'בפוקוס פעיל',
+  queued_next_block: 'בתור',
   completed: 'הושלם',
 }
+
+export const SKILL_TIER_LABELS: Record<SkillTierStatus, string> = {
+  mastered: 'נשלט ✓',
+  active: 'בפוקוס פעיל כרגע 🎯',
+  queued: 'בתור לבלוק הבא ⏳',
+  locked: 'נעול - שלב הבא 🔒',
+}
+
+export const SKILL_SLOT_TARGET_LABELS: Record<SkillSlotTarget, string> = {
+  pull: 'אימון 1: כוח משיכה',
+  push: 'אימון 2: כוח דחיפה ורגליים',
+  combo: 'אימון 3: כוח עליון משולב',
+  morningA: 'שגרת בוקר A',
+  morningB: 'שגרת בוקר B',
+}
+
+export const SKILL_SLOT_ROLE_LABELS: Record<SkillSlotRole, string> = {
+  explosive_skill_slot: 'סלוט סקיל מתפרץ (תרגיל 1-2)',
+  primary_strength_slot: 'סלוט כוח ראשי',
+  horizontal_secondary_slot: 'סלוט משני / אופקי',
+  accessory_core_slot: 'סלוט עזר / ליבה',
+  mobility_finisher_slot: 'פינישר גמישות (6 דקות בסוף האימון)',
+}
+
+/** Recommended maximum of tracks in active focus at once. */
+export const SKILL_FOCUS_LIMIT = 4
 
 export const SKILL_SOURCE_LABELS: Record<SkillSourceType, string> = {
   workout_exercise: 'תרגיל מהאימונים',
@@ -133,6 +200,7 @@ export const SKILL_METRIC_LABELS: Record<SkillMetricType, string> = {
   duration_seconds: 'זמן (שניות)',
   body_stat: 'מדד גוף',
   max_reps: 'מקסימום חזרות',
+  gap_cm: 'מרחק מהרצפה (ס"מ)',
 }
 
 export const SKILL_BODY_STAT_LABELS: Record<SkillBodyStat, string> = {
@@ -153,357 +221,11 @@ export function bodyStatDirection(stat: SkillBodyStat | null): 'increase' | 'dec
 }
 
 // ---------------------------------------------------------------------------
-// Seed: Block 3 (week-12 targets)
+// Seed (8 tracks × 5 tiers) lives in ./skillTreeSeed
 // ---------------------------------------------------------------------------
 
-function v(amount: number | null, extra: { reps?: number; sets?: number } = {}): SkillValue {
+export function v(amount: number | null, extra: { reps?: number; sets?: number } = {}): SkillValue {
   return { amount, reps: extra.reps ?? null, sets: extra.sets ?? null }
-}
-
-type SeedMeasure = Omit<SkillMeasure, 'id' | 'manual' | 'bodyStat'> & {
-  bodyStat?: SkillBodyStat
-}
-
-function seedNode(
-  branchId: string,
-  index: number,
-  input: {
-    title: string
-    note?: string
-    next?: string
-    measures: SeedMeasure[]
-  },
-): SkillNode {
-  const id = `${branchId}-n${index}`
-  return {
-    id,
-    branchId,
-    title: input.title,
-    note: input.note ?? '',
-    order: index,
-    isActiveInCurrentBlock: true,
-    nextProgressionStep: input.next ?? '',
-    measures: input.measures.map((m, i) => ({
-      ...m,
-      bodyStat: m.bodyStat ?? null,
-      id: `${id}-m${i + 1}`,
-      manual: null,
-    })),
-    progressions: [],
-    updatedAt: EPOCH,
-  }
-}
-
-function seedBranch(
-  id: string,
-  order: number,
-  input: Pick<SkillBranch, 'title' | 'subtitle' | 'icon' | 'nextUnlockTitle'>,
-): SkillBranch {
-  return { id, order, status: 'active_focus', updatedAt: EPOCH, ...input }
-}
-
-const workout = 'workout_exercise' as const
-
-export function seedSkillBranches(): SkillBranch[] {
-  return [
-    seedBranch('st-muscle-up', 1, {
-      title: 'Muscle-Up נקי (ללא קיפ)',
-      subtitle: 'משיכה מתפרצת, מעבר מעל המוט ודחיפה',
-      icon: 'muscleUp',
-      nextUnlockTitle: 'Muscle-Up נקי על מוט ועבודה על סטים של 2-3 חזרות',
-    }),
-    seedBranch('st-front-lever', 2, {
-      title: 'Front Lever (פרונט לבר)',
-      subtitle: 'כוח משיכה אופקי וליבה',
-      icon: 'frontLever',
-      nextUnlockTitle: 'Advanced Tuck Front Lever Rows & Static Hold',
-    }),
-    seedBranch('st-hspu-planche', 3, {
-      title: 'Handstand Push-Up & Planche (עמידת ידיים ודחיפה)',
-      subtitle: 'כוח דחיפה אנכי והישענות קדימה',
-      icon: 'handstand',
-      nextUnlockTitle: 'Deep Deficit HSPU & Tuck Planche Push-ups',
-    }),
-    seedBranch('st-one-arm', 4, {
-      title: 'One-Arm Chin-Up (בסיס למתח יד אחת וכוח משיכה מקסימלי)',
-      subtitle: 'אחיזה, שכמות וכוח מקסימלי',
-      icon: 'oneArm',
-      nextUnlockTitle: 'One-Arm Assisted Pull-ups / Uneven Chin-ups',
-    }),
-    seedBranch('st-physique', 5, {
-      title: 'פרופורציות "אל יווני" ורגליים (V-Taper & Lower Body)',
-      subtitle: 'כתפיים רחבות, מותן צרה ורגליים חזקות',
-      icon: 'physique',
-      nextUnlockTitle: 'בלוק 4 - המשך טיפוס ל-80 ק"ג על 9% שומן',
-    }),
-  ]
-}
-
-export function seedSkillNodes(): SkillNode[] {
-  return [
-    // 1. Muscle-Up
-    seedNode('st-muscle-up', 1, {
-      title: 'מתח מתפרץ גבוה (High Pull-ups)',
-      note: 'יעד: 4 חזרות לגובה בטן עליונה, 3 סטים',
-      measures: [
-        {
-          label: 'High Pull-ups לגובה בטן עליונה',
-          sourceType: workout,
-          linkedExercise: 'מתח מתפרץ גבוה|High Pull',
-          metricType: 'sets_x_reps',
-          baseline: v(3, { sets: 3 }),
-          target: v(4, { sets: 3 }),
-        },
-      ],
-    }),
-    seedNode('st-muscle-up', 2, {
-      title: 'מתח חזה מתפרץ בפרונציה (Chest To Bar)',
-      note: 'יעד חלופי: +5 ק"ג ל-5 חזרות',
-      measures: [
-        {
-          label: 'Chest To Bar — מקסימום חזרות משקל גוף',
-          sourceType: workout,
-          linkedExercise: 'Chest To Bar|מתח חזה',
-          metricType: 'max_reps',
-          baseline: v(16),
-          target: v(18),
-        },
-      ],
-    }),
-    seedNode('st-muscle-up', 3, {
-      title: 'מקבילים כבד (Weighted Dips)',
-      measures: [
-        {
-          label: 'מקבילים כבד — סט שיא',
-          sourceType: workout,
-          linkedExercise: 'מקבילים כבד|מקבילים עם משקל',
-          metricType: 'weight_x_reps',
-          baseline: v(25, { reps: 2 }),
-          target: v(30, { reps: 2 }),
-        },
-      ],
-    }),
-    // 2. Front Lever
-    seedNode('st-front-lever', 1, {
-      title: 'חתירת פרונט לבר מקופל (Tuck FL Rows)',
-      next: 'מעבר ל-Advanced Tuck FL Rows',
-      measures: [
-        {
-          label: 'Tuck FL Rows — חזרות נקיות',
-          sourceType: workout,
-          linkedExercise: 'Tuck Front Lever|Tuck FL|פרונט לבר מקופל',
-          metricType: 'sets_x_reps',
-          baseline: v(6, { sets: 3 }),
-          target: v(8, { sets: 3 }),
-        },
-      ],
-    }),
-    seedNode('st-front-lever', 2, {
-      title: 'מתח כבד בפרונציה - סט שיא',
-      measures: [
-        {
-          label: 'מתח כבד בפרונציה — סט כבד',
-          sourceType: workout,
-          linkedExercise: 'מתח כבד בפרונציה',
-          metricType: 'weight_x_reps',
-          baseline: v(27.5, { reps: 3 }),
-          target: v(32.5, { reps: 3 }),
-        },
-      ],
-    }),
-    seedNode('st-front-lever', 3, {
-      title: 'ליבה: החזקת הולו (שגרה A) + Toes To Bar',
-      note: 'TTB עם עצירה של 2 שניות למעלה',
-      measures: [
-        {
-          label: 'Toes To Bar (עם עצירה 2 שנ\' למעלה)',
-          sourceType: workout,
-          linkedExercise: 'Toes To Bar|TTB',
-          metricType: 'sets_x_reps',
-          baseline: v(6, { sets: 3 }),
-          target: v(8, { sets: 3 }),
-        },
-        {
-          label: 'החזקת הולו (Hollow Body Hold)',
-          sourceType: 'morning_routine',
-          linkedExercise: 'Hollow|הולו',
-          metricType: 'duration_seconds',
-          baseline: v(null),
-          target: v(60),
-        },
-      ],
-    }),
-    // 3. HSPU & Planche
-    seedNode('st-hspu-planche', 1, {
-      title: 'לחיצת כתפיים Pike ברגליים מוגבהות (Elevated Pike Push-ups)',
-      next: 'הגבהת ספסל / קירוב ידיים / HSPU לקיר',
-      measures: [
-        {
-          label: 'Elevated Pike Push-ups — חזרות מלאות',
-          sourceType: workout,
-          linkedExercise: 'Pike|פייק',
-          metricType: 'sets_x_reps',
-          baseline: v(5, { sets: 3 }),
-          target: v(8, { sets: 3 }),
-        },
-      ],
-    }),
-    seedNode('st-hspu-planche', 2, {
-      title: 'שכיבות סמיכה פסאודו-פלאנש (Pseudo Planche Push-ups)',
-      note: 'בהישענות מקסימלית קדימה',
-      measures: [
-        {
-          label: 'Pseudo Planche Push-ups',
-          sourceType: workout,
-          linkedExercise: 'Pseudo Planche|פסאודו',
-          metricType: 'sets_x_reps',
-          baseline: v(6, { sets: 2 }),
-          target: v(8, { sets: 2 }),
-        },
-      ],
-    }),
-    seedNode('st-hspu-planche', 3, {
-      title: 'עמידת ידיים מול קיר (שגרת בוקר B)',
-      note: 'בסיס: 60 שנ\' צמוד לקיר / 17 מקבילים',
-      measures: [
-        {
-          label: 'עמידת ידיים — החזקה יציבה',
-          sourceType: 'morning_routine',
-          linkedExercise: 'Handstand|עמידת ידיים',
-          metricType: 'duration_seconds',
-          baseline: v(null),
-          target: v(60),
-        },
-        {
-          label: 'מקבילים משקל גוף — מקסימום חזרות',
-          sourceType: 'manual_benchmark',
-          linkedExercise: 'מקבילים',
-          metricType: 'max_reps',
-          baseline: v(17),
-          target: v(22),
-        },
-      ],
-    }),
-    // 4. One-Arm Chin-Up
-    seedNode('st-one-arm', 1, {
-      title: 'תלייה אקטיבית בשכמות ביד אחת',
-      measures: [
-        {
-          label: 'תלייה ביד אחת — שניות לכל יד',
-          sourceType: workout,
-          linkedExercise: 'תלייה אקטיבית בשכמות ביד אחת|תלייה ביד אחת',
-          metricType: 'duration_seconds',
-          baseline: v(15, { sets: 3 }),
-          target: v(25, { sets: 3 }),
-        },
-      ],
-    }),
-    seedNode('st-one-arm', 2, {
-      title: 'מתח סופינציה כבד',
-      note: 'בדיקת שיא ביום ו\' / שבוע 12',
-      measures: [
-        {
-          label: 'בדיקת שיא — 2 חזרות',
-          sourceType: workout,
-          linkedExercise: 'מתח בסופינציה עם משקל|מתח סופינציה|מתח נקי סופינציה',
-          metricType: 'weight_x_reps',
-          baseline: v(32.5, { reps: 2 }),
-          target: v(40, { reps: 2 }),
-        },
-        {
-          label: 'יום ו\' — 6 חזרות',
-          sourceType: workout,
-          linkedExercise: 'מתח בסופינציה עם משקל',
-          metricType: 'weight_x_reps',
-          baseline: v(22.5, { reps: 5 }),
-          target: v(30, { reps: 6 }),
-        },
-      ],
-    }),
-    seedNode('st-one-arm', 3, {
-      title: 'כפיפת מרפקים בשיפוע + החזקה ב-90°',
-      note: 'כולל 10 שניות החזקה ב-90°',
-      measures: [
-        {
-          label: 'כפיפת מרפקים בשיפוע',
-          sourceType: workout,
-          linkedExercise: 'כפיפת מרפקים בישיבה בשיפוע',
-          metricType: 'weight_x_reps',
-          baseline: v(16, { reps: 6 }),
-          target: v(18, { reps: 8 }),
-        },
-      ],
-    }),
-    // 5. V-Taper & Lower Body
-    seedNode('st-physique', 1, {
-      title: 'סקוואט בולגרי עם משקולות יד',
-      note: 'משקל בכל יד, חזרות לכל רגל',
-      measures: [
-        {
-          label: 'סקוואט בולגרי — ק"ג בכל יד',
-          sourceType: workout,
-          linkedExercise: 'סקוואט בולגרי',
-          metricType: 'weight_x_reps',
-          baseline: v(8, { reps: 8 }),
-          target: v(14, { reps: 8 }),
-        },
-      ],
-    }),
-    seedNode('st-physique', 2, {
-      title: 'דדליפט רומני ברגל אחת (Single-Leg RDL) + הרחקות לצדדים',
-      measures: [
-        {
-          label: 'Single-Leg RDL',
-          sourceType: workout,
-          linkedExercise: 'Single-Leg RDL|דדליפט רומני ברגל אחת',
-          metricType: 'weight_x_reps',
-          baseline: v(12, { reps: 8 }),
-          target: v(16, { reps: 8 }),
-        },
-        {
-          label: 'הרחקות לצדדים',
-          sourceType: workout,
-          linkedExercise: 'Lateral Raises|הרחקות לצדדים',
-          metricType: 'weight_x_reps',
-          baseline: v(6, { reps: 12 }),
-          target: v(8, { reps: 12 }),
-        },
-      ],
-    }),
-    seedNode('st-physique', 3, {
-      title: 'מדדי גוף (מסה נקייה סוף בלוק 3)',
-      note: 'יעד: משקל 75.5-76.0 ק"ג | מותן מתחת ל-80 ס"מ | שומן ≤14.5%',
-      measures: [
-        {
-          label: 'משקל גוף',
-          sourceType: 'body_metric',
-          linkedExercise: '',
-          metricType: 'body_stat',
-          bodyStat: 'weight',
-          baseline: v(73.2),
-          target: v(75.5),
-        },
-        {
-          label: 'היקף מותן',
-          sourceType: 'body_metric',
-          linkedExercise: '',
-          metricType: 'body_stat',
-          bodyStat: 'waist',
-          baseline: v(null),
-          target: v(80),
-        },
-        {
-          label: 'אחוז שומן',
-          sourceType: 'body_metric',
-          linkedExercise: '',
-          metricType: 'body_stat',
-          bodyStat: 'bodyFat',
-          baseline: v(null),
-          target: v(14.5),
-        },
-      ],
-    }),
-  ]
 }
 
 /** Most recent Sunday on or before `today` (week 1 of the block). */
@@ -543,6 +265,16 @@ const METRICS: readonly SkillMetricType[] = [
   'duration_seconds',
   'body_stat',
   'max_reps',
+  'gap_cm',
+]
+const TIER_STATUSES: readonly SkillTierStatus[] = ['mastered', 'active', 'queued', 'locked']
+const SLOT_TARGETS: readonly SkillSlotTarget[] = ['pull', 'push', 'combo', 'morningA', 'morningB']
+const SLOT_ROLES: readonly SkillSlotRole[] = [
+  'explosive_skill_slot',
+  'primary_strength_slot',
+  'horizontal_secondary_slot',
+  'accessory_core_slot',
+  'mobility_finisher_slot',
 ]
 const BODY_STATS: readonly SkillBodyStat[] = ['weight', 'waist', 'bodyFat']
 export const SKILL_ICON_KEYS: readonly SkillIconKey[] = [
@@ -554,6 +286,9 @@ export const SKILL_ICON_KEYS: readonly SkillIconKey[] = [
   'target',
   'flame',
   'trophy',
+  'flag',
+  'leg',
+  'stretch',
 ]
 
 function pick<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
@@ -607,6 +342,27 @@ function normalizeMeasure(raw: unknown, fallbackId: string): SkillMeasure {
   }
 }
 
+function normalizeSlot(raw: unknown): SkillSlotRecipe {
+  const o = obj(raw)
+  return {
+    target: pick(o.target, SLOT_TARGETS, 'pull'),
+    role: pick(o.role, SLOT_ROLES, 'primary_strength_slot'),
+    replaces: str(o.replaces, 300),
+    exercises: Array.isArray(o.exercises)
+      ? o.exercises.slice(0, 6).map((e) => {
+          const eo = obj(e)
+          return {
+            name: str(eo.name, 160),
+            sets: Math.min(20, Math.max(1, Math.round(num(eo.sets) ?? 3))),
+            reps: str(eo.reps, 80),
+            rest: str(eo.rest, 40),
+            notes: str(eo.notes, 400),
+          }
+        }).filter((e) => e.name.trim())
+      : [],
+  }
+}
+
 function normalizeNode(raw: unknown, key: string): SkillNode | null {
   const o = obj(raw)
   const id = str(o.id, 80) || key
@@ -627,9 +383,16 @@ function normalizeNode(raw: unknown, key: string): SkillNode | null {
     title: str(o.title, 200),
     note: str(o.note, 500),
     order: num(o.order) ?? 0,
-    isActiveInCurrentBlock: o.isActiveInCurrentBlock !== false,
-    nextProgressionStep: str(o.nextProgressionStep, 300),
+    // Legacy nodes (before tiers) carried `isActiveInCurrentBlock`.
+    tierStatus: pick(
+      o.tierStatus,
+      TIER_STATUSES,
+      o.isActiveInCurrentBlock === false ? 'queued' : 'active',
+    ),
+    prerequisites: str(o.prerequisites, 400),
     measures,
+    slots: Array.isArray(o.slots) ? o.slots.slice(0, 4).map(normalizeSlot) : [],
+    slotsAppliedAt: typeof o.slotsAppliedAt === 'string' ? iso(o.slotsAppliedAt) : null,
     progressions,
     updatedAt: iso(o.updatedAt),
     ...(o.deleted === true ? { deleted: true } : {}),
@@ -672,6 +435,14 @@ export function normalizeSkillTree(raw: unknown, today = localDateKey()): SkillT
   const deload = Array.isArray(o.deloadWeeks)
     ? o.deloadWeeks.map(num).filter((n): n is number => n != null && n > 0)
     : base.deloadWeeks
+  // The original 5-branch seed (incl. body-stat "V-Taper" goals) is retired.
+  for (const id of LEGACY_SEED_IDS) {
+    const tombstone = (at: string) => (at > SKILL_SEED_MIGRATED_AT ? at : SKILL_SEED_MIGRATED_AT)
+    const b = branches[id]
+    if (b && !b.deleted) branches[id] = { ...b, deleted: true, updatedAt: tombstone(b.updatedAt) }
+    const n = nodes[id]
+    if (n && !n.deleted) nodes[id] = { ...n, deleted: true, updatedAt: tombstone(n.updatedAt) }
+  }
   return {
     blockLabel: str(o.blockLabel, 60) || base.blockLabel,
     blockStartDate: /^\d{4}-\d{2}-\d{2}$/.test(start) ? start : base.blockStartDate,
@@ -786,12 +557,18 @@ export function newNode(state: SkillTreeState, branchId: string): SkillNode {
     title: '',
     note: '',
     order,
-    isActiveInCurrentBlock: true,
-    nextProgressionStep: '',
+    tierStatus: 'locked',
+    prerequisites: '',
     measures: [emptyMeasure()],
+    slots: [],
+    slotsAppliedAt: null,
     progressions: [],
     updatedAt: now(),
   }
+}
+
+export function emptySlot(target: SkillSlotTarget = 'pull'): SkillSlotRecipe {
+  return { target, role: 'primary_strength_slot', replaces: '', exercises: [] }
 }
 
 export function upsertNode(state: SkillTreeState, node: SkillNode): SkillTreeState {
@@ -846,43 +623,70 @@ export function setBlockSettings(
   return { ...state, ...patch, settingsUpdatedAt: now() }
 }
 
-export type SkillAdvanceInput = {
-  title: string
-  nextProgressionStep: string
-  measures: { id: string; baseline: SkillValue; target: SkillValue; linkedExercise: string }[]
+/** Previous tier still in focus when `nodeId` gets activated (it becomes mastered). */
+export function activeTierOf(state: SkillTreeState, branchId: string): SkillNode | null {
+  return liveNodes(state, branchId).find((n) => n.tierStatus === 'active') ?? null
 }
 
-/** Promote a completed node to its next stage: new title/targets, history kept. */
-export function advanceNode(
+/**
+ * Put a tier in active focus: lower tiers become mastered, any other active
+ * tier of the track is retired (mastered if lower, locked if higher), and the
+ * track joins active focus. `slotsApplied` stamps the Smart Slot Swap.
+ */
+export function activateTier(
   state: SkillTreeState,
   nodeId: string,
-  input: SkillAdvanceInput,
+  opts: { slotsApplied: boolean },
 ): SkillTreeState {
   const node = state.nodes[nodeId]
   if (!node) return state
   const at = now()
-  const byId = new Map(input.measures.map((m) => [m.id, m]))
-  return upsertNode(state, {
+  const nodes = { ...state.nodes }
+  let fromTitle = ''
+  for (const n of liveNodes(state, node.branchId)) {
+    if (n.id === nodeId) continue
+    if (n.order < node.order && n.tierStatus !== 'mastered') {
+      if (n.tierStatus === 'active') fromTitle = n.title
+      nodes[n.id] = { ...n, tierStatus: 'mastered', updatedAt: at }
+    } else if (n.order > node.order && n.tierStatus === 'active') {
+      nodes[n.id] = { ...n, tierStatus: 'locked', updatedAt: at }
+    }
+  }
+  nodes[nodeId] = {
     ...node,
-    title: input.title.trim() || node.title,
-    nextProgressionStep: input.nextProgressionStep.trim(),
-    measures: node.measures.map((m) => {
-      const next = byId.get(m.id)
-      return next
-        ? {
-            ...m,
-            baseline: next.baseline,
-            target: next.target,
-            linkedExercise: next.linkedExercise,
-            manual: null,
-          }
-        : m
-    }),
-    progressions: [
-      ...node.progressions,
-      { at, fromTitle: node.title, toTitle: input.title.trim() || node.title },
-    ],
-  })
+    tierStatus: 'active',
+    slotsAppliedAt: opts.slotsApplied ? at : node.slotsAppliedAt,
+    progressions: fromTitle
+      ? [...node.progressions, { at, fromTitle, toTitle: node.title }]
+      : node.progressions,
+    updatedAt: at,
+  }
+  const branch = state.branches[node.branchId]
+  const branches = branch
+    ? { ...state.branches, [branch.id]: { ...branch, status: 'active_focus' as const, updatedAt: at } }
+    : state.branches
+  return { ...state, nodes, branches }
+}
+
+/** Mastery gate passed: tier → mastered; the track completes when nothing is left. */
+export function masterTier(state: SkillTreeState, nodeId: string): SkillTreeState {
+  const node = state.nodes[nodeId]
+  if (!node) return state
+  const at = now()
+  const nodes = { ...state.nodes, [nodeId]: { ...node, tierStatus: 'mastered' as const, updatedAt: at } }
+  const rest = Object.values(nodes).filter((n) => !n.deleted && n.branchId === node.branchId)
+  const branch = state.branches[node.branchId]
+  let branches = state.branches
+  if (branch && rest.every((n) => n.tierStatus === 'mastered')) {
+    branches = { ...branches, [branch.id]: { ...branch, status: 'completed', updatedAt: at } }
+  }
+  return { ...state, nodes, branches }
+}
+
+export function markSlotsApplied(state: SkillTreeState, nodeId: string): SkillTreeState {
+  const node = state.nodes[nodeId]
+  if (!node) return state
+  return upsertNode(state, { ...node, slotsAppliedAt: now() })
 }
 
 // ---------------------------------------------------------------------------
@@ -917,18 +721,30 @@ export type MeasureEvaluation = {
 
 export type NodeEvaluation = {
   node: SkillNode
+  status: SkillTierStatus
   measures: MeasureEvaluation[]
+  /** 1 for mastered tiers, otherwise the average of the measures. */
   progress: number
+  /** Mastered, or every measure at 100%. */
   complete: boolean
+  /** Active tier whose measures all hit 100% — the mastery gate is open. */
+  gateReady: boolean
   feeds: string[]
 }
+
+export type BranchFocus = 'active' | 'queued' | 'completed'
 
 export type BranchEvaluation = {
   branch: SkillBranch
   nodes: NodeEvaluation[]
+  /** (mastered tiers + active tier progress) / tier count. */
   progress: number
-  completedCount: number
-  countedNodes: number
+  masteredCount: number
+  tierCount: number
+  activeNode: NodeEvaluation | null
+  /** First not-yet-mastered tier after the active one (or the next queued tier). */
+  nextNode: NodeEvaluation | null
+  focus: BranchFocus
   complete: boolean
 }
 
@@ -1153,6 +969,28 @@ export function evaluateMeasure(
     }
   }
 
+  if (measure.metricType === 'gap_cm') {
+    // Manual-only, lower is better; the latest entry is the current value.
+    const base = measure.baseline.amount
+    const manualAmount = measure.manual?.value.amount ?? null
+    const currentAmount = manualAmount ?? base
+    let progress = 0
+    if (currentAmount != null && targetAmount != null && base != null) {
+      progress = currentAmount <= targetAmount ? 1 : ratio(-currentAmount, -base, -targetAmount)
+    }
+    return {
+      measure,
+      current: currentAmount == null ? null : v(currentAmount),
+      currentSource: manualAmount != null ? 'manual' : base != null ? 'baseline' : null,
+      currentDate: manualAmount != null ? dateOf(measure.manual!.at) : null,
+      baseline: measure.baseline,
+      progress,
+      complete: progress >= 0.999,
+      feeds,
+      evidenceCount: 0,
+    }
+  }
+
   type Candidate = { value: SkillValue; score: number; source: SkillCurrentSource; date: string | null }
   const candidates: Candidate[] = []
   const baseScore = valueScore(measure, measure.baseline)
@@ -1208,15 +1046,20 @@ export function evaluateNode(
   since: string,
 ): NodeEvaluation {
   const measures = node.measures.map((m) => evaluateMeasure(m, sources, since))
-  const progress = measures.length
+  const mastered = node.tierStatus === 'mastered'
+  const measured = measures.length
     ? measures.reduce((sum, m) => sum + m.progress, 0) / measures.length
     : 0
+  const allMet = measures.length > 0 && measures.every((m) => m.complete)
+  const slotFeeds = node.slots.map((s) => SKILL_SLOT_TARGET_LABELS[s.target])
   return {
     node,
+    status: node.tierStatus,
     measures,
-    progress,
-    complete: measures.length > 0 && measures.every((m) => m.complete),
-    feeds: [...new Set(measures.flatMap((m) => m.feeds))],
+    progress: mastered ? 1 : measured,
+    complete: mastered || allMet,
+    gateReady: node.tierStatus === 'active' && allMet,
+    feeds: [...new Set([...measures.flatMap((m) => m.feeds), ...(measures.length ? [] : slotFeeds)])],
   }
 }
 
@@ -1227,19 +1070,34 @@ export function evaluateSkillTree(
   const since = state.blockStartDate
   return liveBranches(state).map((branch) => {
     const nodes = liveNodes(state, branch.id).map((n) => evaluateNode(n, sources, since))
-    const active = nodes.filter((n) => n.node.isActiveInCurrentBlock)
-    const counted = active.length ? active : nodes
-    const progress = counted.length
-      ? counted.reduce((sum, n) => sum + n.progress, 0) / counted.length
+    const masteredCount = nodes.filter((n) => n.status === 'mastered').length
+    const activeNode = nodes.find((n) => n.status === 'active') ?? null
+    const progress = nodes.length
+      ? nodes.reduce(
+          (sum, n) => sum + (n.status === 'mastered' ? 1 : n.status === 'active' ? n.progress : 0),
+          0,
+        ) / nodes.length
       : 0
-    const completedCount = counted.filter((n) => n.complete).length
+    const nextNode =
+      nodes.find(
+        (n) =>
+          n.status !== 'mastered' &&
+          n.status !== 'active' &&
+          (!activeNode || n.node.order > activeNode.node.order),
+      ) ?? null
+    const complete = nodes.length > 0 && masteredCount === nodes.length
+    const focus: BranchFocus =
+      complete || branch.status === 'completed' ? 'completed' : activeNode ? 'active' : 'queued'
     return {
       branch,
       nodes,
       progress,
-      completedCount,
-      countedNodes: counted.length,
-      complete: counted.length > 0 && completedCount === counted.length,
+      masteredCount,
+      tierCount: nodes.length,
+      activeNode,
+      nextNode,
+      focus,
+      complete,
     }
   })
 }
@@ -1268,6 +1126,8 @@ export function formatSkillValue(measure: SkillMeasure, value: SkillValue | null
     }
     case 'max_reps':
       return `${fmt(value.amount)} חזרות`
+    case 'gap_cm':
+      return `${fmt(value.amount)} ס"מ מהרצפה`
     case 'body_stat': {
       const unit = BODY_STAT_UNITS[measure.bodyStat ?? 'weight']
       return unit === '%' ? `${fmt(value.amount)}%` : `${fmt(value.amount)} ${unit}`
@@ -1282,6 +1142,8 @@ export function quickStep(measure: SkillMeasure): number {
       return 2.5
     case 'duration_seconds':
       return 5
+    case 'gap_cm':
+      return 1
     case 'body_stat':
       return measure.bodyStat === 'waist' ? 0.5 : 0.1
     default:
@@ -1301,23 +1163,14 @@ export function bumpValue(
   if (measure.metricType === 'weight_x_reps') {
     return v(amount, { reps: current?.reps ?? measure.target.reps ?? measure.baseline.reps ?? 1 })
   }
-  if (measure.metricType === 'body_stat' || measure.metricType === 'max_reps') return v(amount)
-  return v(amount, { sets: measureSetCount(measure) })
-}
-
-/** Suggested next target after a node is completed. */
-export function suggestNextTarget(measure: SkillMeasure): SkillValue {
-  const t = measure.target
-  switch (measure.metricType) {
-    case 'weight_x_reps':
-      return { ...t, amount: t.amount == null ? null : t.amount + 2.5 }
-    case 'duration_seconds':
-      return { ...t, amount: t.amount == null ? null : t.amount + 5 }
-    case 'body_stat':
-      return t
-    default:
-      return { ...t, amount: t.amount == null ? null : t.amount + 2 }
+  if (
+    measure.metricType === 'body_stat' ||
+    measure.metricType === 'max_reps' ||
+    measure.metricType === 'gap_cm'
+  ) {
+    return v(amount)
   }
+  return v(amount, { sets: measureSetCount(measure) })
 }
 
 export type BlockWeekInfo = {

@@ -13,7 +13,7 @@ export function Modal({ open, title, onClose, children, wide }: ModalProps) {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] backdrop-blur-sm sm:items-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 px-3 pt-3 pb-[max(2.5rem,calc(env(safe-area-inset-bottom,0px)+1.5rem))] backdrop-blur-sm sm:items-center sm:pb-3">
       <button
         type="button"
         className="absolute inset-0 cursor-default"
@@ -22,7 +22,7 @@ export function Modal({ open, title, onClose, children, wide }: ModalProps) {
       />
       <div
         className={[
-          'relative z-10 max-h-[calc(100dvh-1.5rem-env(safe-area-inset-bottom,0px))] w-full overflow-x-hidden overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] shadow-xl shadow-slate-200/80',
+          'relative z-10 max-h-[calc(100dvh-0.75rem-max(2.5rem,calc(env(safe-area-inset-bottom,0px)+1.5rem)))] sm:max-h-[calc(100dvh-1.5rem)] w-full overflow-x-hidden overflow-y-auto overscroll-contain rounded-2xl border border-slate-200 bg-white p-5 pb-8 shadow-xl shadow-slate-200/80',
           wide ? 'max-w-lg' : 'max-w-md',
         ].join(' ')}
         role="dialog"

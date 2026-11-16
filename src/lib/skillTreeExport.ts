@@ -1,78 +1,74 @@
+import { planSlotSwap } from './skillSlotSwap'
 import {
   blockWeekInfo,
   evaluateSkillTree,
   formatSkillValue,
   percent,
-  SKILL_BODY_STAT_LABELS,
-  SKILL_METRIC_LABELS,
-  SKILL_SOURCE_LABELS,
+  SKILL_FOCUS_LIMIT,
+  SKILL_SLOT_ROLE_LABELS,
+  SKILL_TIER_LABELS,
   type BranchEvaluation,
   type MeasureEvaluation,
+  type NodeEvaluation,
   type SkillDataSources,
   type SkillTreeState,
 } from './skillTree'
 
-const STATUS_TEXT = {
-  active_focus: 'פעיל (בפוקוס)',
-  queued_next_block: 'בתור לבלוק הבא',
-  completed: 'הושלם',
+const FOCUS_TEXT = {
+  active: 'בפוקוס פעיל',
+  queued: 'בתור',
+  completed: 'נשלט במלואו',
 } as const
 
 const SOURCE_TEXT = {
-  log: 'מיומן האימונים',
+  log: 'יומן אימונים',
   manual: 'עדכון ידני',
   baseline: 'בסיס (טרם נשבר)',
-  body: 'מדידה אחרונה',
+  body: 'מדידה',
 } as const
 
 function measureLine(m: MeasureEvaluation): string {
-  const link =
-    m.measure.sourceType === 'body_metric'
-      ? SKILL_BODY_STAT_LABELS[m.measure.bodyStat ?? 'weight']
-      : m.measure.linkedExercise.split('|')[0]?.trim() || '—'
   const source = m.currentSource ? SOURCE_TEXT[m.currentSource] : 'אין נתון'
-  const when = m.currentDate ? ` (${m.currentDate})` : ''
-  return [
-    `    - ${m.measure.label || 'מדד'}: נוכחי ${formatSkillValue(m.measure, m.current)} → יעד ${formatSkillValue(m.measure, m.measure.target)}`,
-    `בסיס ${formatSkillValue(m.measure, m.baseline)}`,
-    `${percent(m.progress)}%`,
-    `מקור: ${SKILL_SOURCE_LABELS[m.measure.sourceType]} · ${source}${when}`,
-    `מקושר ל: ${link}`,
-    `סוג: ${SKILL_METRIC_LABELS[m.measure.metricType]}`,
-  ].join(' | ')
+  const when = m.currentDate ? ` ${m.currentDate}` : ''
+  return `    - ${m.measure.label || 'מדד'}: ${formatSkillValue(m.measure, m.current)} → ${formatSkillValue(m.measure, m.measure.target)} (${percent(m.progress)}%) | בסיס ${formatSkillValue(m.measure, m.baseline)} | ${source}${when}`
 }
 
-function branchBlock(e: BranchEvaluation): string {
-  const head = `### ${e.branch.title} — ${percent(e.progress)}% | ${STATUS_TEXT[e.branch.status]} | ${e.completedCount}/${e.countedNodes} אבני דרך הושלמו`
-  const nodes = e.nodes.map((n) => {
-    const flags = [
-      n.node.isActiveInCurrentBlock ? 'פעיל בבלוק' : 'בתור לבלוק עתידי',
-      n.complete
-        ? n.node.nextProgressionStep
-          ? `הושלם ✓ — השלב הבא נפתח: ${n.node.nextProgressionStep}`
-          : 'הושלם ✓'
-        : n.node.nextProgressionStep
-          ? `השלב הבא (נעול): ${n.node.nextProgressionStep}`
-          : '',
-      n.node.progressions.length
-        ? `שלבים קודמים: ${n.node.progressions.map((p) => `${p.fromTitle} (${p.at.slice(0, 10)})`).join(' ← ')}`
-        : '',
-    ].filter(Boolean)
-    return [
-      `  - ${n.node.title}: ${percent(n.progress)}% | ${flags.join(' | ')} | מוזן מ: ${n.feeds.join(', ')}`,
-      n.node.note ? `    הערה: ${n.node.note}` : '',
-      ...n.measures.map(measureLine),
-    ]
-      .filter(Boolean)
-      .join('\n')
+function slotLines(node: NodeEvaluation, sources: SkillDataSources): string[] {
+  if (!node.node.slots.length) return []
+  return planSlotSwap(node.node.slots, sources.programDays, sources.morningRoutine).map((p) => {
+    const out = p.outgoing.length ? p.outgoing.join(' + ') : p.slot.replaces ? p.slot.replaces.split('|')[0] : 'ללא (תוספת בסוף האימון)'
+    const incoming = p.incoming.map((e) => `${e.name} ${e.sets}×${e.reps}`).join(' + ')
+    return `    - החלפה חכמה · ${p.targetLabel} (${SKILL_SLOT_ROLE_LABELS[p.slot.role]}): יוצא ${out} → נכנס ${incoming}`
   })
-  const unlock = e.branch.nextUnlockTitle
-    ? `  - ${e.complete || e.branch.status === 'completed' ? 'נפתח' : 'נפתח ב-100%'}: ${e.branch.nextUnlockTitle}`
-    : ''
-  return [head, ...nodes, unlock].filter(Boolean).join('\n')
 }
 
-/** `=== עץ מיומנויות ואבני דרך (בלוק 3) ===` section of the AI prompt. */
+function branchBlock(e: BranchEvaluation, sources: SkillDataSources): string {
+  const mastered = e.nodes.filter((n) => n.status === 'mastered')
+  const lines = [
+    `### ${e.branch.title} (${e.branch.subtitle}) — ${FOCUS_TEXT[e.focus]} | ${e.masteredCount}/${e.tierCount} שלבים נשלטו | ${percent(e.progress)}%`,
+    mastered.length
+      ? `  - נשלטו ✓: ${mastered.map((n) => `שלב ${n.node.order} ${n.node.title}`).join(' | ')}`
+      : '',
+  ]
+  const active = e.activeNode
+  if (active) {
+    lines.push(
+      `  - 🎯 שלב ${active.node.order} פעיל (${percent(active.progress)}%${active.gateReady ? ' — עבר את שער השליטה, מוכן לשלב הבא' : ''}): ${active.node.title}`,
+      ...active.measures.map(measureLine),
+      active.node.slotsAppliedAt ? '    - משובץ בתוכנית האימונים ✓' : '    - טרם שובץ בתוכנית',
+    )
+  }
+  const next = e.nextNode
+  if (next) {
+    lines.push(
+      `  - ${next.status === 'queued' ? '⏳' : '🔒'} השלב הבא — שלב ${next.node.order}: ${next.node.title}${next.node.prerequisites ? ` | תנאי פתיחה: ${next.node.prerequisites}` : ''}`,
+      ...slotLines(next, sources),
+    )
+  }
+  return lines.filter(Boolean).join('\n')
+}
+
+/** `=== עץ מיומנויות ואבני דרך ===` section of the AI prompt. */
 export function formatSkillTreeSection(
   state: SkillTreeState,
   sources: SkillDataSources,
@@ -81,64 +77,71 @@ export function formatSkillTreeSection(
   const evaluations = evaluateSkillTree(state, sources)
   if (!evaluations.length) return ''
   const week = blockWeekInfo(state, today)
-  const focus = evaluations.filter((e) => e.branch.status === 'active_focus')
-  const overall = focus.length
-    ? focus.reduce((sum, e) => sum + e.progress, 0) / focus.length
-    : 0
+  const focus = evaluations.filter((e) => e.focus === 'active')
+  const queued = evaluations.filter((e) => e.focus === 'queued')
+  const closest = evaluations
+    .filter((e) => e.activeNode && e.nextNode)
+    .sort((a, b) => b.activeNode!.progress - a.activeNode!.progress)
+    .slice(0, 3)
+    .map(
+      (e) =>
+        `${e.branch.title}: שלב ${e.activeNode!.node.order} ב-${percent(e.activeNode!.progress)}% → פותח "${e.nextNode!.node.title}"`,
+    )
   return [
     `=== עץ מיומנויות ואבני דרך (${state.blockLabel}) ===`,
-    `- ${week.label} | התחלה: ${state.blockStartDate} | ${state.blockWeeks} שבועות | דילואד: שבועות ${state.deloadWeeks.join(', ') || '—'} | מבחנים: שבוע ${state.benchmarkWeek}`,
-    `- התקדמות ממוצעת ביעדים פעילים: ${percent(overall)}%`,
-    '- שיטת חישוב: הביצוע הטוב ביותר מאז תחילת הבלוק (יומן אימונים / עדכון ידני), לא פחות מהבסיס. משקל × חזרות לפי 1RM משוער (Epley); סטים × חזרות לפי ממוצע N הסטים הטובים באימון אחד; מדדי גוף לפי המדידה האחרונה.',
-    ...evaluations.map(branchBlock),
-  ].join('\n')
+    `- ${week.label} | התחלה: ${state.blockStartDate} | ${state.blockWeeks} שבועות | דילואד: ${state.deloadWeeks.join(', ') || '—'} | מבחנים: שבוע ${state.benchmarkWeek}`,
+    `- פוקוס פעיל: ${focus.length}/${SKILL_FOCUS_LIMIT} מסלולים (${focus.map((e) => e.branch.title).join(', ') || '—'})${focus.length > SKILL_FOCUS_LIMIT ? ' ⚠️ מעל המומלץ' : ''}`,
+    queued.length ? `- בתור: ${queued.map((e) => e.branch.title).join(', ')}` : '',
+    closest.length ? `- הכי קרובים לפתיחת השלב הבא: ${closest.join(' | ')}` : '',
+    `- סטטוסים: ${Object.values(SKILL_TIER_LABELS).join(' / ')}. התקדמות = הביצוע הטוב ביותר מאז תחילת הבלוק (יומן / עדכון ידני), לא פחות מהבסיס; משקל × חזרות לפי 1RM משוער (Epley).`,
+    ...evaluations.map((e) => branchBlock(e, sources)),
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
-/** JSON export rows (`skill_tree_branches`, `skill_tree_nodes`). */
+/** JSON export rows (`skill_tree_tracks`, `skill_tree_tiers`). */
 export function skillTreeExportEntities(
   state: SkillTreeState,
   sources: SkillDataSources,
 ): {
-  skillTreeBranches: Record<string, unknown>[]
-  skillTreeNodes: Record<string, unknown>[]
+  skillTreeTracks: Record<string, unknown>[]
+  skillTreeTiers: Record<string, unknown>[]
 } {
   const evaluations = evaluateSkillTree(state, sources)
   return {
-    skillTreeBranches: evaluations.map((e) => ({
+    skillTreeTracks: evaluations.map((e) => ({
       id: e.branch.id,
       title: e.branch.title,
       subtitle: e.branch.subtitle,
-      category_icon: e.branch.icon,
-      status: e.branch.status,
+      focus: e.focus,
       order_index: e.branch.order,
-      next_unlock_title: e.branch.nextUnlockTitle,
       completion_pct: percent(e.progress),
-      completed_nodes: e.completedCount,
-      counted_nodes: e.countedNodes,
+      mastered_tiers: e.masteredCount,
+      tier_count: e.tierCount,
+      active_tier: e.activeNode?.node.order ?? null,
+      next_tier: e.nextNode?.node.order ?? null,
     })),
-    skillTreeNodes: evaluations.flatMap((e) =>
+    skillTreeTiers: evaluations.flatMap((e) =>
       e.nodes.map((n) => ({
         id: n.node.id,
-        branch_id: n.node.branchId,
+        track_id: n.node.branchId,
+        tier: n.node.order,
         title: n.node.title,
-        order_index: n.node.order,
-        is_active_in_current_block: n.node.isActiveInCurrentBlock,
-        next_progression_step: n.node.nextProgressionStep,
+        status: n.status,
+        prerequisites: n.node.prerequisites || null,
         completion_pct: percent(n.progress),
-        completed: n.complete,
-        feeds: n.feeds,
-        progressions: n.node.progressions,
+        mastery_gate_open: n.gateReady,
+        slots_applied_at: n.node.slotsAppliedAt,
+        slots: n.node.slots,
         measures: n.measures.map((m) => ({
           label: m.measure.label,
-          source_type: m.measure.sourceType,
-          linked_exercise_identifier: m.measure.linkedExercise,
+          linked_exercise: m.measure.linkedExercise,
           metric_type: m.measure.metricType,
-          body_stat: m.measure.bodyStat,
-          start_baseline: m.baseline,
-          target_goal: m.measure.target,
-          current_value: m.current,
+          baseline: m.baseline,
+          target: m.measure.target,
+          current: m.current,
           current_source: m.currentSource,
-          current_date: m.currentDate,
           completion_pct: percent(m.progress),
         })),
       })),

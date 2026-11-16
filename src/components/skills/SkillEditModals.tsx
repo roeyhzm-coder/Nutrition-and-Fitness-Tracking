@@ -3,14 +3,19 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import { parseDecimal } from '../../lib/numericInput'
 import {
   emptyMeasure,
+  emptySlot,
+  SKILL_SLOT_ROLE_LABELS,
+  SKILL_SLOT_TARGET_LABELS,
+  SKILL_TIER_LABELS,
+  type SkillSlotExercise,
+  type SkillSlotRecipe,
+  type SkillSlotRole,
+  type SkillSlotTarget,
+  type SkillTierStatus,
   SKILL_BODY_STAT_LABELS,
   SKILL_ICON_KEYS,
   SKILL_METRIC_LABELS,
   SKILL_SOURCE_LABELS,
-  suggestNextTarget,
-  type MeasureEvaluation,
-  type NodeEvaluation,
-  type SkillAdvanceInput,
   type SkillBodyStat,
   type SkillBranch,
   type SkillBranchStatus,
@@ -129,6 +134,8 @@ function fieldLabels(metric: SkillMetricType): { amount: string; second?: { key:
       return { amount: 'חזרות' }
     case 'body_stat':
       return { amount: 'ערך' }
+    case 'gap_cm':
+      return { amount: 'ס"מ מהרצפה' }
   }
 }
 
@@ -181,12 +188,15 @@ export function ValueFields({
 }
 
 const STATUS_OPTIONS: { id: SkillBranchStatus; label: string }[] = [
-  { id: 'active_focus', label: 'בפוקוס בבלוק הנוכחי' },
-  { id: 'queued_next_block', label: 'בתור לבלוקים הבאים' },
+  { id: 'active_focus', label: 'בפוקוס פעיל' },
+  { id: 'queued_next_block', label: 'בתור (בלוקים הבאים)' },
   { id: 'completed', label: 'הושלם' },
 ]
 
-const SOURCE_OPTIONS = (Object.keys(SKILL_SOURCE_LABELS) as SkillSourceType[]).map((id) => ({
+// Body stats live on the dashboard / profile, not in the calisthenics tree.
+const SOURCE_OPTIONS = (Object.keys(SKILL_SOURCE_LABELS) as SkillSourceType[])
+  .filter((id) => id !== 'body_metric')
+  .map((id) => ({
   id,
   label: SKILL_SOURCE_LABELS[id],
 }))
@@ -494,6 +504,156 @@ function MeasureEditor({
   )
 }
 
+const TIER_OPTIONS = (Object.keys(SKILL_TIER_LABELS) as SkillTierStatus[]).map((id) => ({
+  id,
+  label: SKILL_TIER_LABELS[id],
+}))
+const TARGET_OPTIONS = (Object.keys(SKILL_SLOT_TARGET_LABELS) as SkillSlotTarget[]).map((id) => ({
+  id,
+  label: SKILL_SLOT_TARGET_LABELS[id],
+}))
+const ROLE_OPTIONS = (Object.keys(SKILL_SLOT_ROLE_LABELS) as SkillSlotRole[]).map((id) => ({
+  id,
+  label: SKILL_SLOT_ROLE_LABELS[id],
+}))
+
+function SlotEditor({
+  slot,
+  index,
+  exerciseNames,
+  onChange,
+  onRemove,
+}: {
+  slot: SkillSlotRecipe
+  index: number
+  exerciseNames: string[]
+  onChange: (next: SkillSlotRecipe) => void
+  onRemove: () => void
+}) {
+  const listId = `slot-exercises-${index}`
+  const setExercise = (i: number, patch: Partial<SkillSlotExercise>) =>
+    onChange({
+      ...slot,
+      exercises: slot.exercises.map((e, j) => (j === i ? { ...e, ...patch } : e)),
+    })
+  return (
+    <section className="space-y-2.5 rounded-2xl border border-blue-100 bg-blue-50/40 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-bold text-slate-700">מתכון שיבוץ {index + 1}</p>
+        <button
+          type="button"
+          aria-label="מחק מתכון שיבוץ"
+          onClick={onRemove}
+          className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-rose-50 hover:text-rose-600"
+        >
+          <Trash2 className="size-4" />
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <SelectField
+          label="באיזה אימון"
+          value={slot.target}
+          options={TARGET_OPTIONS}
+          onChange={(target) => onChange({ ...slot, target })}
+        />
+        <SelectField
+          label="תפקיד הסלוט"
+          value={slot.role}
+          options={ROLE_OPTIONS}
+          onChange={(role) => onChange({ ...slot, role })}
+        />
+      </div>
+      <label className="block text-xs text-muted">
+        מחליף את התרגיל (ריק = מתווסף בסוף האימון; כמה שמות מופרדים ב-|)
+        <input
+          type="text"
+          list={listId}
+          value={slot.replaces}
+          maxLength={300}
+          onChange={(e) => onChange({ ...slot, replaces: e.target.value })}
+          className="field mt-1"
+        />
+        <datalist id={listId}>
+          {exerciseNames.map((name) => (
+            <option key={name} value={name} />
+          ))}
+        </datalist>
+      </label>
+      <p className="text-xs font-semibold text-text">נכנס לאימון</p>
+      {slot.exercises.map((e, i) => (
+        <div key={i} className="space-y-2 rounded-xl bg-white p-2.5 ring-1 ring-slate-200">
+          <div className="flex items-end gap-1.5">
+            <label className="block min-w-0 flex-1 text-[11px] text-muted">
+              שם התרגיל
+              <input
+                type="text"
+                value={e.name}
+                maxLength={160}
+                onChange={(ev) => setExercise(i, { name: ev.target.value })}
+                className="field mt-1"
+              />
+            </label>
+            <button
+              type="button"
+              aria-label="הסר תרגיל מהמתכון"
+              onClick={() => onChange({ ...slot, exercises: slot.exercises.filter((_, j) => j !== i) })}
+              className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-rose-50 hover:text-rose-600"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            <label className="block text-[11px] text-muted">
+              סטים
+              <NumericInput
+                decimals={0}
+                value={String(e.sets)}
+                onChange={(sets) => setExercise(i, { sets: Math.max(1, Math.round(Number(sets) || 1)) })}
+              />
+            </label>
+            <label className="block text-[11px] text-muted">
+              חזרות / זמן
+              <input
+                type="text"
+                value={e.reps}
+                maxLength={80}
+                onChange={(ev) => setExercise(i, { reps: ev.target.value })}
+                className="field mt-1"
+              />
+            </label>
+            <label className="block text-[11px] text-muted">
+              מנוחה
+              <input
+                type="text"
+                value={e.rest}
+                maxLength={40}
+                onChange={(ev) => setExercise(i, { rest: ev.target.value })}
+                className="field mt-1"
+              />
+            </label>
+          </div>
+        </div>
+      ))}
+      {slot.exercises.length < 6 ? (
+        <Button
+          type="button"
+          className="w-full gap-2"
+          variant="surface"
+          onClick={() =>
+            onChange({
+              ...slot,
+              exercises: [...slot.exercises, { name: '', sets: 3, reps: '', rest: '2 דקות', notes: '' }],
+            })
+          }
+        >
+          <Plus className="size-4" strokeWidth={2} />
+          תרגיל במתכון
+        </Button>
+      ) : null}
+    </section>
+  )
+}
+
 export function SkillNodeModal({
   open,
   node,
@@ -513,11 +673,13 @@ export function SkillNodeModal({
 }) {
   const [draft, setDraft] = useState<SkillNode | null>(node)
   const [measures, setMeasures] = useState<MeasureDraft[]>([])
+  const [slots, setSlots] = useState<SkillSlotRecipe[]>([])
   const [confirmDelete, setConfirmDelete] = useState(false)
   useEffect(() => {
     if (open && node) {
       setDraft(node)
       setMeasures(node.measures.map(measureToDraft))
+      setSlots(node.slots)
       setConfirmDelete(false)
     }
   }, [open, node])
@@ -534,7 +696,7 @@ export function SkillNodeModal({
   }
 
   return (
-    <Modal open={open} title={isNew ? 'אבן דרך חדשה' : 'עריכת אבן דרך'} onClose={onClose} wide>
+    <Modal open={open} title={isNew ? 'שלב חדש' : `עריכת שלב ${draft.order}`} onClose={onClose} wide>
       <form
         className="space-y-3"
         dir="rtl"
@@ -545,15 +707,38 @@ export function SkillNodeModal({
             ...draft,
             title: draft.title.trim(),
             note: draft.note.trim(),
-            nextProgressionStep: draft.nextProgressionStep.trim(),
+            prerequisites: draft.prerequisites.trim(),
             measures: measures.map((m) => draftToMeasure(m, originals.get(m.id))),
+            slots: slots
+              .map((sl) => ({
+                ...sl,
+                replaces: sl.replaces.trim(),
+                exercises: sl.exercises
+                  .map((e) => ({ ...e, name: e.name.trim(), reps: e.reps.trim(), rest: e.rest.trim() }))
+                  .filter((e) => e.name),
+              }))
+              .filter((sl) => sl.exercises.length),
           })
         }}
       >
         <TextField
-          label="שם אבן הדרך"
+          label="שם השלב"
           value={draft.title}
           onChange={(title) => setDraft({ ...draft, title })}
+          maxLength={200}
+        />
+        <SelectField
+          label="סטטוס השלב"
+          value={draft.tierStatus}
+          options={TIER_OPTIONS}
+          onChange={(tierStatus) => setDraft({ ...draft, tierStatus })}
+        />
+        <TextField
+          label="תנאי פתיחה (מה צריך לשלוט בו קודם)"
+          value={draft.prerequisites}
+          onChange={(prerequisites) => setDraft({ ...draft, prerequisites })}
+          multiline
+          maxLength={400}
         />
         <TextField
           label="הערה"
@@ -562,40 +747,7 @@ export function SkillNodeModal({
           multiline
           maxLength={500}
         />
-        <TextField
-          label="השלב הבא כשמגיעים ל-100%"
-          value={draft.nextProgressionStep}
-          onChange={(nextProgressionStep) => setDraft({ ...draft, nextProgressionStep })}
-          placeholder="למשל: מעבר ל-Advanced Tuck FL Rows"
-          maxLength={300}
-        />
-        <div
-          role="radiogroup"
-          aria-label="שיוך לבלוק"
-          className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1"
-        >
-          {[
-            { id: true, label: 'פעיל בבלוק הנוכחי' },
-            { id: false, label: 'בתור לבלוק עתידי' },
-          ].map((o) => (
-            <button
-              key={String(o.id)}
-              type="button"
-              role="radio"
-              aria-checked={draft.isActiveInCurrentBlock === o.id}
-              onClick={() => setDraft({ ...draft, isActiveInCurrentBlock: o.id })}
-              className={[
-                'min-h-10 rounded-lg text-xs font-bold transition',
-                draft.isActiveInCurrentBlock === o.id
-                  ? 'bg-white text-blue-700 shadow-sm'
-                  : 'text-muted hover:text-text',
-              ].join(' ')}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-
+        <p className="pt-1 text-xs font-bold text-slate-700">מדדי שליטה (Mastery Gate — כולם ב-100%)</p>
         <div className="space-y-2">
           {measures.map((m, i) => (
             <MeasureEditor
@@ -622,8 +774,33 @@ export function SkillNodeModal({
           ) : null}
         </div>
 
+        <div className="space-y-2">
+          <p className="pt-1 text-xs font-bold text-slate-700">מתכון שיבוץ לאימון (החלפה חכמה)</p>
+          {slots.map((sl, i) => (
+            <SlotEditor
+              key={i}
+              slot={sl}
+              index={i}
+              exerciseNames={exerciseNames}
+              onChange={(next) => setSlots(slots.map((x, j) => (j === i ? next : x)))}
+              onRemove={() => setSlots(slots.filter((_, j) => j !== i))}
+            />
+          ))}
+          {slots.length < 4 ? (
+            <Button
+              type="button"
+              className="w-full gap-2"
+              variant="surface"
+              onClick={() => setSlots([...slots, emptySlot()])}
+            >
+              <Plus className="size-4" strokeWidth={2} />
+              מתכון שיבוץ
+            </Button>
+          ) : null}
+        </div>
+
         <Button type="submit" className="w-full" variant="accent" disabled={!draft.title.trim()}>
-          שמור אבן דרך
+          שמור שלב
         </Button>
         {!isNew ? (
           confirmDelete ? (
@@ -648,156 +825,10 @@ export function SkillNodeModal({
               onClick={() => setConfirmDelete(true)}
             >
               <Trash2 className="size-4" strokeWidth={1.75} />
-              מחק אבן דרך
+              מחק שלב
             </Button>
           )
         ) : null}
-      </form>
-    </Modal>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Advance to the next progression step
-// ---------------------------------------------------------------------------
-
-export type SkillAdvanceSubmit = SkillAdvanceInput & {
-  /** Rename the linked program exercise(s) to this name (empty = keep). */
-  renameExercise: { measureId: string; from: string; to: string; reps: string } | null
-}
-
-export function SkillAdvanceModal({
-  open,
-  evaluation,
-  onClose,
-  onSubmit,
-}: {
-  open: boolean
-  evaluation: NodeEvaluation | null
-  onClose: () => void
-  onSubmit: (input: SkillAdvanceSubmit) => void
-}) {
-  const node = evaluation?.node ?? null
-  const [title, setTitle] = useState('')
-  const [nextStep, setNextStep] = useState('')
-  const [drafts, setDrafts] = useState<Record<string, { baseline: ValueDraft; target: ValueDraft }>>({})
-  const [renameTo, setRenameTo] = useState('')
-  const [renameReps, setRenameReps] = useState('')
-
-  const workoutMeasure: MeasureEvaluation | undefined = evaluation?.measures.find(
-    (m) => m.measure.sourceType === 'workout_exercise' && m.measure.linkedExercise.trim(),
-  )
-
-  useEffect(() => {
-    if (!open || !evaluation) return
-    setTitle(evaluation.node.nextProgressionStep.replace(/^מעבר ל-?/, '') || evaluation.node.title)
-    setNextStep('')
-    setDrafts(
-      Object.fromEntries(
-        evaluation.measures.map((m) => [
-          m.measure.id,
-          {
-            baseline: toDraft(m.current ?? m.measure.baseline),
-            target: toDraft(suggestNextTarget(m.measure)),
-          },
-        ]),
-      ),
-    )
-    setRenameTo('')
-    setRenameReps('')
-  }, [open, evaluation])
-
-  if (!node || !evaluation) return null
-
-  return (
-    <Modal open={open} title="קדם תרגיל לשלב הבא" onClose={onClose} wide>
-      <form
-        className="space-y-3"
-        dir="rtl"
-        onSubmit={(e) => {
-          e.preventDefault()
-          const rename =
-            workoutMeasure && renameTo.trim()
-              ? {
-                  measureId: workoutMeasure.measure.id,
-                  from: workoutMeasure.measure.linkedExercise,
-                  to: renameTo.trim(),
-                  reps: renameReps.trim(),
-                }
-              : null
-          onSubmit({
-            title,
-            nextProgressionStep: nextStep,
-            measures: evaluation.measures.map((m) => {
-              const d = drafts[m.measure.id]
-              const link =
-                rename && rename.measureId === m.measure.id
-                  ? `${rename.to}|${m.measure.linkedExercise}`.slice(0, 300)
-                  : m.measure.linkedExercise
-              return {
-                id: m.measure.id,
-                baseline: d ? fromDraft(d.baseline, m.measure.metricType) : m.measure.baseline,
-                target: d ? fromDraft(d.target, m.measure.metricType) : m.measure.target,
-                linkedExercise: link,
-              }
-            }),
-            renameExercise: rename,
-          })
-        }}
-      >
-        <p className="rounded-2xl bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-          הושלם: <span className="font-semibold">{node.title}</span>. השלב הנוכחי נשמר בהיסטוריה, הבסיס החדש הוא
-          הביצוע הנוכחי שלך.
-        </p>
-        <TextField label="שם השלב החדש" value={title} onChange={setTitle} />
-        <TextField
-          label="השלב שאחריו (אופציונלי)"
-          value={nextStep}
-          onChange={setNextStep}
-          maxLength={300}
-        />
-        {evaluation.measures.map((m) => {
-          const d = drafts[m.measure.id]
-          if (!d) return null
-          return (
-            <section key={m.measure.id} className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-              <p className="text-xs font-bold text-slate-700">{m.measure.label || 'מדד'}</p>
-              <ValueFields
-                title="בסיס חדש"
-                metric={m.measure.metricType}
-                draft={d.baseline}
-                onChange={(baseline) => setDrafts({ ...drafts, [m.measure.id]: { ...d, baseline } })}
-              />
-              <ValueFields
-                title="יעד חדש"
-                metric={m.measure.metricType}
-                draft={d.target}
-                onChange={(target) => setDrafts({ ...drafts, [m.measure.id]: { ...d, target } })}
-              />
-            </section>
-          )
-        })}
-        {workoutMeasure ? (
-          <section className="space-y-2 rounded-2xl border border-blue-100 bg-blue-50/60 p-3">
-            <p className="text-xs font-bold text-blue-800">עדכון התרגיל בתוכנית האימונים (אופציונלי)</p>
-            <TextField
-              label="שם תרגיל חדש בכל ימי התוכנית"
-              value={renameTo}
-              onChange={setRenameTo}
-              placeholder="למשל: חתירת פרונט לבר Advanced Tuck"
-            />
-            <TextField
-              label="חזרות מתוכננות (טקסט, אופציונלי)"
-              value={renameReps}
-              onChange={setRenameReps}
-              placeholder="למשל: 5-6"
-              maxLength={60}
-            />
-          </section>
-        ) : null}
-        <Button type="submit" className="w-full" variant="accent">
-          קדם לשלב הבא
-        </Button>
       </form>
     </Modal>
   )

@@ -125,9 +125,7 @@ export function collectExportEntities(
   const workoutLogs = (input.workoutLogs ?? []).map((log) => ({
     ...log,
     performedOn: workoutPerformedOn(log),
-    date: workoutPerformedOn(log),
     activityType: 'strength_workout',
-    caloriesBurned: log.estimatedCalories ?? 0,
   }))
   const routines = (input.routines ?? []).map((row) => ({
     ...row,

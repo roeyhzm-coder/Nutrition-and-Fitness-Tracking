@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react'
-import { buildAiExportPrompt, parseImportJson } from '../../lib/exportPrompt'
+import { buildAiExportPrompt, buildWeeklyCountRows, parseImportJson } from '../../lib/exportPrompt'
 import { buildExportJson, downloadTextFile } from '../../lib/dynamicExport'
 import { extractBodyMeasurementsHistory } from '../../lib/bodyMeasurements'
 import { localDateKey } from '../../lib/types'
@@ -134,6 +134,17 @@ export function AiExportPanel() {
       habitChecks,
       lifestyleLogs,
       bodyMeasurements,
+      profile: [profile],
+      goal: [{ ...goal, phase }],
+      macroTargets: [macroTargets],
+      weeklyConsistency: buildWeeklyCountRows({
+        setLogs,
+        phaseStart: goal.startDate,
+        target: goal.weeklyWorkoutTarget || 5,
+        dayMarks: consistencyDayMarks,
+        weekNotes: consistencyWeekNotes,
+        weekStartsOn,
+      }),
       ...morningExportEntities(morningRoutine, weekStartsOn),
       ...skillTreeExportEntities(skillTree, {
         workoutLogs,

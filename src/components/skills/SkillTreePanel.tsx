@@ -1,22 +1,23 @@
 import { useMemo, useState } from 'react'
-import { GitBranch, Plus, Settings2 } from 'lucide-react'
+import { AlertTriangle, GitBranch, Plus, Settings2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import { useTodayKey } from '../../hooks/useTodayKey'
-import { dayAllExercises } from '../../lib/types'
+import { applyMorningSlots, applyProgramSlots } from '../../lib/skillSlotSwap'
 import {
-  advanceNode,
+  activateTier,
   blockWeekInfo,
   deleteBranch,
   deleteNode,
-  liveBranches,
-  matchesLink,
+  markSlotsApplied,
+  masterTier,
   moveNode,
   newBranch,
   newNode,
   percent,
   setBlockSettings,
   setMeasureManual,
+  SKILL_FOCUS_LIMIT,
   upsertBranch,
   upsertNode,
   type BranchEvaluation,
@@ -24,28 +25,14 @@ import {
   type SkillNode,
 } from '../../lib/skillTree'
 import { SkillBranchCard } from './SkillBranchCard'
-import {
-  SkillAdvanceModal,
-  SkillBlockSettingsModal,
-  SkillBranchModal,
-  SkillNodeModal,
-  type SkillAdvanceSubmit,
-} from './SkillEditModals'
+import { SkillBlockSettingsModal, SkillBranchModal, SkillNodeModal } from './SkillEditModals'
+import { SkillTierModal, type TierModalMode } from './SkillTierModal'
 import { useLinkableExerciseNames, useSkillTreeEvaluation } from './useSkillTree'
 
-type Filter = 'all' | 'active' | 'completed' | 'queued'
+type Filter = 'all' | 'active' | 'queued' | 'completed'
 
 function matchesFilter(e: BranchEvaluation, filter: Filter) {
-  switch (filter) {
-    case 'all':
-      return true
-    case 'active':
-      return e.branch.status === 'active_focus'
-    case 'completed':
-      return e.branch.status === 'completed' || e.complete
-    case 'queued':
-      return e.branch.status === 'queued_next_block'
-  }
+  return filter === 'all' || e.focus === filter
 }
 
 function BlockWeeksStrip({
@@ -91,94 +78,136 @@ function BlockWeeksStrip({
   )
 }
 
+function FocusMeter({ count }: { count: number }) {
+  const over = count > SKILL_FOCUS_LIMIT
+  return (
+    <div className="rounded-2xl bg-white/10 p-2.5 ring-1 ring-inset ring-white/20">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <p className="font-bold">
+          פוקוס פעיל: {count}/{SKILL_FOCUS_LIMIT}{' '}
+          <span className="font-medium text-blue-100">מסלולים מומלצים למניעת עומס יתר</span>
+        </p>
+        {over ? <AlertTriangle className="size-4 shrink-0 text-amber-300" strokeWidth={2.25} /> : null}
+      </div>
+      <div className="mt-1.5 flex gap-1" aria-hidden>
+        {Array.from({ length: Math.max(SKILL_FOCUS_LIMIT, count) }, (_, i) => (
+          <span
+            key={i}
+            className={[
+              'h-1.5 flex-1 rounded-full',
+              i < count ? (i >= SKILL_FOCUS_LIMIT ? 'bg-amber-300' : 'bg-white') : 'bg-white/20',
+            ].join(' ')}
+          />
+        ))}
+      </div>
+      {over ? (
+        <p className="mt-1.5 text-[11px] font-semibold text-amber-200">
+          יותר מ-4 מסלולים בפוקוס — שקול להעביר מסלול לבתור כדי לשמור על התאוששות.
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 export function SkillTreePanel() {
-  const { skillTree, updateSkillTree, activeProgram, updateExercise } = useAppData()
+  const {
+    skillTree,
+    updateSkillTree,
+    workoutDays,
+    setWorkoutDays,
+    morningRoutine,
+    updateMorningRoutine,
+  } = useAppData()
   const { evaluations } = useSkillTreeEvaluation()
   const exerciseNames = useLinkableExerciseNames()
   const today = useTodayKey()
   const week = blockWeekInfo(skillTree, today)
 
   const [filter, setFilter] = useState<Filter>('all')
-  const [expandedRaw, setExpanded] = useLocalStorage<string[]>('tn.skillTree.expanded.v1', [
-    'st-muscle-up',
+  const [expandedRaw, setExpanded] = useLocalStorage<string[]>('tn.skillTree.expanded.v2', [
+    'sk-muscle-up',
   ])
   const expanded = Array.isArray(expandedRaw) ? expandedRaw : []
 
   const [branchDraft, setBranchDraft] = useState<{ branch: SkillBranch; isNew: boolean } | null>(null)
   const [nodeDraft, setNodeDraft] = useState<{ node: SkillNode; isNew: boolean } | null>(null)
-  const [advanceId, setAdvanceId] = useState<string | null>(null)
+  const [tierModal, setTierModal] = useState<{ nodeId: string; mode: TierModalMode } | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
   const visible = evaluations.filter((e) => matchesFilter(e, filter))
   const counts = useMemo(
     () => ({
       all: evaluations.length,
-      active: evaluations.filter((e) => matchesFilter(e, 'active')).length,
-      completed: evaluations.filter((e) => matchesFilter(e, 'completed')).length,
-      queued: evaluations.filter((e) => matchesFilter(e, 'queued')).length,
+      active: evaluations.filter((e) => e.focus === 'active').length,
+      queued: evaluations.filter((e) => e.focus === 'queued').length,
+      completed: evaluations.filter((e) => e.focus === 'completed').length,
     }),
     [evaluations],
   )
-  const focus = evaluations.filter((e) => e.branch.status === 'active_focus')
-  const overall = focus.length
-    ? focus.reduce((sum, e) => sum + e.progress, 0) / focus.length
+  const overall = evaluations.length
+    ? evaluations.reduce((sum, e) => sum + e.progress, 0) / evaluations.length
     : 0
-  const nodesDone = focus.reduce((sum, e) => sum + e.completedCount, 0)
-  const nodesTotal = focus.reduce((sum, e) => sum + e.countedNodes, 0)
+  const tiersMastered = evaluations.reduce((sum, e) => sum + e.masteredCount, 0)
+  const tiersTotal = evaluations.reduce((sum, e) => sum + e.tierCount, 0)
 
-  const advanceEvaluation =
-    evaluations.flatMap((e) => e.nodes).find((n) => n.node.id === advanceId) ?? null
+  const modalBranch = tierModal
+    ? (evaluations.find((e) => e.nodes.some((n) => n.node.id === tierModal.nodeId)) ?? null)
+    : null
+  const modalNode = modalBranch?.nodes.find((n) => n.node.id === tierModal?.nodeId) ?? null
 
   function toggle(id: string) {
     setExpanded(expanded.includes(id) ? expanded.filter((x) => x !== id) : [...expanded, id])
   }
 
-  function submitAdvance(input: SkillAdvanceSubmit) {
-    if (!advanceId) return
-    updateSkillTree((prev) => advanceNode(prev, advanceId, input))
-    const rename = input.renameExercise
-    if (rename && activeProgram) {
-      // Update every matching exercise in the active program (all weekdays).
-      for (const day of activeProgram.days) {
-        for (const ex of dayAllExercises(day)) {
-          if (!matchesLink(ex.name, rename.from)) continue
-          updateExercise(day.id, ex.id, {
-            name: rename.to,
-            ...(rename.reps ? { reps: rename.reps } : {}),
-          })
-        }
-      }
+  /** Smart Slot Swap: write the tier's recipes into the plan (program + morning). */
+  function writeSlots(node: SkillNode) {
+    const programSlots = node.slots.filter((s) => s.target !== 'morningA' && s.target !== 'morningB')
+    if (programSlots.length) setWorkoutDays(applyProgramSlots(workoutDays, programSlots))
+    const morning = applyMorningSlots(morningRoutine, node.slots)
+    for (const id of ['A', 'B'] as const) {
+      const exercises = morning[id]
+      if (exercises) updateMorningRoutine(id, { exercises })
     }
-    setAdvanceId(null)
   }
 
-  function completeBranch(e: BranchEvaluation) {
-    updateSkillTree((prev) => {
-      let next = upsertBranch(prev, { ...e.branch, status: 'completed' })
-      const title = e.branch.nextUnlockTitle.trim()
-      const exists = liveBranches(next).some((b) => b.title.trim() === title)
-      if (title && !exists) {
-        next = upsertBranch(next, {
-          ...newBranch(next, title),
-          icon: e.branch.icon,
-          status: 'queued_next_block',
-          subtitle: `נפתח אחרי: ${e.branch.title}`,
-        })
-      }
-      return next
-    })
+  function confirmTier(apply: boolean) {
+    if (!tierModal) return
+    const node = skillTree.nodes[tierModal.nodeId]
+    if (!node) return
+    if (apply) writeSlots(node)
+    if (node.tierStatus === 'active') {
+      updateSkillTree((prev) => markSlotsApplied(prev, node.id))
+    } else {
+      updateSkillTree((prev) => activateTier(prev, node.id, { slotsApplied: apply }))
+    }
+    setTierModal(null)
+  }
+
+  /** Mastery gate passed: open the next tier's swap (activating it masters this one). */
+  function advance(nodeId: string) {
+    const branch = evaluations.find((e) => e.nodes.some((n) => n.node.id === nodeId))
+    const current = branch?.nodes.find((n) => n.node.id === nodeId)
+    if (!branch || !current) return
+    const next = branch.nodes.find(
+      (n) => n.node.order > current.node.order && n.status !== 'mastered',
+    )
+    if (next) {
+      setTierModal({ nodeId: next.node.id, mode: 'confirm' })
+    } else {
+      updateSkillTree((prev) => masterTier(prev, nodeId))
+    }
   }
 
   const filters: { id: Filter; label: string }[] = [
     { id: 'all', label: 'הכל' },
-    { id: 'active', label: `בפוקוס ב${skillTree.blockLabel}` },
-    { id: 'completed', label: 'הושלמו' },
-    { id: 'queued', label: 'בלוקים הבאים' },
+    { id: 'active', label: 'בפוקוס פעיל' },
+    { id: 'queued', label: 'בתור' },
+    { id: 'completed', label: 'נשלטו' },
   ]
 
   return (
     <div className="space-y-4" dir="rtl">
-      <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-4 text-white shadow-lg shadow-blue-700/25">
+      <section className="space-y-3 overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-4 text-white shadow-lg shadow-blue-700/25">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="flex items-center gap-1.5 text-xs font-semibold text-blue-100">
@@ -187,7 +216,7 @@ export function SkillTreePanel() {
             </p>
             <h2 className="mt-1 font-display text-lg font-bold leading-tight">עץ מיומנויות ואבני דרך</h2>
             <p className="mt-0.5 text-xs text-blue-100/90">
-              {nodesDone}/{nodesTotal} אבני דרך הושלמו · מתעדכן אוטומטית מהאימונים, שגרת הבוקר ומדדי הגוף
+              {evaluations.length} מסלולים · {tiersMastered}/{tiersTotal} שלבים נשלטו · מתעדכן מהאימונים ושגרת הבוקר
             </p>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
@@ -204,7 +233,8 @@ export function SkillTreePanel() {
             </button>
           </div>
         </div>
-        <div className="mt-3">
+        <FocusMeter count={counts.active} />
+        <div>
           <BlockWeeksStrip
             week={week.started ? week.week : 0}
             total={skillTree.blockWeeks}
@@ -218,7 +248,7 @@ export function SkillTreePanel() {
         </div>
       </section>
 
-      <div className="no-scrollbar -mx-4 overflow-x-auto overscroll-x-contain px-4" role="tablist" aria-label="סינון יעדים">
+      <div className="no-scrollbar -mx-4 overflow-x-auto overscroll-x-contain px-4" role="tablist" aria-label="סינון מסלולים">
         <div className="flex w-max gap-1.5">
           {filters.map((f) => {
             const active = f.id === filter
@@ -254,29 +284,26 @@ export function SkillTreePanel() {
             <SkillBranchCard
               key={e.branch.id}
               evaluation={e}
-              blockLabel={skillTree.blockLabel}
               expanded={expanded.includes(e.branch.id)}
               onToggle={() => toggle(e.branch.id)}
               onEditBranch={() => setBranchDraft({ branch: e.branch, isNew: false })}
-              onAddNode={() =>
-                setNodeDraft({ node: newNode(skillTree, e.branch.id), isNew: true })
-              }
+              onAddNode={() => setNodeDraft({ node: newNode(skillTree, e.branch.id), isNew: true })}
+              onOpenNode={(nodeId) => setTierModal({ nodeId, mode: 'details' })}
               onEditNode={(nodeId) => {
                 const node = skillTree.nodes[nodeId]
                 if (node) setNodeDraft({ node, isNew: false })
               }}
-              onMoveNode={(nodeId, dir) => updateSkillTree((prev) => moveNode(prev, nodeId, dir))}
               onQuick={(nodeId, measureId, value) =>
                 updateSkillTree((prev) => setMeasureManual(prev, nodeId, measureId, value))
               }
-              onAdvanceNode={setAdvanceId}
-              onCompleteBranch={() => completeBranch(e)}
+              onSwapNode={(nodeId) => setTierModal({ nodeId, mode: 'confirm' })}
+              onAdvance={advance}
             />
           ))}
         </div>
       ) : (
         <p className="rounded-2xl border border-dashed border-slate-200 bg-white p-6 text-center text-sm text-muted">
-          אין יעדים בסינון הזה.
+          אין מסלולים בסינון הזה.
         </p>
       )}
 
@@ -286,9 +313,30 @@ export function SkillTreePanel() {
         className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-blue-200 bg-white text-sm font-bold text-blue-700 transition hover:border-blue-300 hover:bg-blue-50"
       >
         <Plus className="size-4" strokeWidth={2.5} />
-        יעד-על חדש
+        מסלול סקיל חדש
       </button>
 
+      <SkillTierModal
+        open={!!modalNode}
+        mode={tierModal?.mode ?? 'details'}
+        evaluation={modalNode}
+        branch={modalBranch}
+        focusCount={counts.active}
+        onClose={() => setTierModal(null)}
+        onModeChange={(mode) => {
+          if (tierModal) setTierModal({ ...tierModal, mode })
+        }}
+        onEdit={() => {
+          const node = tierModal ? skillTree.nodes[tierModal.nodeId] : null
+          setTierModal(null)
+          if (node) setNodeDraft({ node, isNew: false })
+        }}
+        onMove={(dir) => {
+          if (tierModal) updateSkillTree((prev) => moveNode(prev, tierModal.nodeId, dir))
+        }}
+        onConfirm={() => confirmTier(true)}
+        onActivateOnly={() => confirmTier(false)}
+      />
       <SkillBranchModal
         open={!!branchDraft}
         branch={branchDraft?.branch ?? null}
@@ -318,12 +366,6 @@ export function SkillTreePanel() {
           updateSkillTree((prev) => deleteNode(prev, id))
           setNodeDraft(null)
         }}
-      />
-      <SkillAdvanceModal
-        open={!!advanceEvaluation}
-        evaluation={advanceEvaluation}
-        onClose={() => setAdvanceId(null)}
-        onSubmit={submitAdvance}
       />
       <SkillBlockSettingsModal
         open={settingsOpen}

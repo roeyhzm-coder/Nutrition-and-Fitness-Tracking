@@ -1,5 +1,8 @@
 import {
   Crown,
+  Flag,
+  Footprints,
+  PersonStanding,
   Flame,
   Hand,
   Mountain,
@@ -20,6 +23,9 @@ export const SKILL_ICONS: Record<SkillIconKey, { icon: LucideIcon; label: string
   target: { icon: Target, label: 'יעד' },
   flame: { icon: Flame, label: 'אש' },
   trophy: { icon: Trophy, label: 'גביע' },
+  flag: { icon: Flag, label: 'דגל אנושי' },
+  leg: { icon: Footprints, label: 'רגליים' },
+  stretch: { icon: PersonStanding, label: 'גמישות' },
 }
 
 export function SkillIcon({ icon, className = 'size-5' }: { icon: SkillIconKey; className?: string }) {
