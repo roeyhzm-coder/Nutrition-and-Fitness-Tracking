@@ -259,7 +259,7 @@ export function WeeklyConsistencyTracker() {
   return (
     <>
       <Card
-        title="עקביות שבועית"
+        title="עקביות אימוני כוח"
         action={
           <div className="flex items-center gap-1.5">
             <DropdownMenu>

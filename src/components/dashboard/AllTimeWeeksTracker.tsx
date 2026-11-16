@@ -1,4 +1,4 @@
-import { useState, type KeyboardEvent } from 'react'
+import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ChevronLeft, ChevronRight, Pencil, StickyNote } from 'lucide-react'
 import {
   WEEK_NOTE_MAX_LENGTH,
@@ -8,6 +8,14 @@ import { Modal } from '../ui/Modal'
 
 export const WEEKS_PER_PAGE = 10
 const COUNT_OPTIONS = [0, 1, 2, 3, 4, 5] as const
+
+export type WeekToneFn = (count: number) => { className: string; onDark: boolean }
+
+/** Strength tracker scale (see weekCountTone): dark backgrounds from 3+. */
+export const strengthWeekTone: WeekToneFn = (count) => ({
+  className: weekCountTone(count),
+  onDark: count >= 3,
+})
 
 type EditMode = 'count' | 'note'
 
@@ -113,20 +121,28 @@ function TrackerRow({
   onToggleEdit,
   onSetCount,
   onSaveNote,
+  tone,
+  countOptions,
+  showTarget,
 }: {
   week: WeekConsistency
   editMode: EditMode | null
   onToggleEdit: (mode: EditMode) => void
   onSetCount: (count: number) => void
   onSaveNote: (text: string) => void
+  tone: WeekToneFn
+  countOptions: readonly number[]
+  showTarget: boolean
 }) {
-  const muted = week.completed >= 3 ? 'text-white/80' : 'text-current opacity-70'
+  const { className: toneClass, onDark } = tone(week.completed)
+  const muted = onDark ? 'text-white/80' : 'text-current opacity-70'
+  const maxOption = countOptions[countOptions.length - 1] ?? 5
   const editingCount = editMode === 'count'
   const editingNote = editMode === 'note'
   const hasNote = !!week.note
 
   return (
-    <li className={`rounded-xl px-3 py-2 transition-colors ${weekCountTone(week.completed)}`}>
+    <li className={`rounded-xl px-3 py-2 transition-colors ${toneClass}`}>
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 text-right">
           <p className="text-sm font-semibold">שבוע {week.weekNumber}</p>
@@ -135,6 +151,9 @@ function TrackerRow({
         <div className="flex items-center gap-1.5">
           <span className="min-w-6 text-center text-lg font-extrabold tabular-nums">
             {week.completed}
+            {showTarget ? (
+              <span className={`text-xs font-semibold ${muted}`}>/{week.target}</span>
+            ) : null}
           </span>
           <button
             type="button"
@@ -173,9 +192,13 @@ function TrackerRow({
         </div>
       </div>
       {editingCount ? (
-        <div className="mt-2 grid grid-cols-6 gap-1" role="radiogroup">
-          {COUNT_OPTIONS.map((n) => {
-            const active = Math.min(week.completed, 5) === n
+        <div
+          className="mt-2 grid gap-1"
+          style={{ gridTemplateColumns: `repeat(${countOptions.length}, minmax(0, 1fr))` }}
+          role="radiogroup"
+        >
+          {countOptions.map((n) => {
+            const active = Math.min(week.completed, maxOption) === n
             return (
               <button
                 key={n}
@@ -213,6 +236,11 @@ export function AllTimeWeeksTracker({
   weeks,
   onSetCount,
   onSaveNote,
+  title = 'מעקב שבועות מלא',
+  description,
+  tone = strengthWeekTone,
+  countOptions = COUNT_OPTIONS,
+  showTarget = false,
 }: {
   open: boolean
   onClose: () => void
@@ -220,6 +248,13 @@ export function AllTimeWeeksTracker({
   weeks: WeekConsistency[]
   onSetCount: (week: WeekConsistency, count: number) => void
   onSaveNote: (week: WeekConsistency, text: string) => void
+  title?: string
+  /** Replaces the default help line (week count + notes summary still shown). */
+  description?: ReactNode
+  tone?: WeekToneFn
+  countOptions?: readonly number[]
+  /** Show "/target" next to each week's count. */
+  showTarget?: boolean
 }) {
   const [page, setPage] = useState(0)
   const [editing, setEditing] = useState<{ key: string; mode: EditMode } | null>(
@@ -247,12 +282,12 @@ export function AllTimeWeeksTracker({
   }
 
   return (
-    <Modal open={open} title="מעקב שבועות מלא" onClose={onClose}>
+    <Modal open={open} title={title} onClose={onClose}>
       <div dir="rtl" className="w-full max-w-md space-y-3">
         <p className="text-xs text-muted">
           {ordered.length} שבועות מהיום הראשון
-          {notedCount ? ` · ${notedCount} עם הערה` : ''}. עיפרון לעדכון ספירה
-          שנשכחה, פתק לתיעוד סיבת חריגה.
+          {notedCount ? ` · ${notedCount} עם הערה` : ''}.{' '}
+          {description ?? 'עיפרון לעדכון ספירה שנשכחה, פתק לתיעוד סיבת חריגה.'}
         </p>
         <ul className="space-y-1.5">
           {visible.map((week) => (
@@ -262,6 +297,9 @@ export function AllTimeWeeksTracker({
               editMode={editing?.key === week.weekKey ? editing.mode : null}
               onToggleEdit={(mode) => toggle(week.weekKey, mode)}
               onSetCount={(n) => onSetCount(week, n)}
+              tone={tone}
+              countOptions={countOptions}
+              showTarget={showTarget}
               onSaveNote={(text) => {
                 onSaveNote(week, text)
                 setEditing(null)

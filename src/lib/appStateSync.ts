@@ -25,6 +25,7 @@ import {
 } from './types'
 import { normalizeMacroPresets } from '../data/defaults'
 import {
+  MORNING_PAYLOAD_KEY,
   splitConsistencyPayload,
   WEEK_NOTES_MARKS_KEY,
   type ConsistencyDayMarks,
@@ -41,6 +42,7 @@ import {
   pushUserSavedMeals,
   restorePinnedSavedMeals,
 } from './savedMealsSync'
+import { normalizeMorningState, type MorningRoutineState } from './morningRoutine'
 
 const DEVICE_KEY = 'tn.deviceId'
 
@@ -118,6 +120,8 @@ export type SyncedAppState = {
   consistencyDayMarks: ConsistencyDayMarks
   /** Undefined when the remote payload predates week notes (keep local). */
   consistencyWeekNotes?: ConsistencyWeekNotes
+  /** Undefined when the remote payload predates the morning routine (keep local). */
+  morningRoutine?: MorningRoutineState
   foodCategories: FoodCategory[]
   /** Undefined when the remote table lacks the extended columns. */
   savedMeals?: SavedMeal[]
@@ -288,6 +292,10 @@ function parseRow(
       : undefined,
     consistencyDayMarks: consistency.marks,
     consistencyWeekNotes: consistency.notes,
+    morningRoutine:
+      consistency.morning === undefined
+        ? undefined
+        : normalizeMorningState(consistency.morning),
     foodCategories: (data.food_categories as FoodCategory[]) ?? [],
     ...(flags.hasExtended
       ? {
@@ -468,6 +476,9 @@ function buildNutritionPayloads(
     consistency_day_marks: {
       ...state.consistencyDayMarks,
       [WEEK_NOTES_MARKS_KEY]: state.consistencyWeekNotes ?? {},
+      ...(state.morningRoutine
+        ? { [MORNING_PAYLOAD_KEY]: state.morningRoutine }
+        : {}),
     },
     food_categories: state.foodCategories,
     user_profile: state.profile ?? null,

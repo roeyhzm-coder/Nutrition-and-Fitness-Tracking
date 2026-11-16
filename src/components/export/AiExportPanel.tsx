@@ -1,5 +1,4 @@
 import { useMemo, useRef, useState } from 'react'
-import { LAST_AI_EXPORT_KEY } from '../../lib/aiCheckin'
 import { buildAiExportPrompt, parseImportJson } from '../../lib/exportPrompt'
 import { buildExportJson, downloadTextFile } from '../../lib/dynamicExport'
 import { extractBodyMeasurementsHistory } from '../../lib/bodyMeasurements'
@@ -12,6 +11,7 @@ import {
 import { useAppData } from '../../context/AppDataContext'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
+import { morningExportEntities } from '../../lib/morningExport'
 import { Button } from '../ui/button'
 import { Card } from '../ui/Card'
 
@@ -39,16 +39,12 @@ export function AiExportPanel() {
     workoutPrograms,
     workoutTemplates,
     profile,
-    setProfile,
     bodyMeasurements,
     importMealsAndRecipes,
+    morningRoutine,
   } = useAppData()
   const { workoutLogs } = useWorkoutSession()
   const [copied, setCopied] = useState(false)
-  const [, setLastAiExportAt] = useLocalStorage<string | null>(
-    LAST_AI_EXPORT_KEY,
-    null,
-  )
   const [storedWeekStart] = useLocalStorage<WeekStartDay>(
     WEEK_START_STORAGE_KEY,
     0,
@@ -83,6 +79,7 @@ export function AiExportPanel() {
         recipes,
         workoutPrograms,
         bodyMeasurements,
+        morningRoutine,
       }),
     [
       setLogs,
@@ -110,6 +107,7 @@ export function AiExportPanel() {
       recipes,
       workoutPrograms,
       bodyMeasurements,
+      morningRoutine,
     ],
   )
 
@@ -132,6 +130,7 @@ export function AiExportPanel() {
       habitChecks,
       lifestyleLogs,
       bodyMeasurements,
+      ...morningExportEntities(morningRoutine, weekStartsOn),
     })
     downloadTextFile(
       `body-and-training-export-${localDateKey()}.json`,
@@ -160,10 +159,9 @@ export function AiExportPanel() {
 
   async function copy() {
     try {
+      // Copying is not an AI update: the check-in cycle is only reset explicitly
+      // from the countdown badge ("עדכנתי עם AI היום").
       await navigator.clipboard.writeText(prompt)
-      const today = localDateKey()
-      setLastAiExportAt(today)
-      setProfile({ ...profile, lastAiExportAt: today })
       setCopied(true)
       window.setTimeout(() => setCopied(false), 2000)
     } catch {

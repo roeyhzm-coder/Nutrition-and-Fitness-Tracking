@@ -105,7 +105,13 @@ export function GoalsEditorCard() {
             Math.max(1, parseInteger(form.aiCheckinIntervalDays) ?? 28),
           )
           setGoal({ ...goal, weeklyWorkoutTarget: weekly })
-          setProfile({ ...profile, aiCheckinIntervalDays: interval })
+          if (interval !== profile.aiCheckinIntervalDays) {
+            setProfile({
+              ...profile,
+              aiCheckinIntervalDays: interval,
+              aiCheckinUpdatedAt: new Date().toISOString(),
+            })
+          }
           setSaved(true)
           window.setTimeout(() => setSaved(false), 2000)
         }}

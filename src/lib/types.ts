@@ -266,8 +266,10 @@ export type UserProfile = {
   injuries: string
   /** Preferred days between AI export check-ins. */
   aiCheckinIntervalDays: number
-  /** Last successful AI prompt copy (YYYY-MM-DD). */
+  /** Anchor of the AI check-in cycle: date of the last AI plan update (YYYY-MM-DD). */
   lastAiExportAt: string | null
+  /** ISO time the AI cycle (interval/anchor) was last edited; drives last-write-wins sync. */
+  aiCheckinUpdatedAt: string | null
 }
 
 export const EMPTY_PROFILE: UserProfile = {
@@ -287,6 +289,7 @@ export const EMPTY_PROFILE: UserProfile = {
   injuries: '',
   aiCheckinIntervalDays: 28,
   lastAiExportAt: null,
+  aiCheckinUpdatedAt: null,
 }
 
 function normalizeIntervalDays(value: unknown, fallback = 28): number {
@@ -326,6 +329,10 @@ export function normalizeProfile(
       typeof next.lastAiExportAt === 'string' &&
       /^\d{4}-\d{2}-\d{2}$/.test(next.lastAiExportAt.slice(0, 10))
         ? next.lastAiExportAt.slice(0, 10)
+        : null,
+    aiCheckinUpdatedAt:
+      typeof next.aiCheckinUpdatedAt === 'string' && next.aiCheckinUpdatedAt.length >= 10
+        ? next.aiCheckinUpdatedAt
         : null,
   }
 }

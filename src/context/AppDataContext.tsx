@@ -156,6 +156,17 @@ import {
   type ConsistencyDayMarks,
   type ConsistencyWeekNotes,
 } from '../lib/weeklyConsistency'
+import {
+  completionsForWeekCount,
+  createDefaultMorningState,
+  defaultMorningRoutine,
+  mergeMorningState,
+  MORNING_STORAGE_KEY,
+  normalizeMorningState,
+  type MorningRoutineDef,
+  type MorningRoutineId,
+  type MorningRoutineState,
+} from '../lib/morningRoutine'
 
 type RecipesSyncStatus = 'idle' | 'loading' | 'synced' | 'error'
 
@@ -179,6 +190,22 @@ type AppDataContextValue = {
   consistencyWeekNotes: ConsistencyWeekNotes
   /** Save (or clear, with empty text) the note stored under a week-start date key. */
   setWeekNote: (noteKey: string, text: string) => void
+  /** Morning micro-routine (definitions, daily completions, notes, AI cycle). */
+  morningRoutine: MorningRoutineState
+  /** Mark a day done with routine A/B, or clear it with `null`. */
+  setMorningCompletion: (date: string, routine: MorningRoutineId | null) => void
+  setMorningWeekCount: (
+    weekStart: Date,
+    count: number,
+    fallbackRoutine: MorningRoutineId,
+  ) => void
+  setMorningWeekNote: (noteKey: string, text: string) => void
+  updateMorningRoutine: (
+    id: MorningRoutineId,
+    patch: Partial<Omit<MorningRoutineDef, 'id' | 'updatedAt'>>,
+  ) => void
+  resetMorningRoutine: (id: MorningRoutineId) => void
+  setMorningAiReview: (intervalDays: number, lastReviewAt: string) => void
   weightLogs: WeightEntry[]
   bodyMeasurements: BodyMeasurement[]
   recordBodyMeasurement: (input: {
@@ -568,6 +595,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     useLocalStorage<ConsistencyDayMarks>('tn.consistencyDayMarks.v1', {})
   const [consistencyWeekNotes, setConsistencyWeekNotes] =
     useLocalStorage<ConsistencyWeekNotes>('tn.consistencyWeekNotes.v1', {})
+  const [morningDefault] = useState(createDefaultMorningState)
+  const [morningRoutineRaw, setMorningRoutineRaw] =
+    useLocalStorage<MorningRoutineState>(MORNING_STORAGE_KEY, morningDefault)
+  const morningRoutine = useMemo(
+    () => normalizeMorningState(morningRoutineRaw),
+    [morningRoutineRaw],
+  )
+  const updateMorning = useCallback(
+    (fn: (prev: MorningRoutineState) => MorningRoutineState) => {
+      setMorningRoutineRaw((raw) => fn(normalizeMorningState(raw)))
+    },
+    [setMorningRoutineRaw],
+  )
   const [weightLogs, setWeightLogs] = useLocalStorage<WeightEntry[]>(
     'tn.weightLogs',
     [],
@@ -1130,6 +1170,102 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [setConsistencyWeekNotes],
   )
 
+  const setMorningCompletion = useCallback(
+    (date: string, routine: MorningRoutineId | null) => {
+      const updatedAt = new Date().toISOString()
+      updateMorning((prev) => ({
+        ...prev,
+        completions: {
+          ...prev.completions,
+          [date]: routine
+            ? { done: true, routine, updatedAt }
+            : { done: false, updatedAt },
+        },
+      }))
+    },
+    [updateMorning],
+  )
+
+  const setMorningWeekCount = useCallback(
+    (weekStart: Date, count: number, fallbackRoutine: MorningRoutineId) => {
+      updateMorning((prev) => ({
+        ...prev,
+        completions: completionsForWeekCount(
+          weekStart,
+          count,
+          prev.completions,
+          fallbackRoutine,
+        ),
+      }))
+    },
+    [updateMorning],
+  )
+
+  const setMorningWeekNote = useCallback(
+    (noteKey: string, text: string) => {
+      const trimmed = text.trim().slice(0, WEEK_NOTE_MAX_LENGTH)
+      updateMorning((prev) => {
+        if ((prev.weekNotes[noteKey]?.text ?? '') === trimmed) return prev
+        return {
+          ...prev,
+          weekNotes: {
+            ...prev.weekNotes,
+            [noteKey]: { text: trimmed, updatedAt: new Date().toISOString() },
+          },
+        }
+      })
+    },
+    [updateMorning],
+  )
+
+  const updateMorningRoutine = useCallback(
+    (
+      id: MorningRoutineId,
+      patch: Partial<Omit<MorningRoutineDef, 'id' | 'updatedAt'>>,
+    ) => {
+      updateMorning((prev) => ({
+        ...prev,
+        routines: {
+          ...prev.routines,
+          [id]: {
+            ...prev.routines[id],
+            ...patch,
+            id,
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      }))
+    },
+    [updateMorning],
+  )
+
+  const resetMorningRoutine = useCallback(
+    (id: MorningRoutineId) => {
+      updateMorning((prev) => ({
+        ...prev,
+        routines: {
+          ...prev.routines,
+          [id]: { ...defaultMorningRoutine(id), updatedAt: new Date().toISOString() },
+        },
+      }))
+    },
+    [updateMorning],
+  )
+
+  const setMorningAiReview = useCallback(
+    (intervalDays: number, lastReviewAt: string) => {
+      updateMorning((prev) => ({
+        ...prev,
+        aiReview: {
+          intervalDays,
+          lastReviewAt,
+          updatedAt: new Date().toISOString(),
+        },
+      }))
+    },
+    [updateMorning],
+  )
+
   const ingestRemoteRecipes = useCallback(
     (remote: Recipe[]) => {
       markCatalogSeeded()
@@ -1200,6 +1336,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     workoutTemplates,
     consistencyDayMarks,
     consistencyWeekNotes,
+    morningRoutine,
     foodCategories,
     savedMeals,
     recipes,
@@ -1464,6 +1601,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const remoteNotes = remote.consistencyWeekNotes
         setConsistencyWeekNotes((local) => mergeWeekNotes(local, remoteNotes))
       }
+      if (remote.morningRoutine) {
+        const remoteMorning = remote.morningRoutine
+        setMorningRoutineRaw((local) =>
+          mergeMorningState(normalizeMorningState(local), remoteMorning),
+        )
+      }
       if (remote.foodCategories !== undefined && remote.foodCategories.length) {
         setFoodCategories(remote.foodCategories)
       }
@@ -1514,15 +1657,32 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         )
       }
       if (remote.profile) {
-        setProfileRaw(
-          normalizeProfile({
-            ...remote.profile,
+        const remoteProfile = remote.profile
+        setProfileRaw((localRaw) => {
+          const local = normalizeProfile(localRaw)
+          const localStamp = local.aiCheckinUpdatedAt ?? ''
+          const remoteStamp = remoteProfile.aiCheckinUpdatedAt ?? ''
+          // The AI cycle (interval + anchor) is last-write-wins on its own stamp,
+          // so a stale pull can never move the anchor or the interval.
+          if (localStamp > remoteStamp) {
+            return normalizeProfile({
+              ...remoteProfile,
+              aiCheckinIntervalDays: local.aiCheckinIntervalDays,
+              lastAiExportAt: local.lastAiExportAt,
+              aiCheckinUpdatedAt: local.aiCheckinUpdatedAt,
+            })
+          }
+          if (remoteStamp) return normalizeProfile(remoteProfile)
+          // Legacy rows without a stamp: keep the newest known anchor.
+          return normalizeProfile({
+            ...remoteProfile,
             lastAiExportAt: latestDateKey(
-              remote.profile.lastAiExportAt,
+              remoteProfile.lastAiExportAt,
+              local.lastAiExportAt,
               readLastAiExportAt(),
             ),
-          }),
-        )
+          })
+        })
       }
       if (remote.activityLogs !== undefined) {
         setActivityLogs(remote.activityLogs)
@@ -1554,6 +1714,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setWorkoutTemplates,
       setConsistencyDayMarks,
       setConsistencyWeekNotes,
+      setMorningRoutineRaw,
       setFoodCategories,
       setSavedMeals,
       setRecipes,
@@ -1736,6 +1897,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     workoutTemplates,
     consistencyDayMarks,
     consistencyWeekNotes,
+    morningRoutine,
     foodCategories,
     savedMeals,
     recipes,
@@ -2374,6 +2536,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setWeekConsistencyCount,
       consistencyWeekNotes,
       setWeekNote,
+      morningRoutine,
+      setMorningCompletion,
+      setMorningWeekCount,
+      setMorningWeekNote,
+      updateMorningRoutine,
+      resetMorningRoutine,
+      setMorningAiReview,
       weightLogs,
       bodyMeasurements,
       recordBodyMeasurement,
@@ -2477,6 +2646,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setWeekConsistencyCount,
       consistencyWeekNotes,
       setWeekNote,
+      morningRoutine,
+      setMorningCompletion,
+      setMorningWeekCount,
+      setMorningWeekNote,
+      updateMorningRoutine,
+      resetMorningRoutine,
+      setMorningAiReview,
       weightLogs,
       bodyMeasurements,
       recordBodyMeasurement,

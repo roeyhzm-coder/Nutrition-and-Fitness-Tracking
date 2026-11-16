@@ -47,6 +47,8 @@ import {
   type WeekStartDay,
 } from './weeklyConsistency'
 import { workoutPerformedOn } from './caloriesBurned'
+import type { MorningRoutineState } from './morningRoutine'
+import { formatAiReviewSchedule, formatMorningRoutineSection } from './morningExport'
 import {
   buildActiveBlockStrengthRows,
   buildStrengthRowsFromLogs,
@@ -736,6 +738,7 @@ export function buildAiExportPrompt(input: {
   recipes?: Recipe[]
   workoutPrograms?: WorkoutProgram[]
   bodyMeasurements?: BodyMeasurement[]
+  morningRoutine?: MorningRoutineState
 }): string {
   const phaseStart = input.goal.startDate
   const { profile, goal, macroTargets } = input
@@ -977,6 +980,14 @@ ${PHASE_BLUEPRINT.join('\n')}
 התייחס לסיבות אלו בניתוח העקביות: זהה דפוסים חוזרים (עבודה, שינה, פציעה, נסיעות) והצע התאמות מעשיות לתוכנית.
 ${weekNotesSection}`
       : '',
+    input.morningRoutine
+      ? formatMorningRoutineSection(input.morningRoutine, input.weekStartsOn ?? 0)
+      : '',
+    formatAiReviewSchedule({
+      mainAnchor: profile.lastAiExportAt ?? goal.startDate,
+      mainIntervalDays: profile.aiCheckinIntervalDays,
+      morning: input.morningRoutine,
+    }),
     routinesSection ? `## שגרות והרגלים\n${routinesSection}` : '',
     habitLines.length ? `## הרגלים\n${habitLines.join('\n')}` : '',
     tracksSection ? `## מסלולי מיקוד\n${tracksSection}` : '',

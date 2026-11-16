@@ -13,6 +13,7 @@ import { PhaseHistoryCard } from '../components/dashboard/PhaseHistoryCard'
 import { TodayWorkoutCard } from '../components/dashboard/TodayWorkoutCard'
 import { FocusTracksStatusRow } from '../components/dashboard/FocusTracksStatusRow'
 import { WorkoutHistoryCard } from '../components/workouts/WorkoutHistoryCard'
+import { MorningConsistencySummary } from '../components/morning/MorningConsistency'
 import { useAppData } from '../context/AppDataContext'
 import { useWorkoutSession } from '../context/WorkoutSessionContext'
 import { PHASE_LABELS, localDateKey, todayKey } from '../lib/types'
@@ -111,6 +112,7 @@ export function DashboardPage() {
 
         <WorkoutHistoryCard limit={3} />
         <WeeklyConsistencyTracker />
+        <MorningConsistencySummary />
 
         <GoalPhaseCard
           phase={phase}

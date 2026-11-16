@@ -124,6 +124,7 @@ export const DEFAULT_PROFILE: UserProfile = {
   injuries: '',
   aiCheckinIntervalDays: 28,
   lastAiExportAt: null,
+  aiCheckinUpdatedAt: null,
 }
 
 export const SEED_WEIGHT_ENTRY: WeightEntry = {

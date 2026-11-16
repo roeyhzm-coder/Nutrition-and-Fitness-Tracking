@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
   ArrowDown,
   ArrowUp,
@@ -18,6 +18,7 @@ import {
   WifiOff,
 } from 'lucide-react'
 import { PageHeader } from '../components/layout/PageHeader'
+import { MorningRoutinePanel } from '../components/morning/MorningRoutinePanel'
 import { Button } from '../components/ui/button'
 import { TipActionsMenu } from '../components/tips/TipActionsMenu'
 import { TipItemAccordion } from '../components/tips/TipItemAccordion'
@@ -103,7 +104,7 @@ function SyncPill({
   return <span />
 }
 
-export function TipsPage() {
+function TipsNotesPanel() {
   const tips = useFitnessTips()
   const { categories } = tips
   const [openIds, setOpenIds] = useState<Set<string>>(() => {
@@ -199,22 +200,7 @@ export function TipsPage() {
 
   return (
     <>
-      <PageHeader
-        title="כושר דגשים"
-        subtitle="דגשי ביצוע, טכניקה וחימום — תמיד בהישג יד"
-        action={
-          <Button
-            variant="accent"
-            className="shrink-0 px-3 text-xs sm:text-sm"
-            onClick={() => openNewItem()}
-          >
-            <Plus className="size-4" strokeWidth={2.25} />
-            דגש חדש
-          </Button>
-        }
-      />
-
-      <div className="space-y-4 px-4 py-5" dir="rtl">
+      <div className="space-y-4" dir="rtl">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <SyncPill
             status={tips.status}
@@ -241,6 +227,10 @@ export function TipsPage() {
             <Button variant="outline" size="sm" onClick={() => setCategoryTarget('')}>
               <FolderPlus className="size-3.5" strokeWidth={2} />
               קטגוריה
+            </Button>
+            <Button variant="accent" size="sm" onClick={() => openNewItem()}>
+              <Plus className="size-3.5" strokeWidth={2.25} />
+              דגש חדש
             </Button>
           </div>
         </div>
@@ -465,6 +455,68 @@ export function TipsPage() {
         onClose={() => setCategoryTarget(null)}
         onSave={handleSaveCategory}
       />
+    </>
+  )
+}
+
+type TipsTab = 'morning' | 'notes'
+
+const TABS: { id: TipsTab; label: string }[] = [
+  { id: 'morning', label: 'שגרת בוקר' },
+  { id: 'notes', label: 'דגשים' },
+]
+
+/** "שגרת בוקר ודגשים": morning micro-routine (default) + the fitness tips. */
+export function TipsPage() {
+  const [params, setParams] = useSearchParams()
+  const tab: TipsTab = params.get('tab') === 'notes' ? 'notes' : 'morning'
+
+  function select(next: TipsTab) {
+    const nextParams = new URLSearchParams(params)
+    if (next === 'morning') nextParams.delete('tab')
+    else nextParams.set('tab', next)
+    setParams(nextParams, { replace: true })
+  }
+
+  return (
+    <>
+      <PageHeader
+        title="שגרת בוקר ודגשים"
+        subtitle={
+          tab === 'morning'
+            ? 'מיקרו-שגרה של כ-6 דקות לפני האימון'
+            : 'דגשי ביצוע, טכניקה וחימום — תמיד בהישג יד'
+        }
+      />
+      <div className="space-y-4 px-4 py-5" dir="rtl">
+        <div
+          role="tablist"
+          aria-label="תצוגה"
+          className="grid grid-cols-2 gap-1 rounded-2xl border border-slate-200 bg-white p-1 shadow-sm shadow-slate-200/60"
+        >
+          {TABS.map((option) => {
+            const active = option.id === tab
+            return (
+              <button
+                key={option.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => select(option.id)}
+                className={[
+                  'min-h-10 rounded-xl text-sm font-bold transition',
+                  active
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/25'
+                    : 'text-muted hover:bg-slate-50 hover:text-text',
+                ].join(' ')}
+              >
+                {option.label}
+              </button>
+            )
+          })}
+        </div>
+        {tab === 'morning' ? <MorningRoutinePanel /> : <TipsNotesPanel />}
+      </div>
     </>
   )
 }
