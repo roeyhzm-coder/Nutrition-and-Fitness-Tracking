@@ -8,7 +8,7 @@ export function FocusTracksStatusRow() {
   if (!active.length) return null
 
   return (
-    <div className="flex gap-2 overflow-x-auto pb-0.5">
+    <div className="no-scrollbar flex gap-2 overflow-x-auto pb-0.5">
       {active.map((track) => {
         const done = weekDates.filter((day) =>
           track.completedDates.includes(day),

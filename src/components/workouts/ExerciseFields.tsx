@@ -1,3 +1,4 @@
+import { ExerciseStickmanSvg } from '../ExerciseStickmanSvg'
 import type { Dispatch, SetStateAction } from 'react'
 import { CirclePlay, Dumbbell, Timer } from 'lucide-react'
 import { METRIC_LABEL } from '../../lib/exerciseDefaults'
@@ -194,42 +195,22 @@ export function PlanExerciseNotes({
 export function ExerciseMedia({ exercise }: { exercise: Exercise }) {
   const { imageUrl, mediaUrl, name } = exercise
   const href = mediaUrl ?? imageUrl
-  if (!href) return null
-
-  if (!imageUrl) {
-    return (
-      <a
-        href={href}
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="צפה בהדגמה"
-        title="צפה בהדגמה"
-        className="inline-flex size-11 shrink-0 items-center justify-center rounded-2xl text-muted transition hover:bg-blue-50 hover:text-blue-600"
-      >
-        <CirclePlay className="size-3.5" strokeWidth={1.75} />
-      </a>
-    )
-  }
-
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={mediaUrl ? 'צפה בהדגמה' : name}
-      className="relative block size-16 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50"
-    >
-      <img
-        src={imageUrl}
-        alt={name}
-        loading="lazy"
-        className="size-full object-cover"
-      />
-      {mediaUrl ? (
-        <span className="absolute inset-0 flex items-center justify-center bg-black/25 text-white transition hover:bg-black/10">
-          <CirclePlay className="size-6" strokeWidth={1.75} />
-        </span>
+    <div className="flex shrink-0 flex-col items-center gap-1">
+      <ExerciseStickmanSvg name={name} />
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={mediaUrl ? 'צפה בהדגמה' : 'פתח תמונה'}
+          title={mediaUrl ? 'צפה בהדגמה' : 'פתח תמונה'}
+          className="inline-flex min-h-7 items-center gap-1 rounded-lg bg-blue-50 px-2 text-[10px] font-bold text-blue-700 transition hover:bg-blue-100"
+        >
+          <CirclePlay className="size-3" strokeWidth={2} />
+          {mediaUrl ? 'וידאו' : 'תמונה'}
+        </a>
       ) : null}
-    </a>
+    </div>
   )
 }

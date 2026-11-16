@@ -270,6 +270,7 @@ function seedLoggedExercise(ex: Exercise, metric = resolveExerciseMetric(ex)): L
     defaultMetric: metric,
     rest: ex.rest,
     imageUrl: ex.imageUrl,
+    mediaUrl: ex.mediaUrl,
     notes: ex.notes,
     sets: buildSetsFromDefaults(defaults),
   }

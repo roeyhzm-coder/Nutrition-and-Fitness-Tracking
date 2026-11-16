@@ -218,7 +218,7 @@ export function SkillTreePanel() {
         </div>
       </section>
 
-      <div className="-mx-4 overflow-x-auto px-4" role="tablist" aria-label="סינון יעדים">
+      <div className="no-scrollbar -mx-4 overflow-x-auto overscroll-x-contain px-4" role="tablist" aria-label="סינון יעדים">
         <div className="flex w-max gap-1.5">
           {filters.map((f) => {
             const active = f.id === filter

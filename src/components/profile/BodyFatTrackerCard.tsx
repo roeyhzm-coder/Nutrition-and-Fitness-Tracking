@@ -59,7 +59,7 @@ export function BodyFatTrackerCard() {
       {history.length === 0 ? (
         <p className="text-sm text-muted">אין מדידות אחוזי שומן עדיין.</p>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="no-scrollbar overflow-x-auto">
           <table className="w-full min-w-[240px] text-right text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-xs text-muted">

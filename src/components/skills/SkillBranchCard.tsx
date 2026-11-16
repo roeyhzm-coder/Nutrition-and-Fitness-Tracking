@@ -24,6 +24,21 @@ import {
   type SkillValue,
 } from '../../lib/skillTree'
 import { SkillIcon } from './SkillIcon'
+import { ExerciseStickmanSvg, exerciseFigureKind } from '../ExerciseStickmanSvg'
+import type { SkillNode } from '../../lib/skillTree'
+
+/** Figure for a milestone: its linked exercise first, then its title. */
+function nodeFigure(node: SkillNode) {
+  if (node.measures.length && node.measures.every((m) => m.sourceType === 'body_metric')) {
+    return 'physique' as const
+  }
+  for (const m of node.measures) {
+    if (m.sourceType === 'body_metric') continue
+    const kind = exerciseFigureKind(m.linkedExercise)
+    if (kind !== 'generic') return kind
+  }
+  return exerciseFigureKind(node.title)
+}
 
 function shortDate(key: string | null) {
   if (!key) return ''
@@ -209,7 +224,8 @@ function NodeItem({
               : 'border-slate-200 bg-white',
         ].join(' ')}
       >
-        <div className="flex items-start gap-1">
+        <div className="flex items-start gap-2">
+          <ExerciseStickmanSvg name={node.title} kind={nodeFigure(node)} size="sm" className="mt-0.5" />
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-1.5">
               {complete ? (

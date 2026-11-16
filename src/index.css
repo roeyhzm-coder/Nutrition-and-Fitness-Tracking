@@ -32,6 +32,24 @@ html,
 body,
 #root {
   min-height: 100%;
+  width: 100%;
+  max-width: 100%;
+  /* clip (not hidden) so position: sticky keeps working */
+  overflow-x: clip;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+/* Hide scrollbars on swipeable strips while keeping touch/trackpad scroll. */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 body {
@@ -65,14 +83,18 @@ button:not([aria-label]):not(.icon-hit) {
   min-height: 44px;
 }
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
+/* Styled scrollbars only for mouse devices; touch screens keep the thin
+   native overlay scrollbar instead of a thick always-visible track. */
+@media (pointer: fine) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
 
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 999px;
+  ::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 999px;
+  }
 }
 
 @layer components {

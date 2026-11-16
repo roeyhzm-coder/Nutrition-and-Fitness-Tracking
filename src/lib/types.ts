@@ -534,6 +534,7 @@ export type LoggedExercise = {
   /** Metric stored in the exercise's saved defaults. */
   defaultMetric?: ExerciseMetric
   rest?: string
+  mediaUrl?: string
   imageUrl?: string
   /** Latest exercise notes, refreshed from the saved per-exercise notes. */
   notes?: string

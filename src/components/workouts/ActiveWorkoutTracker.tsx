@@ -1,3 +1,4 @@
+import { ExerciseStickmanSvg } from '../ExerciseStickmanSvg'
 import { useEffect, useRef, useState } from 'react'
 import {
   Check,
@@ -222,13 +223,19 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
       ].join(' ')}
     >
       <div className="flex items-start gap-3">
-        {exercise.imageUrl ? (
-          <img
-            src={exercise.imageUrl}
-            alt={exercise.name}
-            className="size-14 shrink-0 rounded-2xl border border-slate-200 object-cover"
-          />
-        ) : null}
+        <div className="flex shrink-0 flex-col items-center gap-1">
+          <ExerciseStickmanSvg name={exercise.name} />
+          {exercise.mediaUrl || exercise.imageUrl ? (
+            <a
+              href={exercise.mediaUrl ?? exercise.imageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-7 items-center rounded-lg bg-blue-50 px-2 text-[10px] font-bold text-blue-700"
+            >
+              {exercise.mediaUrl ? 'וידאו' : 'תמונה'}
+            </a>
+          ) : null}
+        </div>
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-text">{exercise.name}</p>
           <div className="mt-1 flex flex-wrap gap-1.5 text-xs">
@@ -458,7 +465,7 @@ type TrackerPanelProps = {
 }
 
 function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
-  const { activeWorkout, setPerformedOn, setEstimatedCalories } = useWorkoutSession()
+  const { activeWorkout, setPerformedOn } = useWorkoutSession()
   const workout = activeWorkout!
   const elapsed = useElapsed(workout.startedAt)
   const allSets = workout.exercises.flatMap((e) => e.sets)
@@ -466,9 +473,9 @@ function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
   const performedOn = workout.performedOn || localDateKey()
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-50" dir="rtl">
-      <div className="mx-auto max-w-3xl pb-[calc(13rem+env(safe-area-inset-bottom,0px))]">
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 py-4 backdrop-blur-md">
+    <div className="no-scrollbar fixed inset-0 z-50 h-dvh overflow-x-hidden overflow-y-auto overscroll-contain bg-slate-50" dir="rtl">
+      <div className="mx-auto w-full max-w-3xl pb-[calc(12rem+env(safe-area-inset-bottom,0px))]">
+        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 pt-[calc(1rem+env(safe-area-inset-top,0px))] pb-3 backdrop-blur-md">
           <div className="flex items-center gap-2">
             <div className="min-w-0 flex-1">
               <p className="text-xs text-muted">{workout.programName}</p>
@@ -510,9 +517,9 @@ function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
         </ul>
       </div>
 
-      <div className="fixed inset-x-0 bottom-0 border-t border-slate-200 bg-white/95 px-4 py-4 backdrop-blur-md">
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 px-4 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] backdrop-blur-md">
         <div className="mx-auto max-w-3xl space-y-3">
-          <div className="grid grid-cols-2 gap-2">
+          <div>
             <label className="block text-[11px] text-muted">
               עבור איזה יום האימון הזה מבוצע / הושלם?
               <input
@@ -521,17 +528,6 @@ function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
                 onChange={(e) => {
                   if (e.target.value) setPerformedOn(e.target.value)
                 }}
-                className="field mt-1"
-              />
-            </label>
-            <label className="block text-[11px] text-muted">
-              קלוריות מוערכות
-              <DraftNumberInput
-                value={workout.estimatedCalories ?? null}
-                onCommit={(n) =>
-                  setEstimatedCalories(n == null ? null : Math.max(0, n))
-                }
-                placeholder="0"
                 className="field mt-1"
               />
             </label>

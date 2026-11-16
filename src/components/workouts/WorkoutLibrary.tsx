@@ -83,7 +83,6 @@ export function WorkoutLibrary({
           <p className="truncate font-medium text-text">{t.name}</p>
           <p className="text-xs text-muted">
             {t.exercises.length} תרגילים
-            {t.estimatedCalories ? ` · ${t.estimatedCalories} קק״ל` : ''}
             {' · '}
             לחץ להחלפת היום
           </p>

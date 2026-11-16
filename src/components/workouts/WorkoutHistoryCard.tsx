@@ -65,7 +65,6 @@ function LogItem({ log }: { log: WorkoutLog }) {
           <p className="mt-0.5 text-xs text-muted">
             {log.exercises.length} תרגילים · {setCount} סטים
             {volume > 0 ? ` · נפח ${Math.round(volume)} ק״ג` : ''}
-            {log.estimatedCalories ? ` · ${log.estimatedCalories} קק״ל` : ''}
             {' · '}
             {log.programName}
             {log.blockNumber != null ? ` · בלוק ${log.blockNumber}` : ''}

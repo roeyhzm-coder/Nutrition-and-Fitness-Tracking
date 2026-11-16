@@ -10,7 +10,6 @@ import {
   exerciseToForm,
   formToExercise,
 } from '../../lib/exerciseForm'
-import { NumericInput } from '../ui/NumericInput'
 import { Button } from '../ui/button'
 import { IconButton } from '../ui/IconButton'
 import { Modal } from '../ui/Modal'
@@ -153,16 +152,6 @@ export function TemplateEditor({
               className="mt-1 field"
               placeholder="למשל דחיפה עליון"
               required
-            />
-          </label>
-          <label className="block text-xs text-muted">
-            קלוריות מוערכות לאימון
-            <NumericInput
-              min={0}
-              value={estimatedCalories}
-              onChange={setEstimatedCalories}
-              placeholder="למשל 350"
-              className="mt-1 field"
             />
           </label>
 

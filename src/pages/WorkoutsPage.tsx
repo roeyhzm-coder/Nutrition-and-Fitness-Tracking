@@ -251,7 +251,7 @@ function WorkoutPlanView({ tabs }: { tabs: ReactNode }) {
           expandSignal={librarySignal}
         />
 
-        <section aria-label="לוח שבועי" className="flex gap-2 overflow-x-auto pb-1">
+        <section aria-label="לוח שבועי" className="no-scrollbar flex gap-2 overflow-x-auto pb-1">
           {workoutDays.map((d) => {
             const selected = d.id === day.id
             const isToday = d.dayNumber === todayNumber
