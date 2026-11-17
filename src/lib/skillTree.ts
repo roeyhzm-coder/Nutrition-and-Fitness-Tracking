@@ -14,7 +14,13 @@ import type { BodyMeasurement } from './bodyMeasurements'
 import type { MorningRoutineState } from './morningRoutine'
 import type { SetLog, WeightEntry, WorkoutDay, WorkoutLog } from './types'
 import { dayAllExercises, localDateKey, parseLocalDateKey, uid, WEEKDAY_SHORT } from './types'
-import { LEGACY_SEED_IDS, SKILL_SEED_MIGRATED_AT, seedSkillBranches, seedSkillNodes } from './skillTreeSeed'
+import {
+  LEGACY_SEED_IDS,
+  SKILL_SEED_MIGRATED_AT,
+  SKILL_SEED_V2_AT,
+  seedSkillBranches,
+  seedSkillNodes,
+} from './skillTreeSeed'
 
 export type SkillBranchStatus = 'active_focus' | 'queued_next_block' | 'completed'
 export type SkillSourceType =
@@ -164,8 +170,8 @@ export const SKILL_STATUS_LABELS: Record<SkillBranchStatus, string> = {
 export const SKILL_TIER_LABELS: Record<SkillTierStatus, string> = {
   mastered: 'נשלט ✓',
   active: 'בפוקוס פעיל כרגע 🎯',
-  queued: 'בתור לבלוק הבא ⏳',
-  locked: 'נעול - שלב הבא 🔒',
+  queued: 'בתור ⏳',
+  locked: 'שלב עתידי 🔒 (ייפתח בסיום שלב קודם)',
 }
 
 export const SKILL_SLOT_TARGET_LABELS: Record<SkillSlotTarget, string> = {
@@ -363,7 +369,11 @@ function normalizeSlot(raw: unknown): SkillSlotRecipe {
   }
 }
 
-function normalizeNode(raw: unknown, key: string): SkillNode | null {
+/**
+ * `seed` fills fields a stale client may have dropped (an older bundle rewrote
+ * nodes without `tierStatus` / `slots`, which made every tier read as active).
+ */
+function normalizeNode(raw: unknown, key: string, seed?: SkillNode): SkillNode | null {
   const o = obj(raw)
   const id = str(o.id, 80) || key
   const branchId = str(o.branchId, 80)
@@ -387,11 +397,11 @@ function normalizeNode(raw: unknown, key: string): SkillNode | null {
     tierStatus: pick(
       o.tierStatus,
       TIER_STATUSES,
-      o.isActiveInCurrentBlock === false ? 'queued' : 'active',
+      seed?.tierStatus ?? (o.isActiveInCurrentBlock === false ? 'queued' : 'active'),
     ),
-    prerequisites: str(o.prerequisites, 400),
-    measures,
-    slots: Array.isArray(o.slots) ? o.slots.slice(0, 4).map(normalizeSlot) : [],
+    prerequisites: typeof o.prerequisites === 'string' ? str(o.prerequisites, 400) : (seed?.prerequisites ?? ''),
+    measures: Array.isArray(o.measures) || !seed ? measures : seed.measures,
+    slots: Array.isArray(o.slots) ? o.slots.slice(0, 4).map(normalizeSlot) : (seed?.slots ?? []),
     slotsAppliedAt: typeof o.slotsAppliedAt === 'string' ? iso(o.slotsAppliedAt) : null,
     progressions,
     updatedAt: iso(o.updatedAt),
@@ -399,7 +409,7 @@ function normalizeNode(raw: unknown, key: string): SkillNode | null {
   }
 }
 
-function normalizeBranch(raw: unknown, key: string): SkillBranch | null {
+function normalizeBranch(raw: unknown, key: string, seed?: SkillBranch): SkillBranch | null {
   const o = obj(raw)
   const id = str(o.id, 80) || key
   if (!id) return null
@@ -408,7 +418,7 @@ function normalizeBranch(raw: unknown, key: string): SkillBranch | null {
     title: str(o.title, 200),
     subtitle: str(o.subtitle, 300),
     icon: pick(o.icon, SKILL_ICON_KEYS, 'target'),
-    status: pick(o.status, STATUSES, 'active_focus'),
+    status: pick(o.status, STATUSES, seed?.status ?? 'active_focus'),
     order: num(o.order) ?? 0,
     nextUnlockTitle: str(o.nextUnlockTitle, 300),
     updatedAt: iso(o.updatedAt),
@@ -423,12 +433,12 @@ export function normalizeSkillTree(raw: unknown, today = localDateKey()): SkillT
   if (!Object.keys(o).length) return base
   const branches: Record<string, SkillBranch> = { ...base.branches }
   for (const [key, value] of Object.entries(obj(o.branches))) {
-    const b = normalizeBranch(value, key)
+    const b = normalizeBranch(value, key, base.branches[key])
     if (b) branches[b.id] = b
   }
   const nodes: Record<string, SkillNode> = { ...base.nodes }
   for (const [key, value] of Object.entries(obj(o.nodes))) {
-    const n = normalizeNode(value, key)
+    const n = normalizeNode(value, key, base.nodes[key])
     if (n) nodes[n.id] = n
   }
   const start = str(o.blockStartDate, 10)
@@ -442,6 +452,28 @@ export function normalizeSkillTree(raw: unknown, today = localDateKey()): SkillT
     if (b && !b.deleted) branches[id] = { ...b, deleted: true, updatedAt: tombstone(b.updatedAt) }
     const n = nodes[id]
     if (n && !n.deleted) nodes[id] = { ...n, deleted: true, updatedAt: tombstone(n.updatedAt) }
+  }
+  // Seed v2: reset seed tracks / tiers written before v2 (deterministic on every
+  // device, so last-write-wins sync converges). Manual values are kept.
+  for (const seed of Object.values(base.branches)) {
+    const b = branches[seed.id]
+    if (b && !b.deleted && b.updatedAt < SKILL_SEED_V2_AT) {
+      branches[seed.id] = { ...seed, updatedAt: SKILL_SEED_V2_AT }
+    }
+  }
+  for (const seed of Object.values(base.nodes)) {
+    const n = nodes[seed.id]
+    if (!n || n.deleted || n.updatedAt >= SKILL_SEED_V2_AT) continue
+    const manual = new Map(n.measures.map((m) => [m.id, m]))
+    nodes[seed.id] = {
+      ...seed,
+      measures: seed.measures.map((m) => {
+        const old = manual.get(m.id)
+        return old?.manual && old.label === m.label ? { ...m, manual: old.manual } : m
+      }),
+      progressions: n.progressions,
+      updatedAt: SKILL_SEED_V2_AT,
+    }
   }
   return {
     blockLabel: str(o.blockLabel, 60) || base.blockLabel,
@@ -681,6 +713,22 @@ export function masterTier(state: SkillTreeState, nodeId: string): SkillTreeStat
     branches = { ...branches, [branch.id]: { ...branch, status: 'completed', updatedAt: at } }
   }
   return { ...state, nodes, branches }
+}
+
+/** Move a track out of active focus: its active tier waits in the queue. */
+export function queueBranch(state: SkillTreeState, branchId: string): SkillTreeState {
+  const branch = state.branches[branchId]
+  if (!branch) return state
+  const at = now()
+  const nodes = { ...state.nodes }
+  for (const n of liveNodes(state, branchId)) {
+    if (n.tierStatus === 'active') nodes[n.id] = { ...n, tierStatus: 'queued', updatedAt: at }
+  }
+  return {
+    ...state,
+    nodes,
+    branches: { ...state.branches, [branchId]: { ...branch, status: 'queued_next_block', updatedAt: at } },
+  }
 }
 
 export function markSlotsApplied(state: SkillTreeState, nodeId: string): SkillTreeState {

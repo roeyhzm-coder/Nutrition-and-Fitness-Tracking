@@ -1,4 +1,6 @@
+import { useMemo } from 'react'
 import {
+  ArrowLeftRight,
   CalendarDays,
   Check,
   ChevronDown,
@@ -11,12 +13,15 @@ import {
   Sparkles,
   Sunrise,
   Target,
+  Zap,
 } from 'lucide-react'
+import { useAppData } from '../../context/AppDataContext'
+import { incomingLabel, outgoingLabel, planSlotSwap, type SlotPreview } from '../../lib/skillSlotSwap'
 import {
   bumpValue,
   formatSkillValue,
   percent,
-  SKILL_SLOT_TARGET_LABELS,
+  SKILL_TIER_LABELS,
   type BranchEvaluation,
   type MeasureEvaluation,
   type NodeEvaluation,
@@ -173,56 +178,94 @@ function MeasureRow({
   )
 }
 
-const TIER_STYLE: Record<
-  SkillTierStatus,
-  { dot: string; card: string; pill: string; pillText: string }
-> = {
+const TIER_STYLE: Record<SkillTierStatus, { dot: string; card: string; pill: string }> = {
   mastered: {
     dot: 'bg-gradient-to-b from-emerald-400 to-teal-500 text-white shadow-sm shadow-emerald-500/30',
     card: 'border-emerald-200 bg-emerald-50/60',
     pill: 'bg-emerald-500 text-white',
-    pillText: 'הושלם / נשלט ✓',
   },
   active: {
     dot: 'bg-blue-600 text-white shadow-sm shadow-blue-600/30 ring-blue-100',
     card: 'border-blue-200 bg-white shadow-sm shadow-blue-100',
     pill: 'bg-blue-600 text-white',
-    pillText: 'בפוקוס פעיל כרגע 🎯',
   },
   queued: {
     dot: 'border-2 border-amber-300 bg-amber-50 text-amber-700',
     card: 'border-dashed border-amber-200 bg-amber-50/40',
     pill: 'bg-amber-100 text-amber-800',
-    pillText: 'בתור לבלוק הבא ⏳',
   },
   locked: {
     dot: 'border-2 border-dashed border-slate-300 bg-white text-slate-400',
     card: 'border-dashed border-slate-200 bg-slate-50/80',
     pill: 'bg-slate-200/80 text-slate-600',
-    pillText: 'נעול - שלב הבא 🔒',
   },
+}
+
+/** "מתכון שיבוץ אוטומטי (1-In, 1-Out)" — where the tier lands and what it swaps out. */
+function SwapRecipe({ previews }: { previews: SlotPreview[] }) {
+  if (!previews.length) return null
+  return (
+    <div className="space-y-1.5 rounded-xl bg-white p-2.5 ring-1 ring-slate-200">
+      <p className="flex items-center gap-1.5 text-[11px] font-extrabold text-slate-700">
+        <ArrowLeftRight className="size-3.5 text-blue-600" strokeWidth={2.25} />
+        מתכון שיבוץ אוטומטי (1-In, 1-Out)
+      </p>
+      {previews.map((p, i) => {
+        const out = outgoingLabel(p)
+        return (
+          <dl key={i} className="space-y-0.5 text-[11px] leading-snug">
+            <div className="flex flex-wrap gap-x-1">
+              <dt className="font-bold text-slate-500">באיזה אימון ישתבץ:</dt>
+              <dd className="font-semibold text-slate-800">{p.placeSummary}</dd>
+            </div>
+            <div className="flex flex-wrap gap-x-1">
+              <dt className="font-bold text-rose-700">יחליף את התרגיל:</dt>
+              <dd className="text-slate-800">{out || '— (מתווסף כסיומת בסוף האימון)'}</dd>
+              <dt className="font-bold text-emerald-700">⬅ ויכניס במקומו:</dt>
+              <dd className="font-semibold text-slate-900">{incomingLabel(p)}</dd>
+            </div>
+          </dl>
+        )
+      })}
+    </div>
+  )
 }
 
 function TierItem({
   evaluation,
-  nextTitle,
+  next,
   onOpen,
   onEdit,
   onQuick,
   onSwap,
-  onAdvance,
+  onActivate,
+  onPromote,
 }: {
   evaluation: NodeEvaluation
-  nextTitle: string | null
+  /** The tier that follows (for the mastery callout). */
+  next: NodeEvaluation | null
   onOpen: () => void
   onEdit: () => void
   onQuick: (measureId: string, value: SkillValue) => void
+  /** Active tier not in the plan yet: open the swap confirmation. */
   onSwap: () => void
-  onAdvance: () => void
+  /** Future tier: manual override (confirmation modal). */
+  onActivate: () => void
+  /** Mastery reached: swap in the next tier right away. */
+  onPromote: () => void
 }) {
+  const { workoutDays, morningRoutine } = useAppData()
   const { node, status } = evaluation
   const style = TIER_STYLE[status]
   const pct = percent(evaluation.progress)
+  const previews = useMemo(
+    () => planSlotSwap(node.slots, workoutDays, morningRoutine),
+    [node.slots, workoutDays, morningRoutine],
+  )
+  const nextPreviews = useMemo(
+    () => (next && evaluation.gateReady ? planSlotSwap(next.node.slots, workoutDays, morningRoutine) : []),
+    [next, evaluation.gateReady, workoutDays, morningRoutine],
+  )
   const dot = (
     <span
       aria-hidden
@@ -237,38 +280,34 @@ function TierItem({
       )}
     </span>
   )
+  const header = (
+    <span className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[10px] font-extrabold text-slate-500">שלב {node.order}</span>
+      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${style.pill}`}>
+        {SKILL_TIER_LABELS[status]}
+      </span>
+      {status !== 'locked' && evaluation.measures.length ? (
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-extrabold tabular-nums text-slate-700">
+          {pct}%
+        </span>
+      ) : null}
+    </span>
+  )
 
-  // Mastered / queued / locked tiers: compact and clickable (blueprint).
-  if (status !== 'active') {
+  // Mastered: compact, clickable.
+  if (status === 'mastered') {
     return (
       <li className="relative ps-9">
         {dot}
         <button
           type="button"
           onClick={onOpen}
-          className={`flex w-full items-center gap-2.5 rounded-2xl border p-2.5 text-right transition hover:ring-2 hover:ring-blue-200 ${style.card}`}
+          className={`flex w-full items-center gap-2.5 rounded-2xl border p-2.5 text-right transition hover:ring-2 hover:ring-emerald-200 ${style.card}`}
         >
-          <ExerciseStickmanSvg
-            name={node.title}
-            kind={tierFigure(node)}
-            size="sm"
-            className={status === 'locked' ? 'opacity-60' : ''}
-          />
+          <ExerciseStickmanSvg name={node.title} kind={tierFigure(node)} size="sm" />
           <span className="min-w-0 flex-1 space-y-1">
-            <span className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-extrabold text-slate-500">שלב {node.order}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${style.pill}`}>
-                {style.pillText}
-              </span>
-              {status === 'queued' && evaluation.measures.length ? (
-                <span className="text-[10px] font-bold tabular-nums text-amber-700">{pct}%</span>
-              ) : null}
-            </span>
-            <span
-              className={`block text-[13px] font-bold leading-snug ${status === 'locked' ? 'text-slate-500' : 'text-slate-900'}`}
-            >
-              {node.title}
-            </span>
+            {header}
+            <span className="block text-[13px] font-bold leading-snug text-slate-900">{node.title}</span>
           </span>
           <ChevronLeft className="size-4 shrink-0 text-slate-400" strokeWidth={2} />
         </button>
@@ -276,8 +315,45 @@ function TierItem({
     )
   }
 
-  const applied = !!node.slotsAppliedAt
-  const slotTargets = [...new Set(node.slots.map((s) => SKILL_SLOT_TARGET_LABELS[s.target]))]
+  // Queued / locked: blueprint with the automatic swap recipe + manual override.
+  if (status !== 'active') {
+    return (
+      <li className="relative ps-9">
+        {dot}
+        <article className={`space-y-2 rounded-2xl border p-2.5 ${style.card}`}>
+          <button type="button" onClick={onOpen} className="flex w-full items-center gap-2.5 text-right">
+            <ExerciseStickmanSvg
+              name={node.title}
+              kind={tierFigure(node)}
+              size="sm"
+              className={status === 'locked' ? 'opacity-60' : ''}
+            />
+            <span className="min-w-0 flex-1 space-y-1">
+              {header}
+              <span
+                className={`block text-[13px] font-bold leading-snug ${status === 'locked' ? 'text-slate-600' : 'text-slate-900'}`}
+              >
+                {node.title}
+              </span>
+            </span>
+            <ChevronLeft className="size-4 shrink-0 text-slate-400" strokeWidth={2} />
+          </button>
+          <SwapRecipe previews={previews} />
+          <button
+            type="button"
+            onClick={onActivate}
+            className="flex min-h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-white text-[11px] font-bold text-blue-700 transition hover:bg-blue-50"
+          >
+            <Zap className="size-3.5" strokeWidth={2.25} />
+            הפעל שלב זה עכשיו והחלף באימון
+          </button>
+        </article>
+      </li>
+    )
+  }
+
+  const connected = previews.length > 0 && previews.every((p) => p.alreadyApplied)
+  const connectedPlaces = [...new Set(previews.map((p) => p.placeSummary))]
 
   return (
     <li className="relative ps-9">
@@ -286,24 +362,11 @@ function TierItem({
         <div className="flex items-start gap-2">
           <ExerciseStickmanSvg name={node.title} kind={tierFigure(node)} size="sm" className="mt-0.5" />
           <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[10px] font-extrabold text-slate-500">שלב {node.order}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${style.pill}`}>
-                {style.pillText}
-              </span>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-extrabold tabular-nums text-slate-700">
-                {pct}%
-              </span>
-            </div>
+            {header}
             <button type="button" onClick={onOpen} className="block text-right">
               <h4 className="text-sm font-bold leading-snug text-slate-900">{node.title}</h4>
             </button>
             {node.note ? <p className="text-[11px] leading-snug text-muted">{node.note}</p> : null}
-            <div className="flex flex-wrap gap-1">
-              {evaluation.feeds.map((f) => (
-                <FeedChip key={f} label={f} />
-              ))}
-            </div>
           </div>
           <button
             type="button"
@@ -314,6 +377,41 @@ function TierItem({
             <Pencil className="size-3.5" strokeWidth={1.75} />
           </button>
         </div>
+
+        {connected ? (
+          <div className="rounded-xl bg-gradient-to-l from-emerald-50 to-blue-50 p-2.5 ring-1 ring-emerald-200">
+            <p className="flex items-center gap-1.5 text-xs font-extrabold text-emerald-800">
+              <Repeat2 className="size-4 shrink-0" strokeWidth={2.25} />
+              🔄 מחובר אוטומטית לאימון שלך כרגע
+            </p>
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {connectedPlaces.map((f) => (
+                <FeedChip key={f} label={f} />
+              ))}
+            </div>
+            <p className="mt-1.5 text-[11px] leading-snug text-slate-600">
+              אינך צריך להוסיף כלום — בצע את האימון הרגיל שלך והמדדים כאן יתעדכנו אוטומטית.
+            </p>
+          </div>
+        ) : previews.length ? (
+          <div className="space-y-2">
+            <SwapRecipe previews={previews} />
+            <button
+              type="button"
+              onClick={onSwap}
+              className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl bg-blue-600 text-xs font-bold text-white shadow-sm shadow-blue-600/25 transition hover:bg-blue-700"
+            >
+              <ArrowLeftRight className="size-3.5" strokeWidth={2.25} />
+              שבץ באימון עכשיו (1 יוצא ⬅ 1 נכנס)
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {evaluation.feeds.map((f) => (
+              <FeedChip key={f} label={f} />
+            ))}
+          </div>
+        )}
 
         {evaluation.measures.length ? (
           <ul className="space-y-3">
@@ -328,41 +426,41 @@ function TierItem({
           </ul>
         ) : null}
 
-        {node.slots.length ? (
-          <div className="flex items-center gap-2 rounded-xl bg-slate-50 p-2 ring-1 ring-slate-200/80">
-            <Repeat2 className="size-4 shrink-0 text-blue-600" strokeWidth={2} />
-            <p className="min-w-0 flex-1 text-[11px] leading-snug text-slate-600">
-              {applied ? 'משובץ בתוכנית: ' : 'מתכון שיבוץ: '}
-              <span className="font-semibold text-slate-800">{slotTargets.join(' · ')}</span>
-            </p>
-            {applied ? (
-              <span className="shrink-0 text-[10px] font-bold text-emerald-700">✓ באימון</span>
-            ) : (
-              <button
-                type="button"
-                onClick={onSwap}
-                className="min-h-9 shrink-0 rounded-lg bg-blue-600 px-2.5 text-[11px] font-bold text-white shadow-sm shadow-blue-600/25 transition hover:bg-blue-700"
-              >
-                שבץ בתוכנית האימונים (החלפה חכמה)
-              </button>
-            )}
-          </div>
-        ) : null}
-
         {evaluation.gateReady ? (
-          <div className="space-y-2 rounded-xl bg-gradient-to-l from-emerald-500 to-teal-500 p-3 text-white shadow-sm shadow-emerald-500/25">
-            <p className="flex items-start gap-1.5 text-xs font-bold leading-snug">
-              <Sparkles className="mt-0.5 size-3.5 shrink-0" strokeWidth={2.25} />
-              {nextTitle
-                ? `שלטת בשלב זה! 🎯 מוכן לעבור לשלב הבא: ${nextTitle}`
-                : 'שלטת בשלב האחרון במסלול! 🏆'}
+          <div className="space-y-2.5 rounded-2xl bg-gradient-to-l from-emerald-500 to-teal-500 p-3 text-white shadow-lg shadow-emerald-500/40 ring-2 ring-emerald-300">
+            <p className="flex items-start gap-1.5 text-sm font-extrabold leading-snug">
+              <Sparkles className="mt-0.5 size-4 shrink-0" strokeWidth={2.25} />
+              {next ? '🎉 שלטת בשלב זה ב-100%! מוכן לעלות לשלב הבא?' : '🏆 שלטת בשלב האחרון במסלול!'}
             </p>
+            {next ? (
+              <div className="space-y-1.5 rounded-xl bg-white/95 p-2.5 text-[11px] leading-snug text-slate-800">
+                <p className="font-bold text-slate-900">
+                  שלב {next.node.order}: {next.node.title}
+                </p>
+                {nextPreviews.map((p, i) => (
+                  <dl key={i} className="space-y-0.5 border-t border-slate-100 pt-1.5 first:border-0 first:pt-0">
+                    <div className="flex flex-wrap gap-x-1">
+                      <dt className="font-bold text-slate-500">אימון מתעדכן:</dt>
+                      <dd className="font-semibold">{p.placeSummary}</dd>
+                    </div>
+                    <div className="flex flex-wrap gap-x-1">
+                      <dt className="font-bold text-rose-700">יוצא מהאימון (הושלם ✓):</dt>
+                      <dd>{outgoingLabel(p) || '— (מתווסף בסוף האימון)'}</dd>
+                    </div>
+                    <div className="flex flex-wrap gap-x-1">
+                      <dt className="font-bold text-emerald-700">נכנס במקומו (שלב הבא 🚀):</dt>
+                      <dd className="font-semibold text-slate-900">{incomingLabel(p)}</dd>
+                    </div>
+                  </dl>
+                ))}
+              </div>
+            ) : null}
             <button
               type="button"
-              onClick={onAdvance}
-              className="flex min-h-10 w-full items-center justify-center gap-1.5 rounded-lg bg-white text-sm font-bold text-emerald-700 transition hover:bg-emerald-50"
+              onClick={onPromote}
+              className="flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-white px-2 text-sm font-extrabold text-emerald-700 shadow-sm transition hover:bg-emerald-50 active:scale-[0.99]"
             >
-              {nextTitle ? 'פתח את השלב הבא ושבץ באימון' : 'סמן את המסלול כנשלט'}
+              {next ? 'אשר קידום והחלף תרגיל באימון אוטומטית ⚡' : 'סמן את המסלול כנשלט ✓'}
             </button>
           </div>
         ) : null}
@@ -386,7 +484,9 @@ export function SkillBranchCard({
   onEditNode,
   onQuick,
   onSwapNode,
-  onAdvance,
+  onActivateNode,
+  onPromote,
+  onToggleFocus,
 }: {
   evaluation: BranchEvaluation
   expanded: boolean
@@ -397,8 +497,12 @@ export function SkillBranchCard({
   onEditNode: (nodeId: string) => void
   onQuick: (nodeId: string, measureId: string, value: SkillValue) => void
   onSwapNode: (nodeId: string) => void
-  /** Mastery gate: master the active tier and open the next one. */
-  onAdvance: (nodeId: string) => void
+  /** Manual override: open the 1-in-1-out confirmation for this tier. */
+  onActivateNode: (nodeId: string) => void
+  /** Mastery gate: swap in the next tier automatically. */
+  onPromote: (nodeId: string) => void
+  /** בפוקוס פעיל ↔ בתור. */
+  onToggleFocus: () => void
 }) {
   const { branch, nodes, focus, activeNode, nextNode } = evaluation
   const pct = percent(evaluation.progress)
@@ -462,8 +566,24 @@ export function SkillBranchCard({
             </span>
             <span className="text-[11px] font-semibold text-slate-600">
               {evaluation.masteredCount}/{evaluation.tierCount} שלבים נשלטו
+              {currentTier ? ` · ${activeNode ? 'עכשיו' : 'הבא בתור'}: שלב ${currentTier.node.order}` : ''}
             </span>
           </div>
+          {!done ? (
+            <button
+              type="button"
+              onClick={onToggleFocus}
+              aria-pressed={!queued}
+              className={[
+                'mt-2 inline-flex min-h-8 items-center gap-1 rounded-full px-3 text-[11px] font-bold transition',
+                queued
+                  ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/25 hover:bg-blue-700'
+                  : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+              ].join(' ')}
+            >
+              {queued ? '🎯 העבר לפוקוס פעיל' : '⏳ העבר לבתור'}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -493,7 +613,7 @@ export function SkillBranchCard({
             {currentTier ? (
               <>
                 <Target className="me-1 inline size-3" strokeWidth={2.25} />
-                {activeNode ? 'עכשיו' : 'הבא בתור'}: שלב {currentTier.node.order}
+                {currentTier.node.title}
               </>
             ) : (
               'כל השלבים נשלטו'
@@ -526,19 +646,19 @@ export function SkillBranchCard({
           {nodes.length ? (
             <ol className="relative space-y-3 before:absolute before:inset-y-4 before:start-3.5 before:w-0.5 before:rounded-full before:bg-gradient-to-b before:from-emerald-200 before:via-blue-200 before:to-slate-200">
               {nodes.map((n) => {
-                const next = nodes.find(
-                  (x) => x.node.order > n.node.order && x.status !== 'mastered',
-                )
+                const next =
+                  nodes.find((x) => x.node.order > n.node.order && x.status !== 'mastered') ?? null
                 return (
                   <TierItem
                     key={n.node.id}
                     evaluation={n}
-                    nextTitle={next?.node.title ?? null}
+                    next={next}
                     onOpen={() => onOpenNode(n.node.id)}
                     onEdit={() => onEditNode(n.node.id)}
                     onQuick={(measureId, value) => onQuick(n.node.id, measureId, value)}
                     onSwap={() => onSwapNode(n.node.id)}
-                    onAdvance={() => onAdvance(n.node.id)}
+                    onActivate={() => onActivateNode(n.node.id)}
+                    onPromote={() => onPromote(n.node.id)}
                   />
                 )
               })}

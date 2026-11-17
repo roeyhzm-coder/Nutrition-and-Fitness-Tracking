@@ -30,7 +30,7 @@ function isProgramTarget(slot: SkillSlotRecipe): slot is SkillSlotRecipe & {
   return slot.target in PROGRAM_TARGET_ALIASES
 }
 
-type Container = { dayIndex: number; sessionIndex: number | null; label: string }
+type Container = { dayIndex: number; sessionIndex: number | null; label: string; day: string; name: string }
 
 /** The exercise lists (session or standalone) that belong to the slot's workout. */
 function containersFor(slot: SkillSlotRecipe, days: WorkoutDay[]): Container[] {
@@ -39,18 +39,22 @@ function containersFor(slot: SkillSlotRecipe, days: WorkoutDay[]): Container[] {
   const out: Container[] = []
   days.forEach((day, dayIndex) => {
     if (day.isRest) return
-    const dayName = `יום ${WEEKDAY_SHORT[day.dayNumber - 1] ?? day.dayNumber}`
+    const short = WEEKDAY_SHORT[day.dayNumber - 1] ?? String(day.dayNumber)
+    const dayName = `יום ${short}`
     const sessions = day.sessions ?? []
     const sessionIndex = sessions.findIndex((s) => matchesLink(s.name, alias))
     if (sessionIndex >= 0) {
-      out.push({ dayIndex, sessionIndex, label: `${dayName} · ${sessions[sessionIndex].name}` })
+      const name = sessions[sessionIndex].name
+      out.push({ dayIndex, sessionIndex, label: `${dayName} · ${name}`, day: short, name })
       return
     }
     if (matchesLink(`${day.focus} ${day.title}`, alias)) {
       if (sessions.length) {
-        out.push({ dayIndex, sessionIndex: 0, label: `${dayName} · ${sessions[0].name}` })
+        const name = sessions[0].name
+        out.push({ dayIndex, sessionIndex: 0, label: `${dayName} · ${name}`, day: short, name })
       } else {
-        out.push({ dayIndex, sessionIndex: null, label: `${dayName} · ${day.focus || day.title}` })
+        const name = day.focus || day.title
+        out.push({ dayIndex, sessionIndex: null, label: `${dayName} · ${name}`, day: short, name })
       }
     }
   })
@@ -110,6 +114,8 @@ export type SlotPreview = {
   targetLabel: string
   /** Where it lands, e.g. "יום א׳ · משיכה 3". */
   places: string[]
+  /** Same, grouped per workout: "יום א׳/ג׳ · משיכה 1". */
+  placeSummary: string
   outgoing: string[]
   incoming: SkillSlotExercise[]
   mode: 'replace' | 'append'
@@ -149,6 +155,24 @@ function toMorningExercise(input: SkillSlotExercise): MorningExercise {
   }
 }
 
+function summarizeContainers(containers: Container[]): string {
+  const groups = new Map<string, string[]>()
+  for (const c of containers) groups.set(c.name, [...(groups.get(c.name) ?? []), c.day])
+  return [...groups.entries()].map(([name, days]) => `יום ${days.join('/')} · ${name}`).join(' | ')
+}
+
+/** What leaves the workout: the matched exercise(s), else the recipe's first alias. */
+export function outgoingLabel(preview: SlotPreview): string {
+  if (preview.outgoing.length) return preview.outgoing.join(' + ')
+  const first = preview.slot.replaces.split('|')[0]?.trim()
+  return first || ''
+}
+
+/** "שם 3×5" for the incoming exercise(s). */
+export function incomingLabel(preview: SlotPreview): string {
+  return preview.incoming.map((e) => `${e.name} (${e.sets}×${e.reps})`).join(' + ')
+}
+
 /** Preview of every slot of a tier against the live plan (nothing is written). */
 export function planSlotSwap(
   slots: SkillSlotRecipe[],
@@ -169,6 +193,7 @@ export function planSlotSwap(
         slot,
         targetLabel,
         places: [`שגרת בוקר ${routineId}`],
+        placeSummary: `שגרת בוקר ${routineId}`,
         outgoing: result.removed,
         incoming: slot.exercises,
         mode: result.removed.length ? 'replace' : 'append',
@@ -188,6 +213,7 @@ export function planSlotSwap(
       slot,
       targetLabel,
       places: containers.map((c) => c.label),
+      placeSummary: summarizeContainers(containers) || targetLabel,
       outgoing: [...outgoing],
       incoming: slot.exercises,
       mode: outgoing.size ? 'replace' : 'append',

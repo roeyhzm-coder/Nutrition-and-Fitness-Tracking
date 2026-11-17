@@ -38,7 +38,7 @@ function slotLines(node: NodeEvaluation, sources: SkillDataSources): string[] {
   return planSlotSwap(node.node.slots, sources.programDays, sources.morningRoutine).map((p) => {
     const out = p.outgoing.length ? p.outgoing.join(' + ') : p.slot.replaces ? p.slot.replaces.split('|')[0] : 'ללא (תוספת בסוף האימון)'
     const incoming = p.incoming.map((e) => `${e.name} ${e.sets}×${e.reps}`).join(' + ')
-    return `    - החלפה חכמה · ${p.targetLabel} (${SKILL_SLOT_ROLE_LABELS[p.slot.role]}): יוצא ${out} → נכנס ${incoming}`
+    return `    - החלפה 1:1 · ${p.placeSummary} (${SKILL_SLOT_ROLE_LABELS[p.slot.role]}): יוצא ${out} → נכנס ${incoming}`
   })
 }
 

@@ -31,10 +31,7 @@ function SlotPreviewCard({ preview }: { preview: SlotPreview }) {
         <div>
           <dt className="font-bold text-slate-500">באיזה אימון:</dt>
           <dd className="mt-0.5 font-semibold text-slate-900">
-            {preview.targetLabel}
-            {preview.places.length ? (
-              <span className="block text-[11px] font-normal text-muted">{preview.places.join(' · ')}</span>
-            ) : null}
+            {preview.placeSummary}
           </dd>
         </div>
         <div className="rounded-xl bg-rose-50 p-2 ring-1 ring-rose-100">
@@ -182,7 +179,7 @@ export function SkillTierModal({
               <section className="space-y-2">
                 <p className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                   <ArrowLeftRight className="size-3.5" strokeWidth={2.25} />
-                  מתכון שיבוץ לאימון
+                  מתכון שיבוץ אוטומטי (1-In, 1-Out)
                 </p>
                 {previews.map((p, i) => (
                   <SlotPreviewCard key={i} preview={p} />
@@ -201,7 +198,7 @@ export function SkillTierModal({
               {status === 'locked' || status === 'queued' ? (
                 <Button variant="accent" className="w-full gap-2" onClick={() => onModeChange('confirm')}>
                   <Plus className="size-4" strokeWidth={2.25} />
-                  הפעל שלב זה ושבץ באימון
+                  הפעל שלב זה עכשיו והחלף באימון
                 </Button>
               ) : isActive && writable && !node.slotsAppliedAt ? (
                 <Button variant="accent" className="w-full gap-2" onClick={() => onModeChange('confirm')}>

@@ -1,9 +1,15 @@
-import { useMemo, useState } from 'react'
-import { AlertTriangle, GitBranch, Plus, Settings2 } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, ChevronDown, GitBranch, Info, Plus, Settings2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import { useTodayKey } from '../../hooks/useTodayKey'
-import { applyMorningSlots, applyProgramSlots } from '../../lib/skillSlotSwap'
+import {
+  applyMorningSlots,
+  applyProgramSlots,
+  incomingLabel,
+  outgoingLabel,
+  planSlotSwap,
+} from '../../lib/skillSlotSwap'
 import {
   activateTier,
   blockWeekInfo,
@@ -15,6 +21,7 @@ import {
   newBranch,
   newNode,
   percent,
+  queueBranch,
   setBlockSettings,
   setMeasureManual,
   SKILL_FOCUS_LIMIT,
@@ -109,6 +116,32 @@ function FocusMeter({ count }: { count: number }) {
   )
 }
 
+function HowItWorks() {
+  const [openRaw, setOpen] = useLocalStorage<boolean>('tn.skillTree.howItWorks.open', true)
+  const open = openRaw !== false
+  return (
+    <section className="rounded-2xl border border-blue-100 bg-blue-50/70 text-blue-950">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="flex min-h-11 w-full items-center gap-2 px-3 text-right text-sm font-extrabold"
+      >
+        <Info className="size-4 shrink-0 text-blue-600" strokeWidth={2.25} />
+        <span className="flex-1">איך העץ עובד?</span>
+        <ChevronDown className={`size-4 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} strokeWidth={2} />
+      </button>
+      {open ? (
+        <p className="px-3 pb-3 text-xs leading-relaxed text-blue-900/90">
+          השלב שבפוקוס פעיל מחובר אוטומטית לתרגילים הקיימים באימון שלך. ברגע שתגיע ל-100% שליטה בשלב,
+          האפליקציה תחליף עבורך אוטומטית את התרגיל הישן בתרגיל של השלב הבא באותו יום אימון{' '}
+          <span className="font-bold">(1 יוצא ⬅ 1 נכנס, ללא הארכת האימון!)</span>.
+        </p>
+      ) : null}
+    </section>
+  )
+}
+
 export function SkillTreePanel() {
   const {
     skillTree,
@@ -123,7 +156,20 @@ export function SkillTreePanel() {
   const today = useTodayKey()
   const week = blockWeekInfo(skillTree, today)
 
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilter] = useState<Filter>('active')
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<number | null>(null)
+  useEffect(
+    () => () => {
+      if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
+    },
+    [],
+  )
+  function showToast(message: string) {
+    setToast(message)
+    if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), 5000)
+  }
   const [expandedRaw, setExpanded] = useLocalStorage<string[]>('tn.skillTree.expanded.v2', [
     'sk-muscle-up',
   ])
@@ -160,7 +206,10 @@ export function SkillTreePanel() {
   }
 
   /** Smart Slot Swap: write the tier's recipes into the plan (program + morning). */
-  function writeSlots(node: SkillNode) {
+  function writeSlots(node: SkillNode): string | null {
+    const changes = planSlotSwap(node.slots, workoutDays, morningRoutine).filter(
+      (p) => !p.missingTarget && !p.alreadyApplied,
+    )
     const programSlots = node.slots.filter((s) => s.target !== 'morningA' && s.target !== 'morningB')
     if (programSlots.length) setWorkoutDays(applyProgramSlots(workoutDays, programSlots))
     const morning = applyMorningSlots(morningRoutine, node.slots)
@@ -168,13 +217,23 @@ export function SkillTreePanel() {
       const exercises = morning[id]
       if (exercises) updateMorningRoutine(id, { exercises })
     }
+    if (!changes.length) return null
+    return `האימון עודכן אוטומטית! ${changes
+      .map((p) => {
+        const out = outgoingLabel(p)
+        return out
+          ? `${incomingLabel(p)} החליף את ${out} ב-${p.placeSummary}`
+          : `${incomingLabel(p)} נוסף בסוף ${p.placeSummary}`
+      })
+      .join(' · ')}.`
   }
 
   function confirmTier(apply: boolean) {
     if (!tierModal) return
     const node = skillTree.nodes[tierModal.nodeId]
     if (!node) return
-    if (apply) writeSlots(node)
+    const message = apply ? writeSlots(node) : null
+    if (message) showToast(message)
     if (node.tierStatus === 'active') {
       updateSkillTree((prev) => markSlotsApplied(prev, node.id))
     } else {
@@ -183,24 +242,47 @@ export function SkillTreePanel() {
     setTierModal(null)
   }
 
-  /** Mastery gate passed: open the next tier's swap (activating it masters this one). */
-  function advance(nodeId: string) {
+  /** Mastery gate passed: swap the next tier in right away (1 out, 1 in) and advance. */
+  function promote(nodeId: string) {
     const branch = evaluations.find((e) => e.nodes.some((n) => n.node.id === nodeId))
     const current = branch?.nodes.find((n) => n.node.id === nodeId)
     if (!branch || !current) return
     const next = branch.nodes.find(
       (n) => n.node.order > current.node.order && n.status !== 'mastered',
     )
-    if (next) {
-      setTierModal({ nodeId: next.node.id, mode: 'confirm' })
-    } else {
+    if (!next) {
       updateSkillTree((prev) => masterTier(prev, nodeId))
+      showToast(`🏆 ${branch.branch.title} נשלט במלואו!`)
+      return
     }
+    const message = writeSlots(next.node)
+    updateSkillTree((prev) => activateTier(prev, next.node.id, { slotsApplied: true }))
+    showToast(message ?? `שלב ${next.node.order} פעיל: ${next.node.title}`)
+  }
+
+  /** Track card toggle: בפוקוס פעיל ↔ בתור. */
+  function toggleFocus(e: BranchEvaluation) {
+    if (e.focus === 'active') {
+      updateSkillTree((prev) => queueBranch(prev, e.branch.id))
+      return
+    }
+    const target = e.nodes.find((n) => n.status !== 'mastered')
+    if (!target) return
+    const previews = planSlotSwap(target.node.slots, workoutDays, morningRoutine)
+    if (previews.some((p) => !p.missingTarget && !p.alreadyApplied)) {
+      setTierModal({ nodeId: target.node.id, mode: 'confirm' })
+      return
+    }
+    updateSkillTree((prev) =>
+      activateTier(prev, target.node.id, {
+        slotsApplied: previews.length > 0 && previews.every((p) => p.alreadyApplied),
+      }),
+    )
   }
 
   const filters: { id: Filter; label: string }[] = [
-    { id: 'all', label: 'הכל' },
     { id: 'active', label: 'בפוקוס פעיל' },
+    { id: 'all', label: 'הכל' },
     { id: 'queued', label: 'בתור' },
     { id: 'completed', label: 'נשלטו' },
   ]
@@ -247,6 +329,8 @@ export function SkillTreePanel() {
           </p>
         </div>
       </section>
+
+      <HowItWorks />
 
       <div className="no-scrollbar -mx-4 overflow-x-auto overscroll-x-contain px-4" role="tablist" aria-label="סינון מסלולים">
         <div className="flex w-max gap-1.5">
@@ -297,7 +381,9 @@ export function SkillTreePanel() {
                 updateSkillTree((prev) => setMeasureManual(prev, nodeId, measureId, value))
               }
               onSwapNode={(nodeId) => setTierModal({ nodeId, mode: 'confirm' })}
-              onAdvance={advance}
+              onActivateNode={(nodeId) => setTierModal({ nodeId, mode: 'confirm' })}
+              onPromote={promote}
+              onToggleFocus={() => toggleFocus(e)}
             />
           ))}
         </div>
@@ -315,6 +401,15 @@ export function SkillTreePanel() {
         <Plus className="size-4" strokeWidth={2.5} />
         מסלול סקיל חדש
       </button>
+
+      {toast ? (
+        <p
+          role="status"
+          className="fixed inset-x-3 bottom-28 z-[60] mx-auto max-w-md rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold leading-snug text-white shadow-lg shadow-emerald-700/30"
+        >
+          {toast}
+        </p>
+      ) : null}
 
       <SkillTierModal
         open={!!modalNode}

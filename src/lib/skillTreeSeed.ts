@@ -24,6 +24,11 @@ const IN_BLOCK_3 = '2026-11-15T00:00:00.000Z'
 
 /** Tombstone time for the retired 5-branch seed (deterministic on every device). */
 export const SKILL_SEED_MIGRATED_AT = '2026-11-17T00:00:00.000Z'
+/**
+ * Seed v2 (4 tracks in focus / 4 queued, strict 1-in-1-out recipes): every seed
+ * track / tier last written before this time is reset to the seed (manual values kept).
+ */
+export const SKILL_SEED_V2_AT = '2026-11-17T10:30:00.000Z'
 const LEGACY_BRANCHES = ['st-muscle-up', 'st-front-lever', 'st-hspu-planche', 'st-one-arm', 'st-physique']
 export const LEGACY_SEED_IDS: ReadonlySet<string> = new Set([
   ...LEGACY_BRANCHES,
@@ -139,7 +144,9 @@ function track(
   return { id, order, icon, title, subtitle, status, nextUnlockTitle, updatedAt: EPOCH }
 }
 
-// Exercise-name aliases used both for measures and for the swap targets.
+// Exercise-name aliases (`|`) used both for measures and for the swap targets.
+// Each tier's `replaces` also lists the earlier tiers' exercises, so jumping
+// straight to a tier still swaps 1-for-1 instead of appending.
 const HIGH_PULL = 'מתח מתפרץ גבוה|High Pull'
 const CTB = 'Chest To Bar|מתח חזה'
 const HEAVY_DIPS = 'מקבילים כבד|מקבילים עם משקל|Weighted Dips'
@@ -147,24 +154,61 @@ const TUCK_ROWS = 'Tuck Front Lever Rows|חתירת פרונט לבר מקופל
 const HEAVY_PULL = 'מתח כבד בפרונציה'
 const TTB = 'Toes To Bar|TTB'
 const OA_HANG = 'תלייה אקטיבית בשכמות ביד אחת|תלייה ביד אחת'
-const HEAVY_CHIN = 'מתח בסופינציה עם משקל|מתח סופינציה|מתח נקי סופינציה'
+const HEAVY_CHIN = 'מתח בסופינציה עם משקל'
 const INCLINE_CURL = 'כפיפת מרפקים בישיבה בשיפוע'
 const PIKE = 'Pike|פייק'
 const PSEUDO = 'Pseudo Planche|פסאודו'
 const BULGARIAN = 'סקוואט בולגרי|Bulgarian'
 const SL_RDL = 'Single-Leg RDL|דדליפט רומני ברגל אחת'
+const WALL_HS = 'עמידת ידיים מול קיר|Wall Handstand'
+const FINISHER = 'סיומת גמישות לשפגאט'
+
+const MU3 = 'Strict Bar Muscle-Up נקי (ללא קיפ)'
+const MU4 = 'Muscle-Up Sets (סטים של 5 נקיים)'
+const MU5 = 'Weighted / Slow Muscle-Up'
+const FL3 = 'Advanced Tuck Front Lever Rows'
+const FL4 = 'Straddle / One-Leg Front Lever'
+const FL5 = 'Full Front Lever Hold & Pulls'
+const OA3 = 'Archer Pull-ups / Uneven Chin-ups'
+const OA4 = 'One-Arm Chin-Up Negatives'
+const OA5 = 'Full One-Arm Chin-Up'
+const HS3 = 'Deep Deficit Pike Push-ups'
+const HS3M = 'עמידת ידיים חופשית (Freestanding Handstand)'
+const HS4 = 'Full Chest-to-Wall HSPU'
+const HS5 = 'Freestanding HSPU'
+const PL3 = 'Tuck Planche Hold'
+const PL4 = 'Advanced Tuck Planche & Push-ups'
+const PL5 = 'Straddle / Full Planche'
+const CF2 = 'סופרסט ליבה: Full L-Sit + Windshield Wipers'
+const CF3 = 'Dragon Flag'
+const CF4 = 'Tuck / Straddle Human Flag'
+const CF5 = 'Full Human Flag'
+const PS3 = 'Freestanding Pistol Squat'
+const PS4 = 'Weighted Pistol Squat'
+const PS4B = 'Nordic Hamstring Curl (אקסצנטרי)'
+const PS5 = 'Advanced Shrimp Squat'
+const PS5B = 'Full Nordic Curl (ללא ידיים)'
+
+const chain = (...aliases: string[]) => aliases.join('|')
 
 export function seedSkillBranches(): SkillBranch[] {
   return [
     track('sk-muscle-up', 1, 'muscleUp', 'Muscle-Up & Explosive Bar Mastery', 'משיכה מתפרצת ומאסל-אפ', 'active_focus', 'Strict Bar Muscle-Up נקי ללא קיפ'),
-    track('sk-front-lever', 2, 'frontLever', 'Front Lever Mastery', 'פרונט לבר וכוח משיכה אופקי', 'active_focus', 'Advanced Tuck Front Lever'),
-    track('sk-one-arm', 3, 'oneArm', 'One-Arm Chin-Up & Streetlifting Pull', 'מתח יד אחת ומשיכה מקסימלית', 'active_focus', 'Archer Pull-ups / Uneven Towel Chin-ups'),
+    track('sk-front-lever', 2, 'frontLever', 'Front Lever Mastery', 'פרונט לבר וכוח משיכה אופקי', 'active_focus', 'Advanced Tuck Front Lever Rows'),
+    track('sk-one-arm', 3, 'oneArm', 'One-Arm Chin-Up & Streetlifting Pull', 'מתח יד אחת ומשיכה מקסימלית', 'active_focus', 'Archer Pull-ups / Uneven Chin-ups'),
     track('sk-handstand', 4, 'handstand', 'Handstand & Freestanding HSPU', 'עמידת ידיים ולחיצה אנכית', 'active_focus', 'Freestanding Handstand 15 שניות'),
-    track('sk-planche', 5, 'flame', 'Planche & Heavy Push Mastery', 'פלאנש ודחיפה כבדה', 'active_focus', 'Tuck Planche Hold 15 שניות'),
-    track('sk-core-flag', 6, 'flag', 'Human Flag & Elite Core Compression', 'דגל אנושי, V-Sit וליבה', 'queued_next_block', 'Full L-Sit + Hanging Windshield Wipers'),
-    track('sk-pistol', 7, 'leg', 'Single-Leg Strength & Pistol Squat', 'שליטה ברגל אחת ופיסטול סקוואט', 'active_focus', 'Freestanding Pistol Squat'),
+    track('sk-planche', 5, 'flame', 'Planche & Heavy Push Mastery', 'פלאנש ודחיפה כבדה', 'queued_next_block', 'Tuck Planche Hold'),
+    track('sk-core-flag', 6, 'flag', 'Human Flag & Elite Core Compression', 'דגל אנושי, V-Sit וליבה', 'queued_next_block', 'Full L-Sit + Windshield Wipers'),
+    track('sk-pistol', 7, 'leg', 'Single-Leg Strength & Pistol Squat', 'שליטה ברגל אחת ופיסטול סקוואט', 'queued_next_block', 'Freestanding Pistol Squat'),
     track('sk-splits', 8, 'stretch', 'Splits & Mobility Mastery', 'שפגאט קדמי/אמצעי וגמישות קצה', 'queued_next_block', 'בסיס לשפגאט (Couch + PNF + Frog)'),
   ]
+}
+
+/** One 6-minute mobility finisher; each tier swaps the previous tier's finisher. */
+function finisher(stage: string, notes: string): SkillSlotRecipe {
+  return slot('push', 'mobility_finisher_slot', FINISHER, [
+    ex(`${FINISHER} - 6 דק׳ (${stage})`, 1, '6 דקות', '—', notes),
+  ])
 }
 
 export function seedSkillNodes(): SkillNode[] {
@@ -177,7 +221,7 @@ export function seedSkillNodes(): SkillNode[] {
   const ps = 'sk-pistol'
   const sp = 'sk-splits'
   return [
-    // 1. Muscle-Up & Explosive Bar
+    // 1. Muscle-Up & Explosive Bar — slot: אימון 3 (יום ו׳), High Pull-ups.
     tier(mu, 1, 'mastered', 'מתח חזה רצוף (16 חזרות משקל גוף)'),
     tier(mu, 2, 'active', 'High Pull-ups לבטן עליונה (3×4) + מתח חזה (18 חזרות / +5 ק"ג) + מקבילים כבד (30 ק"ג × 2)', {
       prereq: 'מתח חזה רצוף 16 חזרות',
@@ -186,91 +230,64 @@ export function seedSkillNodes(): SkillNode[] {
         maxReps('מתח חזה (Chest To Bar) — מקסימום חזרות', CTB, 16, 18),
         weighted('מקבילים כבד — סט שיא', HEAVY_DIPS, [25, 2], [30, 2]),
       ],
-      slots: [
-        slot('combo', 'explosive_skill_slot', HIGH_PULL, [ex('מתח מתפרץ גבוה (High Pull-ups)', 3, '3-4', '3 דקות')]),
-      ],
+      slots: [slot('combo', 'explosive_skill_slot', HIGH_PULL, [ex('מתח מתפרץ גבוה (High Pull-ups)', 3, '3-4', '2-3 דקות')])],
     }),
     tier(mu, 3, 'locked', 'Strict Bar Muscle-Up נקי ללא קיפ (3 סטים × 2-3 חזרות)', {
       prereq: 'High Pull-ups 3×4 לבטן עליונה + 18 מתח חזה + מקבילים 30 ק"ג × 2',
-      measures: [setsReps('Strict Muscle-Up — חזרות נקיות לסט', 'Strict Bar Muscle-Up|Muscle-Up נקי', 3, 0, 2)],
+      measures: [setsReps('Strict Muscle-Up — חזרות נקיות לסט', 'Strict Bar Muscle-Up', 3, 0, 3)],
       slots: [
         slot('combo', 'explosive_skill_slot', HIGH_PULL, [
-          ex('Strict Bar Muscle-Up נקי (ללא קיפ)', 3, '2-3', '3 דקות', 'משיכה מתפרצת לבטן תחתונה, מעבר מהיר של פרקי הידיים, בלי קיפ.'),
-          ex('Muscle-Up Negatives (ירידה איטית)', 2, '3 × 5 שניות', '2 דקות'),
+          ex(MU3, 3, '2-3', '3 דקות', 'משיכה מתפרצת לבטן תחתונה, מעבר מהיר של פרקי הידיים, בלי קיפ.'),
         ]),
       ],
     }),
     tier(mu, 4, 'locked', 'Muscle-Up Sets (3 סטים × 5 חזרות נקיות)', {
       prereq: 'Strict Muscle-Up 3×2-3 נקי',
-      measures: [setsReps('Muscle-Up — 3 סטים', 'Muscle-Up', 3, 3, 5)],
-      slots: [
-        slot('combo', 'explosive_skill_slot', 'Muscle-Up', [ex('Muscle-Up נקי — סטים של 5', 3, '3-5', '3 דקות')]),
-      ],
+      measures: [setsReps('Muscle-Up — 3 סטים', 'Muscle-Up Sets', 3, 3, 5)],
+      slots: [slot('combo', 'explosive_skill_slot', chain('Strict Bar Muscle-Up', HIGH_PULL), [ex(MU4, 3, '5', '3 דקות')])],
     }),
-    tier(mu, 5, 'locked', 'Slow No-Momentum Muscle-Up / Weighted Muscle-Up (+5-10 ק"ג)', {
+    tier(mu, 5, 'locked', 'Weighted / Slow Muscle-Up (3×3, +5-10 ק"ג או ללא מומנטום)', {
       prereq: '3×5 Muscle-Up נקיים',
-      measures: [weighted('Weighted Muscle-Up', 'Weighted Muscle-Up|Muscle-Up עם משקל', [0, 3], [7.5, 3])],
+      measures: [weighted('Weighted Muscle-Up', 'Weighted / Slow Muscle-Up|Weighted Muscle-Up', [0, 3], [7.5, 3])],
       slots: [
-        slot('combo', 'explosive_skill_slot', 'Muscle-Up', [
-          ex('Weighted Muscle-Up (+5-10 ק"ג)', 3, '2-3', '3-4 דקות'),
-          ex('Slow Muscle-Up ללא מומנטום', 2, '2', '3 דקות'),
+        slot('combo', 'explosive_skill_slot', chain('Muscle-Up Sets', 'Strict Bar Muscle-Up', HIGH_PULL), [
+          ex(MU5, 3, '3', '3-4 דקות', '+5-10 ק"ג, או איטי לגמרי ללא מומנטום.'),
         ]),
       ],
     }),
 
-    // 2. Front Lever
+    // 2. Front Lever — slot: אימון 1 (א׳/ג׳), Tuck FL Rows.
     tier(fl, 1, 'mastered', 'Tuck Front Lever Hold (20 שניות) + Hollow Body Hold (60 שניות)'),
     tier(fl, 2, 'active', 'Tuck Front Lever Rows (3×8) + מתח פרונציה כבד (32.5 ק"ג × 3) + Toes To Bar (3×8 עם עצירה)', {
-      prereq: 'Tuck FL Hold 20 שנ\' + Hollow 60 שנ\'',
+      prereq: "Tuck FL Hold 20 שנ' + Hollow 60 שנ'",
       measures: [
         setsReps('Tuck FL Rows — חזרות נקיות', TUCK_ROWS, 3, 6, 8),
         weighted('מתח כבד בפרונציה — סט כבד', HEAVY_PULL, [27.5, 3], [32.5, 3]),
-        setsReps('Toes To Bar (עצירה 2 שנ\' למעלה)', TTB, 3, 6, 8),
+        setsReps("Toes To Bar (עצירה 2 שנ' למעלה)", TTB, 3, 6, 8),
       ],
       slots: [
         slot('pull', 'horizontal_secondary_slot', TUCK_ROWS, [ex('חתירת פרונט לבר מקופל (Tuck Front Lever Rows)', 3, '6-8', '2 דקות')]),
       ],
     }),
-    tier(fl, 3, 'locked', 'Advanced Tuck Front Lever (Hold 15s + Rows 3×6 גב שטוח 90 מעלות)', {
+    tier(fl, 3, 'locked', 'Advanced Tuck Front Lever Rows (3×6, גב שטוח 90 מעלות)', {
       prereq: 'Tuck FL Rows 3×8 + מתח כבד 32.5 ק"ג × 3 + TTB 3×8',
-      measures: [
-        hold('Advanced Tuck FL Hold', 'Advanced Tuck Front Lever Hold|Advanced Tuck FL Hold', 5, 15),
-        setsReps('Advanced Tuck FL Rows', 'Advanced Tuck Front Lever Rows|Advanced Tuck FL Rows', 3, 3, 6),
-      ],
-      slots: [
-        slot('pull', 'horizontal_secondary_slot', TUCK_ROWS, [
-          ex('Advanced Tuck Front Lever Rows (גב שטוח)', 3, '4-6', '2-3 דקות'),
-          ex('Advanced Tuck Front Lever Hold', 3, '8-15 שניות', '2 דקות'),
-        ]),
-      ],
+      measures: [setsReps('Advanced Tuck FL Rows', FL3, 3, 3, 6)],
+      slots: [slot('pull', 'horizontal_secondary_slot', TUCK_ROWS, [ex(FL3, 3, '6', '2-3 דקות', 'גב שטוח, ירכיים בקו הגב.')])],
     }),
-    tier(fl, 4, 'locked', 'One-Leg / Straddle Front Lever (Hold 10-12s + Straddle Negatives)', {
-      prereq: 'Advanced Tuck Hold 15 שנ\' + Rows 3×6',
-      measures: [hold('Straddle / One-Leg FL Hold', 'Straddle Front Lever Hold|One-Leg Front Lever', 3, 12)],
-      slots: [
-        slot('pull', 'horizontal_secondary_slot', 'Advanced Tuck Front Lever', [
-          ex('Straddle / One-Leg Front Lever Hold', 3, '6-12 שניות', '2-3 דקות'),
-          ex('Straddle Front Lever Negatives', 3, '3 × 5 שניות', '2-3 דקות'),
-        ]),
-      ],
+    tier(fl, 4, 'locked', 'Straddle / One-Leg Front Lever (3×10 שניות)', {
+      prereq: 'Advanced Tuck FL Rows 3×6',
+      measures: [hold('Straddle / One-Leg FL Hold', FL4, 3, 10, { sets: 3 })],
+      slots: [slot('pull', 'horizontal_secondary_slot', chain(FL3, TUCK_ROWS), [ex(FL4, 3, '10 שניות', '2-3 דקות')])],
     }),
-    tier(fl, 5, 'locked', 'Full Front Lever Hold (8-10 שניות) & Full FL Pull-ups', {
-      prereq: 'Straddle FL Hold 12 שנ\'',
-      measures: [
-        hold('Full Front Lever Hold', 'Full Front Lever Hold', 2, 10),
-        maxReps('Full FL Pull-ups', 'Full Front Lever Pull-ups', 0, 3),
-      ],
-      slots: [
-        slot('pull', 'horizontal_secondary_slot', 'Straddle|One-Leg Front Lever', [
-          ex('Full Front Lever Hold', 3, '5-10 שניות', '3 דקות'),
-          ex('Full Front Lever Pull-ups', 3, '1-3', '3 דקות'),
-        ]),
-      ],
+    tier(fl, 5, 'locked', 'Full Front Lever Hold & Pulls (3×8 שניות)', {
+      prereq: "Straddle FL Hold 3×10 שנ'",
+      measures: [hold('Full Front Lever Hold', 'Full Front Lever', 2, 8, { sets: 3 })],
+      slots: [slot('pull', 'horizontal_secondary_slot', chain(FL4, FL3, TUCK_ROWS), [ex(FL5, 3, '8 שניות', '3 דקות')])],
     }),
 
-    // 3. One-Arm Chin-Up
+    // 3. One-Arm Chin-Up — tier 2/4/5 slot: אימון 1 hang; tier 3: אימון 3 weighted chin-ups.
     tier(oa, 1, 'mastered', 'מתח סופינציה +32.5 ק"ג × 2 חזרות'),
-    tier(oa, 2, 'active', 'תלייה אקטיבית בשכמה ביד אחת (3×25 שנ\') + מתח סופינציה כבד (40-42.5 ק"ג × 2 / 30 ק"ג × 6) + כפיפת מרפקים בשיפוע עם החזקה ב-90° (18 ק"ג × 8)', {
+    tier(oa, 2, 'active', "תלייה אקטיבית בשכמה ביד אחת (3×25 שנ') + מתח סופינציה כבד (40-42.5 ק\"ג × 2 / 30 ק\"ג × 6) + כפיפת מרפקים בשיפוע עם החזקה ב-90° (18 ק\"ג × 8)", {
       prereq: 'מתח סופינציה +32.5 ק"ג × 2',
       measures: [
         hold('תלייה ביד אחת — שניות לכל יד', OA_HANG, 15, 25, { sets: 3 }),
@@ -278,50 +295,31 @@ export function seedSkillNodes(): SkillNode[] {
         weighted('מתח סופינציה — 6 חזרות', HEAVY_CHIN, [22.5, 5], [30, 6]),
         weighted('כפיפת מרפקים בשיפוע + 90°', INCLINE_CURL, [16, 6], [18, 8]),
       ],
-      slots: [
-        slot('pull', 'primary_strength_slot', OA_HANG, [ex('תלייה אקטיבית בשכמות ביד אחת', 3, '15-25 שניות לכל יד', '90 שניות')]),
-      ],
+      slots: [slot('pull', 'primary_strength_slot', OA_HANG, [ex('תלייה אקטיבית בשכמות ביד אחת', 3, '15-25 שניות לכל יד', '90 שניות')])],
     }),
-    tier(oa, 3, 'locked', 'Archer Pull-ups נקיים (3×5 לכל צד) / Uneven Towel Chin-ups', {
-      prereq: 'תלייה ביד אחת 3×25 שנ\' + מתח סופינציה 40 ק"ג × 2',
-      measures: [setsReps('Archer Pull-ups — לכל צד', 'Archer|מתח קשת|Towel', 3, 2, 5)],
-      slots: [
-        slot('pull', 'primary_strength_slot', OA_HANG, [
-          ex('מתח "קשת" (Archer Pull-ups)', 3, '3-5 לכל צד', '2-3 דקות'),
-          ex('Uneven Towel Chin-ups', 2, '3-4 לכל צד', '2 דקות'),
-        ]),
-      ],
+    tier(oa, 3, 'locked', 'Archer Pull-ups / Uneven Chin-ups (3×5 לכל צד)', {
+      prereq: "תלייה ביד אחת 3×25 שנ' + מתח סופינציה 40 ק\"ג × 2",
+      measures: [setsReps('Archer / Uneven — לכל צד', 'Archer|Uneven', 3, 2, 5)],
+      slots: [slot('combo', 'primary_strength_slot', HEAVY_CHIN, [ex(OA3, 3, '5 לכל צד', '2-3 דקות')])],
     }),
-    tier(oa, 4, 'locked', 'One-Arm Chin-Up Negatives (ירידה של 6 שניות ביד אחת) + Band-Assisted OAC (3×3)', {
+    tier(oa, 4, 'locked', 'One-Arm Chin-Up Negatives (3×3 לכל יד, ירידה של 6 שניות)', {
       prereq: 'Archer Pull-ups 3×5 לכל צד',
-      measures: [
-        hold('OAC Negative — שניות ירידה', 'One-Arm Chin-Up Negatives', 2, 6, { source: 'manual_benchmark' }),
-        setsReps('Band-Assisted OAC', 'Band-Assisted One-Arm|Band-Assisted OAC', 3, 1, 3),
-      ],
-      slots: [
-        slot('pull', 'primary_strength_slot', 'Archer|Towel', [
-          ex('One-Arm Chin-Up Negatives (ירידה 6 שניות)', 3, '2 לכל יד', '3 דקות'),
-          ex('Band-Assisted One-Arm Chin-Up (OAC)', 3, '3 לכל יד', '3 דקות'),
-        ]),
-      ],
+      measures: [setsReps('OAC Negatives — לכל יד', OA4, 3, 1, 3)],
+      slots: [slot('pull', 'primary_strength_slot', OA_HANG, [ex(OA4, 3, '3 לכל יד', '3 דקות', 'ירידה של 6 שניות ביד אחת.')])],
     }),
-    tier(oa, 5, 'locked', 'Full One-Arm Chin-Up / Pull-Up (עליית מתח מלאה ונקייה ביד אחת לכל צד)', {
-      prereq: 'ירידה של 6 שניות + Band OAC 3×3',
-      measures: [maxReps('One-Arm Chin-Up מלא — חזרות לכל יד', 'One-Arm Chin-Up מלא', 0, 1, 'manual_benchmark')],
-      slots: [
-        slot('pull', 'primary_strength_slot', 'One-Arm Chin-Up Negatives|Band-Assisted', [
-          ex('One-Arm Chin-Up מלא', 3, '1-2 לכל יד', '4 דקות'),
-        ]),
-      ],
+    tier(oa, 5, 'locked', 'Full One-Arm Chin-Up (3×1-2 לכל יד)', {
+      prereq: 'OAC Negatives 3×3 לכל יד',
+      measures: [maxReps('One-Arm Chin-Up מלא — חזרות לכל יד', OA5, 0, 2)],
+      slots: [slot('pull', 'primary_strength_slot', chain(OA4, OA_HANG), [ex(OA5, 3, '1-2 לכל יד', '4 דקות')])],
     }),
 
-    // 4. Handstand & HSPU
+    // 4. Handstand & HSPU — slots: אימון 2 Pike + שגרת בוקר B.
     tier(hs, 1, 'mastered', 'עמידת ידיים חזה לקיר (60 שניות) + Wall HSPU בסיסי'),
-    tier(hs, 2, 'active', 'Elevated Pike Push-ups (3×8 מלאות) + עמידת ידיים מול קיר בשגרת בוקר B (60 שנ\')', {
-      prereq: 'עמידת ידיים חזה לקיר 60 שנ\'',
+    tier(hs, 2, 'active', "Elevated Pike Push-ups (3×8 מלאות) + עמידת ידיים מול קיר בשגרת בוקר B (60 שנ')", {
+      prereq: "עמידת ידיים חזה לקיר 60 שנ'",
       measures: [
-        setsReps('Elevated Pike Push-ups — חזרות מלאות', PIKE, 3, 5, 8),
-        hold('עמידת ידיים מול קיר (שגרת בוקר B)', 'Handstand|עמידת ידיים', null, 60, { source: 'morning_routine' }),
+        setsReps('Elevated Pike Push-ups — חזרות מלאות', 'Elevated Pike', 3, 5, 8),
+        hold('עמידת ידיים מול קיר (שגרת בוקר B)', 'עמידת ידיים מול קיר|Handstand', null, 60, { source: 'morning_routine' }),
       ],
       slots: [
         slot('push', 'primary_strength_slot', PIKE, [
@@ -329,217 +327,158 @@ export function seedSkillNodes(): SkillNode[] {
         ]),
       ],
     }),
-    tier(hs, 3, 'locked', 'Freestanding Handstand (עמידת ידיים חופשית 15 שניות) + Deep Deficit Pike Push-ups על ידיות', {
-      prereq: 'Pike מוגבה 3×8 + עמידת ידיים לקיר 60 שנ\'',
+    tier(hs, 3, 'locked', 'Freestanding Handstand (15 שניות) + Deep Deficit Pike Push-ups (3×6)', {
+      prereq: "Pike מוגבה 3×8 + עמידת ידיים לקיר 60 שנ'",
       measures: [
         hold('עמידת ידיים חופשית', 'Freestanding Handstand|עמידת ידיים חופשית', 0, 15, { source: 'morning_routine' }),
-        setsReps('Deep Deficit Pike Push-ups', 'Deficit Pike', 3, 4, 8),
+        setsReps('Deep Deficit Pike Push-ups', 'Deficit Pike', 3, 3, 6),
       ],
       slots: [
-        slot('push', 'primary_strength_slot', PIKE, [ex('Deep Deficit Pike Push-ups על ידיות', 3, '5-8', '2-3 דקות')]),
-        slot('morningB', 'accessory_core_slot', 'עמידת ידיים מול קיר|Wall Handstand', [
-          ex('עמידת ידיים חופשית (Freestanding Handstand)', 5, '10-15 שניות', '30 שניות', 'נסיונות קצרים, יציאה בטוחה לצד (cartwheel).'),
+        slot('push', 'primary_strength_slot', PIKE, [ex(HS3, 3, '6', '2-3 דקות', 'על ידיות / פלטות, ראש מתחת לגובה הידיים.')]),
+        slot('morningB', 'accessory_core_slot', WALL_HS, [
+          ex(HS3M, 5, '15 שניות', '30 שניות', 'נסיונות קצרים, יציאה בטוחה לצד (cartwheel).'),
         ]),
       ],
     }),
-    tier(hs, 4, 'locked', 'Full Range Chest-to-Wall HSPU (3×6 ראש עד הרצפה)', {
-      prereq: 'עמידה חופשית 15 שנ\' + Deficit Pike 3×8',
-      measures: [setsReps('Chest-to-Wall HSPU — טווח מלא', 'Chest-to-Wall HSPU|Wall HSPU', 3, 2, 6)],
-      slots: [
-        slot('push', 'primary_strength_slot', 'Deficit Pike|Pike', [
-          ex('Chest-to-Wall HSPU (טווח מלא, ראש לרצפה)', 3, '3-6', '3 דקות'),
-        ]),
-      ],
+    tier(hs, 4, 'locked', 'Full Chest-to-Wall HSPU (3×6 ראש עד הרצפה)', {
+      prereq: "עמידה חופשית 15 שנ' + Deficit Pike 3×6",
+      measures: [setsReps('Chest-to-Wall HSPU — טווח מלא', 'Chest-to-Wall HSPU', 3, 2, 6)],
+      slots: [slot('push', 'primary_strength_slot', chain('Deficit Pike', PIKE), [ex(HS4, 3, '6', '3 דקות')])],
     }),
-    tier(hs, 5, 'locked', 'Freestanding HSPU (לחיצת כתפיים בעמידת ידיים חופשית) / 90-Degree Hold', {
+    tier(hs, 5, 'locked', 'Freestanding HSPU (3×3)', {
       prereq: 'Chest-to-Wall HSPU 3×6',
-      measures: [maxReps('Freestanding HSPU', 'Freestanding HSPU', 0, 3, 'manual_benchmark')],
-      slots: [
-        slot('push', 'primary_strength_slot', 'Chest-to-Wall HSPU|Wall HSPU', [
-          ex('Freestanding HSPU', 4, '1-3', '3-4 דקות'),
-          ex('90-Degree Hold (על מקבילים)', 3, '5-10 שניות', '2 דקות'),
-        ]),
-      ],
+      measures: [setsReps('Freestanding HSPU', HS5, 3, 1, 3)],
+      slots: [slot('push', 'primary_strength_slot', chain('Chest-to-Wall HSPU', PIKE), [ex(HS5, 3, '3', '3-4 דקות')])],
     }),
 
-    // 5. Planche & Heavy Push
+    // 5. Planche & Heavy Push — slot: אימון 2, Pseudo Planche.
     tier(pl, 1, 'mastered', 'מקבילים משקל גוף (17 חזרות) + שכיבות סמיכה מתפרצות (31 חזרות)'),
-    tier(pl, 2, 'active', 'Pseudo Planche Push-ups בהישענות מקסימלית (2×8) + מקבילים כבד (30 ק"ג × 2)', {
+    tier(pl, 2, 'queued', 'Pseudo Planche Push-ups בהישענות מקסימלית (2×8) + מקבילים כבד (30 ק"ג × 2)', {
       prereq: '17 מקבילים + 31 שכיבות סמיכה מתפרצות',
       measures: [
         setsReps('Pseudo Planche Push-ups', PSEUDO, 2, 6, 8),
         weighted('מקבילים כבד — סט שיא', HEAVY_DIPS, [25, 2], [30, 2]),
       ],
       slots: [
-        slot('push', 'horizontal_secondary_slot', PSEUDO, [
-          ex('שכיבות סמיכה פסאודו-פלאנש (Pseudo Planche Push-ups)', 2, '6-8', '2 דקות'),
-        ]),
+        slot('push', 'horizontal_secondary_slot', PSEUDO, [ex('שכיבות סמיכה פסאודו-פלאנש (Pseudo Planche Push-ups)', 2, '6-8', '2 דקות')]),
       ],
     }),
-    tier(pl, 3, 'locked', 'Tuck Planche Hold (15 שניות על מקבילים/רצפה) + Weighted Dips (40 ק"ג × 3)', {
+    tier(pl, 3, 'locked', 'Tuck Planche Hold (4×15 שניות)', {
       prereq: 'Pseudo Planche 2×8 + מקבילים 30 ק"ג × 2',
-      measures: [
-        hold('Tuck Planche Hold', 'Tuck Planche Hold', 5, 15),
-        weighted('Weighted Dips', HEAVY_DIPS, [30, 3], [40, 3]),
-      ],
-      slots: [
-        slot('push', 'horizontal_secondary_slot', PSEUDO, [ex('Tuck Planche Hold (על מקבילים / רצפה)', 4, '8-15 שניות', '2 דקות')]),
-      ],
+      measures: [hold('Tuck Planche Hold', PL3, 5, 15, { sets: 4 })],
+      slots: [slot('push', 'horizontal_secondary_slot', PSEUDO, [ex(PL3, 4, '15 שניות', '2 דקות')])],
     }),
-    tier(pl, 4, 'locked', 'Advanced Tuck Planche (12 שניות, גב ישר) + Tuck Planche Push-ups (3×5)', {
-      prereq: 'Tuck Planche 15 שנ\' + מקבילים 40 ק"ג × 3',
-      measures: [
-        hold('Advanced Tuck Planche', 'Advanced Tuck Planche', 4, 12),
-        setsReps('Tuck Planche Push-ups', 'Tuck Planche Push-ups', 3, 2, 5),
-      ],
-      slots: [
-        slot('push', 'horizontal_secondary_slot', 'Tuck Planche Hold', [
-          ex('Advanced Tuck Planche Hold (גב ישר)', 4, '6-12 שניות', '2-3 דקות'),
-          ex('Tuck Planche Push-ups', 3, '3-5', '2-3 דקות'),
-        ]),
-      ],
+    tier(pl, 4, 'locked', 'Advanced Tuck Planche & Push-ups (3×5)', {
+      prereq: "Tuck Planche 4×15 שנ'",
+      measures: [setsReps('Advanced Tuck Planche Push-ups', 'Advanced Tuck Planche', 3, 2, 5)],
+      slots: [slot('push', 'horizontal_secondary_slot', chain(PL3, PSEUDO), [ex(PL4, 3, '5', '2-3 דקות')])],
     }),
-    tier(pl, 5, 'locked', 'Straddle Planche -> Full Planche Hold', {
-      prereq: 'Advanced Tuck Planche 12 שנ\' + Tuck Planche Push-ups 3×5',
-      measures: [hold('Straddle / Full Planche Hold', 'Straddle Planche|Full Planche', 3, 10)],
+    tier(pl, 5, 'locked', 'Straddle / Full Planche (3×10 שניות)', {
+      prereq: 'Advanced Tuck Planche & Push-ups 3×5',
+      measures: [hold('Straddle / Full Planche Hold', PL5, 3, 10, { sets: 3 })],
       slots: [
-        slot('push', 'horizontal_secondary_slot', 'Advanced Tuck Planche|Tuck Planche Push-ups', [
-          ex('Straddle Planche Hold', 4, '5-10 שניות', '3 דקות'),
-          ex('Full Planche Lean / Negatives', 3, '3-5 שניות', '3 דקות'),
-        ]),
+        slot('push', 'horizontal_secondary_slot', chain('Advanced Tuck Planche', PL3, PSEUDO), [ex(PL5, 3, '5-10 שניות', '3 דקות')]),
       ],
     }),
 
-    // 6. Human Flag & Core Compression
+    // 6. Human Flag & Core — slot: אימון 1, Toes To Bar.
     tier(cf, 1, 'mastered', 'הרמות פייק (2×10) + החזקת הולו (60 שניות) + L-Sit ברכיים'),
-    tier(cf, 2, 'queued', 'Full L-Sit על מקבילים/רצפה (3×20 שניות) + Hanging Windshield Wipers (3×8)', {
-      prereq: 'הרמות פייק 2×10 + הולו 60 שנ\' + L-Sit ברכיים',
+    tier(cf, 2, 'queued', 'Full L-Sit (3×20 שניות) + Hanging Windshield Wipers (3×8)', {
+      prereq: "הרמות פייק 2×10 + הולו 60 שנ' + L-Sit ברכיים",
       measures: [
-        hold('Full L-Sit', 'L-Sit', 8, 20, { sets: 3 }),
+        hold('Full L-Sit', 'L-Sit', 8, 20, { sets: 3, source: 'manual_benchmark' }),
         setsReps('Hanging Windshield Wipers', 'Windshield Wipers', 3, 4, 8),
       ],
       slots: [
-        slot('combo', 'accessory_core_slot', '', [
-          ex('Full L-Sit (מקבילים / רצפה)', 3, '10-20 שניות', '90 שניות'),
-          ex('Hanging Windshield Wipers', 3, '6-8', '90 שניות'),
+        slot('pull', 'accessory_core_slot', TTB, [
+          ex(CF2, 3, "L-Sit 20 שנ' + 8 מגבים", '90 שניות', 'סופרסט: L-Sit ומיד אחריו Windshield Wipers.'),
         ]),
       ],
     }),
-    tier(cf, 3, 'locked', 'Dragon Flag מלא ונקי (3×6) + L-Sit to Tuck V-Sit', {
-      prereq: 'L-Sit 3×20 שנ\' + Windshield Wipers 3×8',
-      measures: [setsReps('Dragon Flag מלא', 'Dragon Flag', 3, 3, 6)],
-      slots: [
-        slot('combo', 'accessory_core_slot', 'Windshield Wipers|L-Sit', [
-          ex('Dragon Flag מלא', 3, '4-6', '2 דקות'),
-          ex('L-Sit to Tuck V-Sit', 3, '5-10 שניות', '90 שניות'),
-        ]),
-      ],
+    tier(cf, 3, 'locked', 'Dragon Flag מלא ונקי (3×6)', {
+      prereq: "L-Sit 3×20 שנ' + Windshield Wipers 3×8",
+      measures: [setsReps('Dragon Flag מלא', CF3, 3, 3, 6)],
+      slots: [slot('pull', 'accessory_core_slot', chain('Windshield Wipers', TTB), [ex(CF3, 3, '6', '2 דקות')])],
     }),
-    tier(cf, 4, 'locked', 'Tuck / Straddle Human Flag (דגל אנושי בפישוק - 10 שניות לכל צד)', {
+    tier(cf, 4, 'locked', 'Tuck / Straddle Human Flag (10 שניות לכל צד)', {
       prereq: 'Dragon Flag 3×6',
-      measures: [hold('Tuck / Straddle Human Flag — לכל צד', 'Human Flag|דגל אנושי', 3, 10)],
-      slots: [
-        slot('combo', 'accessory_core_slot', 'Dragon Flag', [ex('Tuck / Straddle Human Flag', 4, '5-10 שניות לכל צד', '2-3 דקות')]),
-      ],
+      measures: [hold('Tuck / Straddle Human Flag — לכל צד', 'Straddle Human Flag', 3, 10)],
+      slots: [slot('pull', 'accessory_core_slot', chain(CF3, 'Windshield Wipers', TTB), [ex(CF4, 3, '10 שניות לכל צד', '2-3 דקות')])],
     }),
-    tier(cf, 5, 'locked', 'Full Human Flag (דגל אנושי מלא וישר) & 45° V-Sit', {
-      prereq: 'Straddle Flag 10 שנ\' לכל צד',
-      measures: [
-        hold('Full Human Flag', 'Full Human Flag', 3, 10),
-        hold('45° V-Sit', 'V-Sit', 3, 10),
-      ],
+    tier(cf, 5, 'locked', 'Full Human Flag (דגל אנושי מלא וישר)', {
+      prereq: "Straddle Flag 10 שנ' לכל צד",
+      measures: [hold('Full Human Flag', CF5, 3, 10)],
       slots: [
-        slot('combo', 'accessory_core_slot', 'Human Flag|V-Sit', [
-          ex('Full Human Flag', 4, '3-10 שניות לכל צד', '3 דקות'),
-          ex('45° V-Sit', 3, '5-10 שניות', '2 דקות'),
+        slot('pull', 'accessory_core_slot', chain('Straddle Human Flag', CF3, 'Windshield Wipers', TTB), [
+          ex(CF5, 3, '5-10 שניות לכל צד', '3 דקות'),
         ]),
       ],
     }),
 
-    // 7. Single-Leg & Pistol
-    tier(ps, 1, 'mastered', 'וול-סיט רגל אחת (12 שניות) + ג\'אמפ סקוואט עם משקל'),
-    tier(ps, 2, 'active', 'סקוואט בולגרי כבד (14 ק"ג בכל יד × 8 חזרות לרגל) + Single-Leg RDL (16 ק"ג × 8)', {
-      prereq: 'וול-סיט רגל אחת 12 שנ\'',
+    // 7. Single-Leg & Pistol — slots: אימון 2, Bulgarian + Single-Leg RDL.
+    tier(ps, 1, 'mastered', "וול-סיט רגל אחת (12 שניות) + ג'אמפ סקוואט עם משקל"),
+    tier(ps, 2, 'queued', 'סקוואט בולגרי כבד (14 ק"ג בכל יד × 8 חזרות לרגל) + Single-Leg RDL (16 ק"ג × 8)', {
+      prereq: "וול-סיט רגל אחת 12 שנ'",
       measures: [
         weighted('סקוואט בולגרי — ק"ג בכל יד', BULGARIAN, [8, 8], [14, 8]),
         weighted('Single-Leg RDL', SL_RDL, [12, 8], [16, 8]),
       ],
-      slots: [
-        slot('push', 'primary_strength_slot', BULGARIAN, [ex('סקוואט בולגרי עם משקולות יד', 3, '6-8 לכל רגל', '2 דקות')]),
-      ],
+      slots: [slot('push', 'primary_strength_slot', BULGARIAN, [ex('סקוואט בולגרי עם משקולות יד', 3, '6-8 לכל רגל', '2 דקות')])],
     }),
-    tier(ps, 3, 'locked', 'Box Pistol Squat נשלט -> Freestanding Pistol Squat (3×5 לכל רגל)', {
+    tier(ps, 3, 'locked', 'Freestanding Pistol Squat (3×5 לכל רגל)', {
       prereq: 'בולגרי 14 ק"ג × 8 + SL RDL 16 ק"ג × 8',
-      measures: [setsReps('Pistol Squat — לכל רגל', 'Pistol', 3, 2, 5)],
-      slots: [
-        slot('push', 'primary_strength_slot', BULGARIAN, [ex('Pistol Squat (Box → חופשי)', 3, '3-5 לכל רגל', '2 דקות')]),
-      ],
+      measures: [setsReps('Pistol Squat — לכל רגל', PS3, 3, 2, 5)],
+      slots: [slot('push', 'primary_strength_slot', BULGARIAN, [ex(PS3, 3, '5 לכל רגל', '2 דקות')])],
     }),
-    tier(ps, 4, 'locked', 'Weighted Pistol Squat (+10-16 ק"ג ל-5 חזרות) + Nordic Hamstring Curl (אקסצנטרי)', {
+    tier(ps, 4, 'locked', 'Weighted Pistol Squat (+10 ק"ג × 5) + Nordic Hamstring Curl (אקסצנטרי)', {
       prereq: 'Pistol חופשי 3×5 לכל רגל',
       measures: [
-        weighted('Weighted Pistol Squat', 'Weighted Pistol', [4, 5], [10, 5]),
-        setsReps('Nordic Curl אקסצנטרי', 'Nordic', 3, 3, 5),
+        weighted('Weighted Pistol Squat', PS4, [4, 5], [10, 5]),
+        setsReps('Nordic Curl אקסצנטרי', 'Nordic Hamstring', 3, 3, 5),
       ],
       slots: [
-        slot('push', 'primary_strength_slot', 'Pistol', [ex('Weighted Pistol Squat', 3, '5 לכל רגל', '2-3 דקות')]),
-        slot('push', 'accessory_core_slot', SL_RDL, [ex('Nordic Hamstring Curl (אקסצנטרי)', 3, '3-5', '2 דקות')]),
+        slot('push', 'primary_strength_slot', chain(PS3, BULGARIAN), [ex(PS4, 3, '5 לכל רגל', '2-3 דקות')]),
+        slot('push', 'accessory_core_slot', SL_RDL, [ex(PS4B, 3, '3-5', '2 דקות')]),
       ],
     }),
-    tier(ps, 5, 'locked', 'Full Nordic Curl ללא ידיים (3×5) + Advanced Shrimp Squat', {
+    tier(ps, 5, 'locked', 'Advanced Shrimp Squat + Full Nordic Curl ללא ידיים (3×5)', {
       prereq: 'Weighted Pistol +10 ק"ג × 5 + Nordic אקסצנטרי 3×5',
       measures: [
+        setsReps('Advanced Shrimp Squat', PS5, 3, 2, 5),
         setsReps('Full Nordic Curl', 'Full Nordic', 3, 2, 5),
-        setsReps('Advanced Shrimp Squat', 'Shrimp Squat', 3, 2, 5),
       ],
       slots: [
-        slot('push', 'accessory_core_slot', 'Nordic', [ex('Full Nordic Curl (ללא ידיים)', 3, '3-5', '2-3 דקות')]),
-        slot('push', 'primary_strength_slot', 'Weighted Pistol|Pistol', [ex('Advanced Shrimp Squat', 3, '3-5 לכל רגל', '2 דקות')]),
+        slot('push', 'primary_strength_slot', chain(PS4, PS3, BULGARIAN), [ex(PS5, 3, '5 לכל רגל', '2 דקות')]),
+        slot('push', 'accessory_core_slot', chain('Nordic Hamstring', SL_RDL), [ex(PS5B, 3, '5', '2-3 דקות')]),
       ],
     }),
 
-    // 8. Splits & Mobility
+    // 8. Splits & Mobility — one 6-minute finisher at the end of אימון 2, swapped per tier.
     tier(sp, 1, 'mastered', 'ישיבת סקוואט עמוקה (90 שניות כל בוקר) + סיבובי גב עליון'),
     tier(sp, 2, 'queued', 'בסיס לשפגאט: Couch Stretch + PNF Hamstring Stretch + Frog Stretch (ירידה ל-15 ס"מ מהרצפה)', {
-      prereq: 'ישיבת סקוואט עמוקה 90 שנ\' כל בוקר',
-      note: 'פינישר של 6 דקות בסוף אימון דחיפה ורגליים כשהשרירים חמים — בלי אימון נפרד.',
+      prereq: "ישיבת סקוואט עמוקה 90 שנ' כל בוקר",
+      note: 'סיומת של 6 דקות בסוף אימון דחיפה ורגליים כשהשרירים חמים — בלי אימון נפרד.',
       measures: [gap('Frog Stretch — מרחק מהרצפה', 'Frog Stretch', 30, 15)],
       slots: [
-        slot('push', 'mobility_finisher_slot', '', [
-          ex('Couch Stretch + PNF Hamstring Stretch (סופרסט)', 2, '60 שניות לכל רגל', '—', 'PNF: 10 שניות כיווץ, שחרור והעמקה.'),
-          ex('Frog Stretch', 2, '60 שניות', '—'),
-        ]),
+        finisher('Couch + PNF + Frog', 'Couch Stretch 60 שנ׳ לכל רגל · PNF Hamstring (10 שנ׳ כיווץ, שחרור והעמקה) · Frog Stretch 60 שנ׳.'),
       ],
     }),
-    tier(sp, 3, 'locked', 'Loaded Butterfly & Pancake Stretch (חזה נוגע ברצפה בישיבת פישוק) + Front Split (5 ס"מ מהרצפה)', {
+    tier(sp, 3, 'locked', 'Loaded Butterfly & Pancake Stretch + Front Split (5 ס"מ מהרצפה)', {
       prereq: 'Frog Stretch 15 ס"מ מהרצפה',
       measures: [gap('Front Split — מרחק מהרצפה', 'Front Split', 20, 5)],
       slots: [
-        slot('push', 'mobility_finisher_slot', 'Couch Stretch|Frog Stretch', [
-          ex('Loaded Butterfly + Pancake Stretch', 2, '60 שניות', '—'),
-          ex('Front Split מתקדם (עם בלוקים)', 2, '60 שניות לכל רגל', '—'),
-        ]),
+        finisher('Butterfly + Pancake + Front Split', 'Loaded Butterfly 60 שנ׳ · Pancake 60 שנ׳ · Front Split עם בלוקים 60 שנ׳ לכל רגל.'),
       ],
     }),
-    tier(sp, 4, 'locked', 'Full Front Split (שפגאט קדמי מלא על הרצפה בשתי הרגליים - 30 שניות)', {
+    tier(sp, 4, 'locked', 'Full Front Split (שפגאט קדמי מלא בשתי הרגליים - 30 שניות)', {
       prereq: 'Front Split 5 ס"מ מהרצפה',
       measures: [hold('Full Front Split — לכל רגל', 'Full Front Split', 0, 30, { source: 'manual_benchmark' })],
-      slots: [
-        slot('push', 'mobility_finisher_slot', 'Front Split|Butterfly|Pancake', [
-          ex('Full Front Split', 2, '30 שניות לכל רגל', '—'),
-          ex('Pancake Stretch', 1, '60 שניות', '—'),
-        ]),
-      ],
+      slots: [finisher('Full Front Split', 'Full Front Split 2×30 שנ׳ לכל רגל · Pancake 60 שנ׳.')],
     }),
-    tier(sp, 5, 'locked', 'Full Middle Split (שפגאט אמצעי/בנים מלא - 30 שניות)', {
-      prereq: 'Full Front Split 30 שנ\' בשתי הרגליים',
+    tier(sp, 5, 'locked', 'Full Middle Split (שפגאט אמצעי מלא - 30 שניות)', {
+      prereq: "Full Front Split 30 שנ' בשתי הרגליים",
       measures: [hold('Full Middle Split', 'Middle Split', 0, 30, { source: 'manual_benchmark' })],
-      slots: [
-        slot('push', 'mobility_finisher_slot', 'Full Front Split|Pancake', [
-          ex('Middle Split (שפגאט בנים)', 2, '30-60 שניות', '—'),
-          ex('Full Front Split', 1, '30 שניות לכל רגל', '—'),
-        ]),
-      ],
+      slots: [finisher('Middle Split', 'Middle Split 2×30-60 שנ׳ · Full Front Split 30 שנ׳ לכל רגל.')],
     }),
   ]
 }
