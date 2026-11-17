@@ -22,6 +22,7 @@ import {
   formatSkillValue,
   percent,
   SKILL_TIER_LABELS,
+  trackCategory,
   type BranchEvaluation,
   type MeasureEvaluation,
   type NodeEvaluation,
@@ -510,6 +511,7 @@ export function SkillBranchCard({
   const queued = focus === 'queued'
   const currentTier = activeNode ?? nextNode
 
+  const category = trackCategory(branch.id)
   return (
     <section
       className={[
@@ -548,6 +550,19 @@ export function SkillBranchCard({
               <Pencil className="size-4" strokeWidth={1.75} />
             </button>
           </div>
+          {category ? (
+            <span
+              className={[
+                'mt-1 inline-flex max-w-full items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ring-1 ring-inset',
+                category.kind === 'pull'
+                  ? 'bg-cyan-50 text-indigo-700 ring-indigo-200'
+                  : 'bg-orange-50 text-orange-800 ring-orange-200',
+              ].join(' ')}
+            >
+              <span aria-hidden>{category.kind === 'pull' ? '⬇' : '⬆'}</span>
+              <span className="truncate">{category.badge}</span>
+            </span>
+          ) : null}
           {branch.subtitle ? (
             <p className="mt-0.5 text-xs leading-snug text-muted">{branch.subtitle}</p>
           ) : null}

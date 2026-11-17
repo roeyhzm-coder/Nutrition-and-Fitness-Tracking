@@ -80,6 +80,7 @@ export function SkillTierModal({
   evaluation,
   branch,
   focusCount,
+  focusRival,
   onClose,
   onModeChange,
   onEdit,
@@ -92,6 +93,8 @@ export function SkillTierModal({
   evaluation: NodeEvaluation | null
   branch: BranchEvaluation | null
   focusCount: number
+  /** Focused track of the same category that moves to the queue on activation. */
+  focusRival: string | null
   onClose: () => void
   onModeChange: (mode: TierModalMode) => void
   onEdit: () => void
@@ -116,7 +119,7 @@ export function SkillTierModal({
   const isActive = status === 'active'
   const otherActive = branch.activeNode && branch.activeNode.node.id !== node.id ? branch.activeNode : null
   const branchInFocus = branch.focus === 'active'
-  const overLimit = !branchInFocus && focusCount >= SKILL_FOCUS_LIMIT
+  const overLimit = !branchInFocus && !focusRival && focusCount >= SKILL_FOCUS_LIMIT
   const writable = previews.some((p) => !p.missingTarget && !p.alreadyApplied)
   const lowerOpen = branch.nodes.filter(
     (n) => n.node.order < node.order && n.status !== 'mastered' && n.node.id !== otherActive?.node.id,
@@ -222,6 +225,12 @@ export function SkillTierModal({
           </>
         ) : (
           <>
+            {!branchInFocus && focusRival ? (
+              <p className="rounded-xl bg-blue-50 p-2.5 text-xs text-blue-900 ring-1 ring-blue-100">
+                <span className="font-bold">החלפת פוקוס: </span>
+                {focusRival} יעבור לבתור (1 מסלול משיכה + 1 מסלול דחיפה בפוקוס).
+              </p>
+            ) : null}
             {overLimit ? (
               <div className="flex items-start gap-2 rounded-xl bg-amber-50 p-2.5 text-xs text-amber-900 ring-1 ring-amber-200">
                 <AlertTriangle className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
@@ -229,7 +238,7 @@ export function SkillTierModal({
                   <span className="font-bold">
                     פוקוס פעיל: {focusCount + 1}/{SKILL_FOCUS_LIMIT} מסלולים.{' '}
                   </span>
-                  מעל 4 מסלולים בפוקוס במקביל עלול ליצור עומס יתר והתאוששות חלקית. מומלץ להעביר מסלול אחר לבתור.
+                  מומלץ 2 מסלולים בלבד (1 משיכה + 1 דחיפה) כדי למנוע עומס יתר. מומלץ להעביר מסלול אחר לבתור.
                 </p>
               </div>
             ) : null}

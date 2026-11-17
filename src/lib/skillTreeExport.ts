@@ -5,6 +5,7 @@ import {
   formatSkillValue,
   percent,
   SKILL_FOCUS_LIMIT,
+  trackCategory,
   SKILL_SLOT_ROLE_LABELS,
   SKILL_TIER_LABELS,
   type BranchEvaluation,
@@ -45,7 +46,7 @@ function slotLines(node: NodeEvaluation, sources: SkillDataSources): string[] {
 function branchBlock(e: BranchEvaluation, sources: SkillDataSources): string {
   const mastered = e.nodes.filter((n) => n.status === 'mastered')
   const lines = [
-    `### ${e.branch.title} (${e.branch.subtitle}) — ${FOCUS_TEXT[e.focus]} | ${e.masteredCount}/${e.tierCount} שלבים נשלטו | ${percent(e.progress)}%`,
+    `### ${e.branch.title} (${e.branch.subtitle})${trackCategory(e.branch.id) ? ` [${trackCategory(e.branch.id)!.badge}]` : ''} — ${FOCUS_TEXT[e.focus]} | ${e.masteredCount}/${e.tierCount} שלבים נשלטו | ${percent(e.progress)}%`,
     mastered.length
       ? `  - נשלטו ✓: ${mastered.map((n) => `שלב ${n.node.order} ${n.node.title}`).join(' | ')}`
       : '',
@@ -90,7 +91,7 @@ export function formatSkillTreeSection(
   return [
     `=== עץ מיומנויות ואבני דרך (${state.blockLabel}) ===`,
     `- ${week.label} | התחלה: ${state.blockStartDate} | ${state.blockWeeks} שבועות | דילואד: ${state.deloadWeeks.join(', ') || '—'} | מבחנים: שבוע ${state.benchmarkWeek}`,
-    `- פוקוס פעיל: ${focus.length}/${SKILL_FOCUS_LIMIT} מסלולים (${focus.map((e) => e.branch.title).join(', ') || '—'})${focus.length > SKILL_FOCUS_LIMIT ? ' ⚠️ מעל המומלץ' : ''}`,
+    `- פוקוס פעיל: ${focus.length}/${SKILL_FOCUS_LIMIT} מסלולים (${focus.map((e) => `${e.branch.title} [${trackCategory(e.branch.id)?.kind === 'pull' ? 'משיכה' : trackCategory(e.branch.id)?.kind === 'push' ? 'דחיפה' : 'מותאם'}]`).join(', ') || '—'}) · מומלץ 1 משיכה + 1 דחיפה${focus.length > SKILL_FOCUS_LIMIT ? ' ⚠️ מעל המומלץ' : ''}`,
     queued.length ? `- בתור: ${queued.map((e) => e.branch.title).join(', ')}` : '',
     closest.length ? `- הכי קרובים לפתיחת השלב הבא: ${closest.join(' | ')}` : '',
     `- סטטוסים: ${Object.values(SKILL_TIER_LABELS).join(' / ')}. התקדמות = הביצוע הטוב ביותר מאז תחילת הבלוק (יומן / עדכון ידני), לא פחות מהבסיס; משקל × חזרות לפי 1RM משוער (Epley).`,

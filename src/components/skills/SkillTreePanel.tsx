@@ -25,6 +25,8 @@ import {
   setBlockSettings,
   setMeasureManual,
   SKILL_FOCUS_LIMIT,
+  soloFocusInCategory,
+  trackCategory,
   upsertBranch,
   upsertNode,
   type BranchEvaluation,
@@ -36,9 +38,10 @@ import { SkillBlockSettingsModal, SkillBranchModal, SkillNodeModal } from './Ski
 import { SkillTierModal, type TierModalMode } from './SkillTierModal'
 import { useLinkableExerciseNames, useSkillTreeEvaluation } from './useSkillTree'
 
-type Filter = 'all' | 'active' | 'queued' | 'completed'
+type Filter = 'all' | 'active' | 'pull' | 'push' | 'queued' | 'completed'
 
 function matchesFilter(e: BranchEvaluation, filter: Filter) {
+  if (filter === 'pull' || filter === 'push') return trackCategory(e.branch.id)?.kind === filter
   return filter === 'all' || e.focus === filter
 }
 
@@ -85,16 +88,19 @@ function BlockWeeksStrip({
   )
 }
 
-function FocusMeter({ count }: { count: number }) {
+function FocusMeter({ count, pull, push }: { count: number; pull: number; push: number }) {
   const over = count > SKILL_FOCUS_LIMIT
+  const unbalanced = pull > 1 || push > 1
   return (
     <div className="rounded-2xl bg-white/10 p-2.5 ring-1 ring-inset ring-white/20">
       <div className="flex items-center justify-between gap-2 text-xs">
         <p className="font-bold">
-          פוקוס פעיל: {count}/{SKILL_FOCUS_LIMIT}{' '}
-          <span className="font-medium text-blue-100">מסלולים מומלצים למניעת עומס יתר</span>
+          פוקוס פעיל: {count}/{SKILL_FOCUS_LIMIT} מסלולים{' '}
+          <span className="font-medium text-blue-100">
+            ({pull} משיכה · {push} דחיפה)
+          </span>
         </p>
-        {over ? <AlertTriangle className="size-4 shrink-0 text-amber-300" strokeWidth={2.25} /> : null}
+        {over || unbalanced ? <AlertTriangle className="size-4 shrink-0 text-amber-300" strokeWidth={2.25} /> : null}
       </div>
       <div className="mt-1.5 flex gap-1" aria-hidden>
         {Array.from({ length: Math.max(SKILL_FOCUS_LIMIT, count) }, (_, i) => (
@@ -107,11 +113,15 @@ function FocusMeter({ count }: { count: number }) {
           />
         ))}
       </div>
-      {over ? (
+      {over || unbalanced ? (
         <p className="mt-1.5 text-[11px] font-semibold text-amber-200">
-          יותר מ-4 מסלולים בפוקוס — שקול להעביר מסלול לבתור כדי לשמור על התאוששות.
+          מומלץ 2 מסלולים בלבד: 1 משיכה + 1 דחיפה — העבר מסלול לבתור כדי לשמור על התאוששות.
         </p>
-      ) : null}
+      ) : (
+        <p className="mt-1.5 text-[11px] text-blue-100/90">
+          מומלץ: 1 מסלול משיכה + 1 מסלול דחיפה. העברת מסלול לפוקוס מחליפה אוטומטית את המסלול מאותה קטגוריה.
+        </p>
+      )}
     </div>
   )
 }
@@ -187,6 +197,10 @@ export function SkillTreePanel() {
       active: evaluations.filter((e) => e.focus === 'active').length,
       queued: evaluations.filter((e) => e.focus === 'queued').length,
       completed: evaluations.filter((e) => e.focus === 'completed').length,
+      pull: evaluations.filter((e) => trackCategory(e.branch.id)?.kind === 'pull').length,
+      push: evaluations.filter((e) => trackCategory(e.branch.id)?.kind === 'push').length,
+      activePull: evaluations.filter((e) => e.focus === 'active' && trackCategory(e.branch.id)?.kind === 'pull').length,
+      activePush: evaluations.filter((e) => e.focus === 'active' && trackCategory(e.branch.id)?.kind === 'push').length,
     }),
     [evaluations],
   )
@@ -228,17 +242,39 @@ export function SkillTreePanel() {
       .join(' · ')}.`
   }
 
+  /** Same-category track already in focus (it moves to the queue when `branchId` joins). */
+  function focusRival(branchId: string): BranchEvaluation | null {
+    const kind = trackCategory(branchId)?.kind
+    if (!kind || skillTree.branches[branchId]?.status === 'active_focus') return null
+    return (
+      evaluations.find(
+        (e) => e.branch.id !== branchId && e.focus === 'active' && trackCategory(e.branch.id)?.kind === kind,
+      ) ?? null
+    )
+  }
+
+  /** Activate a tier; a track joining focus swaps out the focused track of its category. */
+  function activateWithFocus(nodeId: string, slotsApplied: boolean): string | null {
+    const node = skillTree.nodes[nodeId]
+    if (!node) return null
+    const rival = focusRival(node.branchId)
+    updateSkillTree((prev) => soloFocusInCategory(activateTier(prev, nodeId, { slotsApplied }), node.branchId))
+    return rival ? `${rival.branch.title} עבר לבתור.` : null
+  }
+
   function confirmTier(apply: boolean) {
     if (!tierModal) return
     const node = skillTree.nodes[tierModal.nodeId]
     if (!node) return
     const message = apply ? writeSlots(node) : null
-    if (message) showToast(message)
+    let swapped: string | null = null
     if (node.tierStatus === 'active') {
       updateSkillTree((prev) => markSlotsApplied(prev, node.id))
     } else {
-      updateSkillTree((prev) => activateTier(prev, node.id, { slotsApplied: apply }))
+      swapped = activateWithFocus(node.id, apply)
     }
+    const text = [message, swapped].filter(Boolean).join(' ')
+    if (text) showToast(text)
     setTierModal(null)
   }
 
@@ -273,15 +309,17 @@ export function SkillTreePanel() {
       setTierModal({ nodeId: target.node.id, mode: 'confirm' })
       return
     }
-    updateSkillTree((prev) =>
-      activateTier(prev, target.node.id, {
-        slotsApplied: previews.length > 0 && previews.every((p) => p.alreadyApplied),
-      }),
+    const swapped = activateWithFocus(
+      target.node.id,
+      previews.length > 0 && previews.every((p) => p.alreadyApplied),
     )
+    showToast(`${e.branch.title} בפוקוס פעיל 🎯${swapped ? ` · ${swapped}` : ''}`)
   }
 
   const filters: { id: Filter; label: string }[] = [
     { id: 'active', label: 'בפוקוס פעיל' },
+    { id: 'pull', label: 'משיכה' },
+    { id: 'push', label: 'דחיפה / רגליים' },
     { id: 'all', label: 'הכל' },
     { id: 'queued', label: 'בתור' },
     { id: 'completed', label: 'נשלטו' },
@@ -315,7 +353,7 @@ export function SkillTreePanel() {
             </button>
           </div>
         </div>
-        <FocusMeter count={counts.active} />
+        <FocusMeter count={counts.active} pull={counts.activePull} push={counts.activePush} />
         <div>
           <BlockWeeksStrip
             week={week.started ? week.week : 0}
@@ -417,6 +455,7 @@ export function SkillTreePanel() {
         evaluation={modalNode}
         branch={modalBranch}
         focusCount={counts.active}
+        focusRival={modalBranch ? (focusRival(modalBranch.branch.id)?.branch.title ?? null) : null}
         onClose={() => setTierModal(null)}
         onModeChange={(mode) => {
           if (tierModal) setTierModal({ ...tierModal, mode })

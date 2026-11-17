@@ -17,7 +17,10 @@ import { dayAllExercises, localDateKey, parseLocalDateKey, uid, WEEKDAY_SHORT } 
 import {
   LEGACY_SEED_IDS,
   SKILL_SEED_MIGRATED_AT,
-  SKILL_SEED_V2_AT,
+  SKILL_SEED_REV,
+  SKILL_SEED_V3_AT,
+  SKILL_TRACK_CATEGORY,
+  type SkillTrackCategory,
   seedSkillBranches,
   seedSkillNodes,
 } from './skillTreeSeed'
@@ -131,6 +134,8 @@ export type SkillNode = {
   slotsAppliedAt: string | null
   progressions: SkillProgression[]
   updatedAt: string
+  /** Seed revision (seed entities only); see SKILL_SEED_REV. */
+  seedRev?: number
   deleted?: boolean
 }
 
@@ -143,6 +148,7 @@ export type SkillBranch = {
   order: number
   nextUnlockTitle: string
   updatedAt: string
+  seedRev?: number
   deleted?: boolean
 }
 
@@ -190,8 +196,17 @@ export const SKILL_SLOT_ROLE_LABELS: Record<SkillSlotRole, string> = {
   mobility_finisher_slot: 'פינישר גמישות (6 דקות בסוף האימון)',
 }
 
-/** Recommended maximum of tracks in active focus at once. */
-export const SKILL_FOCUS_LIMIT = 4
+/** Recommended maximum of tracks in active focus at once: 1 pull + 1 push. */
+export const SKILL_FOCUS_LIMIT = 2
+
+export type { SkillTrackCategory }
+export function trackCategory(branchId: string): { kind: SkillTrackCategory; badge: string } | null {
+  return SKILL_TRACK_CATEGORY[branchId] ?? null
+}
+export const SKILL_CATEGORY_LABELS: Record<SkillTrackCategory, string> = {
+  pull: "משיכה · ימים א', ג', ו'",
+  push: "דחיפה ורגליים · ימים ב', ד'",
+}
 
 export const SKILL_SOURCE_LABELS: Record<SkillSourceType, string> = {
   workout_exercise: 'תרגיל מהאימונים',
@@ -405,6 +420,7 @@ function normalizeNode(raw: unknown, key: string, seed?: SkillNode): SkillNode |
     slotsAppliedAt: typeof o.slotsAppliedAt === 'string' ? iso(o.slotsAppliedAt) : null,
     progressions,
     updatedAt: iso(o.updatedAt),
+    ...(num(o.seedRev) != null ? { seedRev: num(o.seedRev) as number } : {}),
     ...(o.deleted === true ? { deleted: true } : {}),
   }
 }
@@ -422,6 +438,7 @@ function normalizeBranch(raw: unknown, key: string, seed?: SkillBranch): SkillBr
     order: num(o.order) ?? 0,
     nextUnlockTitle: str(o.nextUnlockTitle, 300),
     updatedAt: iso(o.updatedAt),
+    ...(num(o.seedRev) != null ? { seedRev: num(o.seedRev) as number } : {}),
     ...(o.deleted === true ? { deleted: true } : {}),
   }
 }
@@ -453,17 +470,23 @@ export function normalizeSkillTree(raw: unknown, today = localDateKey()): SkillT
     const n = nodes[id]
     if (n && !n.deleted) nodes[id] = { ...n, deleted: true, updatedAt: tombstone(n.updatedAt) }
   }
-  // Seed v2: reset seed tracks / tiers written before v2 (deterministic on every
-  // device, so last-write-wins sync converges). Manual values are kept.
+  // Seed revision: reset every seed track / tier that lacks the current
+  // revision (an older bundle wrote it). Deterministic on every device, and the
+  // reset copy is stamped 1 ms newer so it wins last-write-wins sync. Manual
+  // values and progression history are kept.
+  const resetAt = (at: string) => {
+    const bumped = new Date(Date.parse(at) + 1).toISOString()
+    return bumped > SKILL_SEED_V3_AT ? bumped : SKILL_SEED_V3_AT
+  }
   for (const seed of Object.values(base.branches)) {
     const b = branches[seed.id]
-    if (b && !b.deleted && b.updatedAt < SKILL_SEED_V2_AT) {
-      branches[seed.id] = { ...seed, updatedAt: SKILL_SEED_V2_AT }
+    if (b && !b.deleted && (b.seedRev ?? 0) < SKILL_SEED_REV) {
+      branches[seed.id] = { ...seed, updatedAt: resetAt(b.updatedAt) }
     }
   }
   for (const seed of Object.values(base.nodes)) {
     const n = nodes[seed.id]
-    if (!n || n.deleted || n.updatedAt >= SKILL_SEED_V2_AT) continue
+    if (!n || n.deleted || (n.seedRev ?? 0) >= SKILL_SEED_REV) continue
     const manual = new Map(n.measures.map((m) => [m.id, m]))
     nodes[seed.id] = {
       ...seed,
@@ -472,7 +495,7 @@ export function normalizeSkillTree(raw: unknown, today = localDateKey()): SkillT
         return old?.manual && old.label === m.label ? { ...m, manual: old.manual } : m
       }),
       progressions: n.progressions,
-      updatedAt: SKILL_SEED_V2_AT,
+      updatedAt: resetAt(n.updatedAt),
     }
   }
   return {
@@ -729,6 +752,22 @@ export function queueBranch(state: SkillTreeState, branchId: string): SkillTreeS
     nodes,
     branches: { ...state.branches, [branchId]: { ...branch, status: 'queued_next_block', updatedAt: at } },
   }
+}
+
+/**
+ * Keep 1 pull + 1 push in focus: when `branchId` (re)joins active focus, any
+ * other focused track of the same category moves to the queue.
+ */
+export function soloFocusInCategory(state: SkillTreeState, branchId: string): SkillTreeState {
+  const kind = trackCategory(branchId)?.kind
+  if (!kind) return state
+  let next = state
+  for (const b of liveBranches(state)) {
+    if (b.id !== branchId && b.status === 'active_focus' && trackCategory(b.id)?.kind === kind) {
+      next = queueBranch(next, b.id)
+    }
+  }
+  return next
 }
 
 export function markSlotsApplied(state: SkillTreeState, nodeId: string): SkillTreeState {

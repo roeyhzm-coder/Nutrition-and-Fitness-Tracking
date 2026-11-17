@@ -29,6 +29,27 @@ export const SKILL_SEED_MIGRATED_AT = '2026-11-17T00:00:00.000Z'
  * track / tier last written before this time is reset to the seed (manual values kept).
  */
 export const SKILL_SEED_V2_AT = '2026-11-17T10:30:00.000Z'
+/**
+ * Seed revision stamped on every seed track / tier. A seed entity without the
+ * current revision (written by an older bundle, which drops unknown fields) is
+ * reset to the seed on load — independent of its timestamp, so a stale client
+ * can never resurrect an old tier state again. Bump when the seed changes.
+ */
+export const SKILL_SEED_REV = 3
+export const SKILL_SEED_V3_AT = '2026-11-17T12:00:00.000Z'
+
+export type SkillTrackCategory = 'pull' | 'push'
+/** Training-day category of each seed track (badge on the card + 1 pull / 1 push focus). */
+export const SKILL_TRACK_CATEGORY: Readonly<Record<string, { kind: SkillTrackCategory; badge: string }>> = {
+  'sk-front-lever': { kind: 'pull', badge: "משיכה (ימים א', ג')" },
+  'sk-one-arm': { kind: 'pull', badge: "משיכה (ימים א', ג', ו')" },
+  'sk-muscle-up': { kind: 'pull', badge: "משיכה מתפרצת (ימים א', ג', ו')" },
+  'sk-core-flag': { kind: 'pull', badge: "משיכה וליבה (ימים א', ג')" },
+  'sk-handstand': { kind: 'push', badge: "דחיפה אנכית (ימים ב', ד' + בוקר B)" },
+  'sk-planche': { kind: 'push', badge: "דחיפה אופקית (ימים ב', ד')" },
+  'sk-pistol': { kind: 'push', badge: "רגליים (ימים ב', ד')" },
+  'sk-splits': { kind: 'push', badge: "גמישות - סוף אימון דחיפה/רגליים (ב', ד')" },
+}
 const LEGACY_BRANCHES = ['st-muscle-up', 'st-front-lever', 'st-hspu-planche', 'st-one-arm', 'st-physique']
 export const LEGACY_SEED_IDS: ReadonlySet<string> = new Set([
   ...LEGACY_BRANCHES,
@@ -129,6 +150,7 @@ function tier(
     slotsAppliedAt: tierStatus === 'active' && input.slots?.length ? IN_BLOCK_3 : null,
     progressions: [],
     updatedAt: EPOCH,
+    seedRev: SKILL_SEED_REV,
   }
 }
 
@@ -141,7 +163,7 @@ function track(
   status: SkillBranch['status'],
   nextUnlockTitle: string,
 ): SkillBranch {
-  return { id, order, icon, title, subtitle, status, nextUnlockTitle, updatedAt: EPOCH }
+  return { id, order, icon, title, subtitle, status, nextUnlockTitle, updatedAt: EPOCH, seedRev: SKILL_SEED_REV }
 }
 
 // Exercise-name aliases (`|`) used both for measures and for the swap targets.
@@ -193,9 +215,9 @@ const chain = (...aliases: string[]) => aliases.join('|')
 
 export function seedSkillBranches(): SkillBranch[] {
   return [
-    track('sk-muscle-up', 1, 'muscleUp', 'Muscle-Up & Explosive Bar Mastery', 'משיכה מתפרצת ומאסל-אפ', 'active_focus', 'Strict Bar Muscle-Up נקי ללא קיפ'),
+    track('sk-muscle-up', 1, 'muscleUp', 'Muscle-Up & Explosive Bar Mastery', 'משיכה מתפרצת ומאסל-אפ', 'queued_next_block', 'Strict Bar Muscle-Up נקי ללא קיפ'),
     track('sk-front-lever', 2, 'frontLever', 'Front Lever Mastery', 'פרונט לבר וכוח משיכה אופקי', 'active_focus', 'Advanced Tuck Front Lever Rows'),
-    track('sk-one-arm', 3, 'oneArm', 'One-Arm Chin-Up & Streetlifting Pull', 'מתח יד אחת ומשיכה מקסימלית', 'active_focus', 'Archer Pull-ups / Uneven Chin-ups'),
+    track('sk-one-arm', 3, 'oneArm', 'One-Arm Chin-Up & Streetlifting Pull', 'מתח יד אחת ומשיכה מקסימלית', 'queued_next_block', 'Archer Pull-ups / Uneven Chin-ups'),
     track('sk-handstand', 4, 'handstand', 'Handstand & Freestanding HSPU', 'עמידת ידיים ולחיצה אנכית', 'active_focus', 'Freestanding Handstand 15 שניות'),
     track('sk-planche', 5, 'flame', 'Planche & Heavy Push Mastery', 'פלאנש ודחיפה כבדה', 'queued_next_block', 'Tuck Planche Hold'),
     track('sk-core-flag', 6, 'flag', 'Human Flag & Elite Core Compression', 'דגל אנושי, V-Sit וליבה', 'queued_next_block', 'Full L-Sit + Windshield Wipers'),
@@ -223,7 +245,7 @@ export function seedSkillNodes(): SkillNode[] {
   return [
     // 1. Muscle-Up & Explosive Bar — slot: אימון 3 (יום ו׳), High Pull-ups.
     tier(mu, 1, 'mastered', 'מתח חזה רצוף (16 חזרות משקל גוף)'),
-    tier(mu, 2, 'active', 'High Pull-ups לבטן עליונה (3×4) + מתח חזה (18 חזרות / +5 ק"ג) + מקבילים כבד (30 ק"ג × 2)', {
+    tier(mu, 2, 'queued', 'High Pull-ups לבטן עליונה (3×4) + מתח חזה (18 חזרות / +5 ק"ג) + מקבילים כבד (30 ק"ג × 2)', {
       prereq: 'מתח חזה רצוף 16 חזרות',
       measures: [
         setsReps('High Pull-ups לגובה בטן עליונה', HIGH_PULL, 3, 3, 4),
@@ -287,7 +309,7 @@ export function seedSkillNodes(): SkillNode[] {
 
     // 3. One-Arm Chin-Up — tier 2/4/5 slot: אימון 1 hang; tier 3: אימון 3 weighted chin-ups.
     tier(oa, 1, 'mastered', 'מתח סופינציה +32.5 ק"ג × 2 חזרות'),
-    tier(oa, 2, 'active', "תלייה אקטיבית בשכמה ביד אחת (3×25 שנ') + מתח סופינציה כבד (40-42.5 ק\"ג × 2 / 30 ק\"ג × 6) + כפיפת מרפקים בשיפוע עם החזקה ב-90° (18 ק\"ג × 8)", {
+    tier(oa, 2, 'queued', "תלייה אקטיבית בשכמה ביד אחת (3×25 שנ') + מתח סופינציה כבד (40-42.5 ק\"ג × 2 / 30 ק\"ג × 6) + כפיפת מרפקים בשיפוע עם החזקה ב-90° (18 ק\"ג × 8)", {
       prereq: 'מתח סופינציה +32.5 ק"ג × 2',
       measures: [
         hold('תלייה ביד אחת — שניות לכל יד', OA_HANG, 15, 25, { sets: 3 }),
