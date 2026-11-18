@@ -3,20 +3,13 @@ import { AlertTriangle, ChevronDown, GitBranch, Info, Plus, Settings2 } from 'lu
 import { useAppData } from '../../context/AppDataContext'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import { useTodayKey } from '../../hooks/useTodayKey'
-import {
-  applyMorningSlots,
-  applyProgramSlots,
-  incomingLabel,
-  outgoingLabel,
-  planSlotSwap,
-} from '../../lib/skillSlotSwap'
+import { planSlotSwap } from '../../lib/skillSlotSwap'
 import {
   activateTier,
   blockWeekInfo,
   deleteBranch,
   deleteNode,
   markSlotsApplied,
-  masterTier,
   moveNode,
   newBranch,
   newNode,
@@ -36,7 +29,7 @@ import {
 import { SkillBranchCard } from './SkillBranchCard'
 import { SkillBlockSettingsModal, SkillBranchModal, SkillNodeModal } from './SkillEditModals'
 import { SkillTierModal, type TierModalMode } from './SkillTierModal'
-import { useLinkableExerciseNames, useSkillTreeEvaluation } from './useSkillTree'
+import { useLinkableExerciseNames, useSkillStageActions, useSkillTreeEvaluation } from './useSkillTree'
 
 type Filter = 'all' | 'active' | 'pull' | 'push' | 'queued' | 'completed'
 
@@ -157,11 +150,10 @@ export function SkillTreePanel() {
     skillTree,
     updateSkillTree,
     workoutDays,
-    setWorkoutDays,
     morningRoutine,
-    updateMorningRoutine,
   } = useAppData()
   const { evaluations } = useSkillTreeEvaluation()
+  const { writeSlots, advanceStage } = useSkillStageActions()
   const exerciseNames = useLinkableExerciseNames()
   const today = useTodayKey()
   const week = blockWeekInfo(skillTree, today)
@@ -219,29 +211,6 @@ export function SkillTreePanel() {
     setExpanded(expanded.includes(id) ? expanded.filter((x) => x !== id) : [...expanded, id])
   }
 
-  /** Smart Slot Swap: write the tier's recipes into the plan (program + morning). */
-  function writeSlots(node: SkillNode): string | null {
-    const changes = planSlotSwap(node.slots, workoutDays, morningRoutine).filter(
-      (p) => !p.missingTarget && !p.alreadyApplied,
-    )
-    const programSlots = node.slots.filter((s) => s.target !== 'morningA' && s.target !== 'morningB')
-    if (programSlots.length) setWorkoutDays(applyProgramSlots(workoutDays, programSlots))
-    const morning = applyMorningSlots(morningRoutine, node.slots)
-    for (const id of ['A', 'B'] as const) {
-      const exercises = morning[id]
-      if (exercises) updateMorningRoutine(id, { exercises })
-    }
-    if (!changes.length) return null
-    return `האימון עודכן אוטומטית! ${changes
-      .map((p) => {
-        const out = outgoingLabel(p)
-        return out
-          ? `${incomingLabel(p)} החליף את ${out} ב-${p.placeSummary}`
-          : `${incomingLabel(p)} נוסף בסוף ${p.placeSummary}`
-      })
-      .join(' · ')}.`
-  }
-
   /** Same-category track already in focus (it moves to the queue when `branchId` joins). */
   function focusRival(branchId: string): BranchEvaluation | null {
     const kind = trackCategory(branchId)?.kind
@@ -280,20 +249,8 @@ export function SkillTreePanel() {
 
   /** Mastery gate passed: swap the next tier in right away (1 out, 1 in) and advance. */
   function promote(nodeId: string) {
-    const branch = evaluations.find((e) => e.nodes.some((n) => n.node.id === nodeId))
-    const current = branch?.nodes.find((n) => n.node.id === nodeId)
-    if (!branch || !current) return
-    const next = branch.nodes.find(
-      (n) => n.node.order > current.node.order && n.status !== 'mastered',
-    )
-    if (!next) {
-      updateSkillTree((prev) => masterTier(prev, nodeId))
-      showToast(`🏆 ${branch.branch.title} נשלט במלואו!`)
-      return
-    }
-    const message = writeSlots(next.node)
-    updateSkillTree((prev) => activateTier(prev, next.node.id, { slotsApplied: true }))
-    showToast(message ?? `שלב ${next.node.order} פעיל: ${next.node.title}`)
+    const message = advanceStage(nodeId)
+    if (message) showToast(message)
   }
 
   /** Track card toggle: בפוקוס פעיל ↔ בתור. */

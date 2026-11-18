@@ -13,6 +13,14 @@ import {
   X,
 } from 'lucide-react'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
+import { useAppData } from '../../context/AppDataContext'
+import { useSkillStageActions } from '../skills/useSkillTree'
+import {
+  focusSkillItems,
+  SKILL_EXERCISE_PREFIX,
+  skillItemForExercise,
+  type SkillFocusItem,
+} from '../../lib/skillWorkout'
 import {
   defaultsFromExercise,
   formatPerSetDefaultSummary,
@@ -30,7 +38,6 @@ import {
   syncNumericDraft,
 } from '../../lib/numericInput'
 import type { ExerciseMetric, LoggedExercise } from '../../lib/types'
-import { localDateKey } from '../../lib/types'
 import { Button } from '../ui/button'
 import { IconButton } from '../ui/IconButton'
 import { NumericInput } from '../ui/NumericInput'
@@ -128,9 +135,70 @@ function formatDefaultSummary(exercise: LoggedExercise, defaults: ExerciseDefaul
 type ExerciseBlockProps = {
   exercise: LoggedExercise
   index: number
+  /** Skill Tree stage in focus this exercise belongs to. */
+  skill: SkillFocusItem | null
+  /** Stage of a skill exercise completed during this workout. */
+  completedStage: number | null
+  onAdvanceSkill: (item: SkillFocusItem) => void
 }
 
-function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
+/** "🎯 מיקוד עץ מיומנויות" header: stage, pass criterion and instant promotion. */
+function SkillStageBanner({
+  item,
+  onAdvance,
+}: {
+  item: SkillFocusItem
+  onAdvance: () => void
+}) {
+  const [confirming, setConfirming] = useState(false)
+  return (
+    <div className="mb-3 space-y-2 rounded-xl bg-gradient-to-l from-indigo-600 to-blue-600 p-3 text-white shadow-sm shadow-indigo-600/25">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="rounded-full bg-white/20 px-2.5 py-0.5 text-[11px] font-extrabold">
+          🎯 מיקוד עץ מיומנויות • שלב {item.order} מתוך {item.tierCount}
+        </span>
+        <span className="truncate text-[11px] font-semibold text-indigo-100" dir="auto">
+          {item.branchTitle}
+        </span>
+      </div>
+      <p className="rounded-lg bg-white/95 px-2.5 py-2 text-xs leading-snug text-indigo-950" dir="auto">
+        <span className="font-extrabold">יעד למעבר שלב: </span>
+        {item.target}
+      </p>
+      {confirming ? (
+        <div className="flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              setConfirming(false)
+              onAdvance()
+            }}
+            className="min-h-10 flex-1 rounded-xl bg-amber-300 px-3 text-xs font-extrabold text-amber-950 transition hover:bg-amber-200"
+          >
+            כן, עבור לשלב {item.order < item.tierCount ? item.order + 1 : 'הסיום'} 🚀
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirming(false)}
+            className="min-h-10 rounded-xl bg-white/15 px-3 text-xs font-bold text-white transition hover:bg-white/25"
+          >
+            ביטול
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="min-h-10 w-full rounded-xl bg-white px-3 text-xs font-extrabold text-indigo-700 shadow-sm transition hover:bg-indigo-50"
+        >
+          🏆 השגתי את יעד השלב! סמן כהושלם והתקדם לשלב הבא
+        </button>
+      )}
+    </div>
+  )
+}
+
+function ExerciseBlock({ exercise, index, skill, completedStage, onAdvanceSkill }: ExerciseBlockProps) {
   const {
     updateSet,
     setExerciseDone,
@@ -219,9 +287,17 @@ function ExerciseBlock({ exercise, index }: ExerciseBlockProps) {
         'rounded-2xl border p-4 transition',
         allDone
           ? 'border-blue-200 bg-blue-50'
-          : 'border-slate-200 bg-white',
+          : skill
+            ? 'border-indigo-200 bg-white ring-1 ring-indigo-100'
+            : 'border-slate-200 bg-white',
       ].join(' ')}
     >
+      {skill ? <SkillStageBanner item={skill} onAdvance={() => onAdvanceSkill(skill)} /> : null}
+      {!skill && completedStage != null ? (
+        <p className="mb-3 rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 ring-1 ring-emerald-200">
+          ✅ שלב {completedStage} בעץ המיומנויות הושלם באימון הזה
+        </p>
+      ) : null}
       <div className="flex items-start gap-3">
         <div className="flex shrink-0 flex-col items-center gap-1">
           <ExerciseStickmanSvg name={exercise.name} />
@@ -465,12 +541,34 @@ type TrackerPanelProps = {
 }
 
 function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
-  const { activeWorkout, setPerformedOn } = useWorkoutSession()
+  const { activeWorkout } = useWorkoutSession()
+  const { skillTree } = useAppData()
+  const { advanceStage } = useSkillStageActions()
   const workout = activeWorkout!
   const elapsed = useElapsed(workout.startedAt)
   const allSets = workout.exercises.flatMap((e) => e.sets)
   const doneSets = allSets.filter((s) => s.done).length
-  const performedOn = workout.performedOn || localDateKey()
+  const skillItems = focusSkillItems(skillTree)
+  const [skillToast, setSkillToast] = useState<string | null>(null)
+  const skillToastTimer = useRef<number | null>(null)
+  useEffect(
+    () => () => {
+      if (skillToastTimer.current != null) window.clearTimeout(skillToastTimer.current)
+    },
+    [],
+  )
+  function advanceSkill(item: SkillFocusItem) {
+    const message = advanceStage(item.nodeId)
+    if (!message) return
+    setSkillToast(message)
+    if (skillToastTimer.current != null) window.clearTimeout(skillToastTimer.current)
+    skillToastTimer.current = window.setTimeout(() => setSkillToast(null), 6000)
+  }
+  function completedStageOf(exerciseId: string): number | null {
+    if (!exerciseId.startsWith(SKILL_EXERCISE_PREFIX)) return null
+    const node = skillTree.nodes[exerciseId.slice(SKILL_EXERCISE_PREFIX.length)]
+    return node?.tierStatus === 'mastered' ? node.order : null
+  }
 
   return (
     <div
@@ -517,26 +615,31 @@ function TrackerPanel({ onMinimize, onFinish, onCancel }: TrackerPanelProps) {
       <main className="no-scrollbar min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain">
         <ul className="mx-auto max-w-3xl space-y-4 px-4 pt-5 pb-40">
           {workout.exercises.map((ex, i) => (
-            <ExerciseBlock key={`${ex.exerciseId}-${i}`} exercise={ex} index={i} />
+            <ExerciseBlock
+              key={`${ex.exerciseId}-${i}`}
+              exercise={ex}
+              index={i}
+              skill={skillItemForExercise(ex, skillItems)}
+              completedStage={completedStageOf(ex.exerciseId)}
+              onAdvanceSkill={advanceSkill}
+            />
           ))}
         </ul>
       </main>
+
+      {skillToast ? (
+        <p
+          role="status"
+          className="pointer-events-none fixed inset-x-3 bottom-[calc(7.5rem+env(safe-area-inset-bottom,0px))] z-[60] mx-auto max-w-md rounded-2xl bg-emerald-600 px-4 py-3 text-center text-sm font-bold leading-snug text-white shadow-xl shadow-emerald-600/30"
+        >
+          {skillToast}
+        </p>
+      ) : null}
 
       {/* In-flow footer (not fixed): always fully above the screen edge and
           the Android navigation bar, which edge-to-edge PWAs draw over. */}
       <footer className="shrink-0 border-t border-slate-200 bg-white px-4 pt-2.5 pb-[max(2.5rem,calc(env(safe-area-inset-bottom,0px)+1.5rem))] shadow-[0_-8px_24px_-12px_rgba(15,23,42,0.18)]">
         <div className="mx-auto max-w-3xl space-y-2">
-          <label className="flex items-center gap-2 text-[11px] leading-tight text-muted">
-            <span className="min-w-0 flex-1">עבור איזה יום האימון הזה מבוצע / הושלם?</span>
-            <input
-              type="date"
-              value={performedOn}
-              onChange={(e) => {
-                if (e.target.value) setPerformedOn(e.target.value)
-              }}
-              className="field w-40 shrink-0 py-2"
-            />
-          </label>
           <Button
             variant="accent"
             className="w-full py-3"

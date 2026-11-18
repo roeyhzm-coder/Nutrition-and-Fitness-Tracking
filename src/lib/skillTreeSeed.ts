@@ -35,8 +35,9 @@ export const SKILL_SEED_V2_AT = '2026-11-17T10:30:00.000Z'
  * reset to the seed on load — independent of its timestamp, so a stale client
  * can never resurrect an old tier state again. Bump when the seed changes.
  */
-export const SKILL_SEED_REV = 3
-export const SKILL_SEED_V3_AT = '2026-11-17T12:00:00.000Z'
+export const SKILL_SEED_REV = 4
+/** Floor timestamp for the current seed revision's reset (rev 4: clean Stage 1 baseline). */
+export const SKILL_SEED_REV_AT = '2026-11-18T17:30:00.000Z'
 
 export type SkillTrackCategory = 'pull' | 'push'
 /** Training-day category of each seed track (badge on the card + 1 pull / 1 push focus). */
@@ -184,6 +185,10 @@ const BULGARIAN = 'סקוואט בולגרי|Bulgarian'
 const SL_RDL = 'Single-Leg RDL|דדליפט רומני ברגל אחת'
 const WALL_HS = 'עמידת ידיים מול קיר|Wall Handstand'
 const FINISHER = 'סיומת גמישות לשפגאט'
+const TUCK_FL_HOLD = 'Tuck Front Lever Hold|החזקת פרונט לבר מקופל'
+const HOLLOW = 'Hollow Body|הולו'
+const CTW_HS = 'עמידת ידיים חזה לקיר|Chest-to-Wall Handstand'
+const BW_DIPS = 'מקבילים משקל גוף|Bodyweight Dips'
 
 const MU3 = 'Strict Bar Muscle-Up נקי (ללא קיפ)'
 const MU4 = 'Muscle-Up Sets (סטים של 5 נקיים)'
@@ -244,8 +249,10 @@ export function seedSkillNodes(): SkillNode[] {
   const sp = 'sk-splits'
   return [
     // 1. Muscle-Up & Explosive Bar — slot: אימון 3 (יום ו׳), High Pull-ups.
-    tier(mu, 1, 'mastered', 'מתח חזה רצוף (16 חזרות משקל גוף)'),
-    tier(mu, 2, 'queued', 'High Pull-ups לבטן עליונה (3×4) + מתח חזה (18 חזרות / +5 ק"ג) + מקבילים כבד (30 ק"ג × 2)', {
+    tier(mu, 1, 'queued', 'מתח חזה רצוף (16 חזרות משקל גוף)', {
+      measures: [maxReps('מתח חזה רצוף (משקל גוף)', CTB, 10, 16)],
+    }),
+    tier(mu, 2, 'locked', 'High Pull-ups לבטן עליונה (3×4) + מתח חזה (18 חזרות / +5 ק"ג) + מקבילים כבד (30 ק"ג × 2)', {
       prereq: 'מתח חזה רצוף 16 חזרות',
       measures: [
         setsReps('High Pull-ups לגובה בטן עליונה', HIGH_PULL, 3, 3, 4),
@@ -279,8 +286,13 @@ export function seedSkillNodes(): SkillNode[] {
     }),
 
     // 2. Front Lever — slot: אימון 1 (א׳/ג׳), Tuck FL Rows.
-    tier(fl, 1, 'mastered', 'Tuck Front Lever Hold (20 שניות) + Hollow Body Hold (60 שניות)'),
-    tier(fl, 2, 'active', 'Tuck Front Lever Rows (3×8) + מתח פרונציה כבד (32.5 ק"ג × 3) + Toes To Bar (3×8 עם עצירה)', {
+    tier(fl, 1, 'active', 'Tuck Front Lever Hold (20 שניות) + Hollow Body Hold (60 שניות)', {
+      measures: [
+        hold('Tuck Front Lever Hold', TUCK_FL_HOLD, 10, 20, { sets: 3 }),
+        hold('Hollow Body Hold', HOLLOW, 30, 60),
+      ],
+    }),
+    tier(fl, 2, 'locked', 'Tuck Front Lever Rows (3×8) + מתח פרונציה כבד (32.5 ק"ג × 3) + Toes To Bar (3×8 עם עצירה)', {
       prereq: "Tuck FL Hold 20 שנ' + Hollow 60 שנ'",
       measures: [
         setsReps('Tuck FL Rows — חזרות נקיות', TUCK_ROWS, 3, 6, 8),
@@ -308,8 +320,10 @@ export function seedSkillNodes(): SkillNode[] {
     }),
 
     // 3. One-Arm Chin-Up — tier 2/4/5 slot: אימון 1 hang; tier 3: אימון 3 weighted chin-ups.
-    tier(oa, 1, 'mastered', 'מתח סופינציה +32.5 ק"ג × 2 חזרות'),
-    tier(oa, 2, 'queued', "תלייה אקטיבית בשכמה ביד אחת (3×25 שנ') + מתח סופינציה כבד (40-42.5 ק\"ג × 2 / 30 ק\"ג × 6) + כפיפת מרפקים בשיפוע עם החזקה ב-90° (18 ק\"ג × 8)", {
+    tier(oa, 1, 'queued', 'מתח סופינציה +32.5 ק"ג × 2 חזרות', {
+      measures: [weighted('מתח סופינציה עם משקל', HEAVY_CHIN, [25, 2], [32.5, 2])],
+    }),
+    tier(oa, 2, 'locked', "תלייה אקטיבית בשכמה ביד אחת (3×25 שנ') + מתח סופינציה כבד (40-42.5 ק\"ג × 2 / 30 ק\"ג × 6) + כפיפת מרפקים בשיפוע עם החזקה ב-90° (18 ק\"ג × 8)", {
       prereq: 'מתח סופינציה +32.5 ק"ג × 2',
       measures: [
         hold('תלייה ביד אחת — שניות לכל יד', OA_HANG, 15, 25, { sets: 3 }),
@@ -336,8 +350,13 @@ export function seedSkillNodes(): SkillNode[] {
     }),
 
     // 4. Handstand & HSPU — slots: אימון 2 Pike + שגרת בוקר B.
-    tier(hs, 1, 'mastered', 'עמידת ידיים חזה לקיר (60 שניות) + Wall HSPU בסיסי'),
-    tier(hs, 2, 'active', "Elevated Pike Push-ups (3×8 מלאות) + עמידת ידיים מול קיר בשגרת בוקר B (60 שנ')", {
+    tier(hs, 1, 'active', 'עמידת ידיים חזה לקיר (60 שניות) + Wall HSPU בסיסי', {
+      measures: [
+        hold('עמידת ידיים חזה לקיר', CTW_HS, 30, 60, { sets: 3 }),
+        maxReps('Wall HSPU בסיסי', 'Wall HSPU', 1, 3),
+      ],
+    }),
+    tier(hs, 2, 'locked', "Elevated Pike Push-ups (3×8 מלאות) + עמידת ידיים מול קיר בשגרת בוקר B (60 שנ')", {
       prereq: "עמידת ידיים חזה לקיר 60 שנ'",
       measures: [
         setsReps('Elevated Pike Push-ups — חזרות מלאות', 'Elevated Pike', 3, 5, 8),
@@ -374,8 +393,13 @@ export function seedSkillNodes(): SkillNode[] {
     }),
 
     // 5. Planche & Heavy Push — slot: אימון 2, Pseudo Planche.
-    tier(pl, 1, 'mastered', 'מקבילים משקל גוף (17 חזרות) + שכיבות סמיכה מתפרצות (31 חזרות)'),
-    tier(pl, 2, 'queued', 'Pseudo Planche Push-ups בהישענות מקסימלית (2×8) + מקבילים כבד (30 ק"ג × 2)', {
+    tier(pl, 1, 'queued', 'מקבילים משקל גוף (17 חזרות) + שכיבות סמיכה מתפרצות (31 חזרות)', {
+      measures: [
+        maxReps('מקבילים משקל גוף', BW_DIPS, 12, 17),
+        maxReps('שכיבות סמיכה מתפרצות', 'שכיבות סמיכה מתפרצות|Explosive Push', 20, 31),
+      ],
+    }),
+    tier(pl, 2, 'locked', 'Pseudo Planche Push-ups בהישענות מקסימלית (2×8) + מקבילים כבד (30 ק"ג × 2)', {
       prereq: '17 מקבילים + 31 שכיבות סמיכה מתפרצות',
       measures: [
         setsReps('Pseudo Planche Push-ups', PSEUDO, 2, 6, 8),
@@ -404,8 +428,14 @@ export function seedSkillNodes(): SkillNode[] {
     }),
 
     // 6. Human Flag & Core — slot: אימון 1, Toes To Bar.
-    tier(cf, 1, 'mastered', 'הרמות פייק (2×10) + החזקת הולו (60 שניות) + L-Sit ברכיים'),
-    tier(cf, 2, 'queued', 'Full L-Sit (3×20 שניות) + Hanging Windshield Wipers (3×8)', {
+    tier(cf, 1, 'queued', 'הרמות פייק (2×10) + החזקת הולו (60 שניות) + L-Sit ברכיים', {
+      measures: [
+        setsReps('הרמות פייק', 'הרמות פייק|Pike Leg Raise|Pike Lift', 2, 6, 10),
+        hold('Hollow Body Hold', HOLLOW, 30, 60),
+        hold('L-Sit ברכיים', 'L-Sit ברכיים|Tuck L-Sit', 10, 20),
+      ],
+    }),
+    tier(cf, 2, 'locked', 'Full L-Sit (3×20 שניות) + Hanging Windshield Wipers (3×8)', {
       prereq: "הרמות פייק 2×10 + הולו 60 שנ' + L-Sit ברכיים",
       measures: [
         hold('Full L-Sit', 'L-Sit', 8, 20, { sets: 3, source: 'manual_benchmark' }),
@@ -438,8 +468,10 @@ export function seedSkillNodes(): SkillNode[] {
     }),
 
     // 7. Single-Leg & Pistol — slots: אימון 2, Bulgarian + Single-Leg RDL.
-    tier(ps, 1, 'mastered', "וול-סיט רגל אחת (12 שניות) + ג'אמפ סקוואט עם משקל"),
-    tier(ps, 2, 'queued', 'סקוואט בולגרי כבד (14 ק"ג בכל יד × 8 חזרות לרגל) + Single-Leg RDL (16 ק"ג × 8)', {
+    tier(ps, 1, 'queued', "וול-סיט רגל אחת (12 שניות) + ג'אמפ סקוואט עם משקל", {
+      measures: [hold('וול-סיט רגל אחת', 'וול-סיט רגל אחת|Single-Leg Wall Sit', 5, 12, { sets: 3 })],
+    }),
+    tier(ps, 2, 'locked', 'סקוואט בולגרי כבד (14 ק"ג בכל יד × 8 חזרות לרגל) + Single-Leg RDL (16 ק"ג × 8)', {
       prereq: "וול-סיט רגל אחת 12 שנ'",
       measures: [
         weighted('סקוואט בולגרי — ק"ג בכל יד', BULGARIAN, [8, 8], [14, 8]),
@@ -476,8 +508,10 @@ export function seedSkillNodes(): SkillNode[] {
     }),
 
     // 8. Splits & Mobility — one 6-minute finisher at the end of אימון 2, swapped per tier.
-    tier(sp, 1, 'mastered', 'ישיבת סקוואט עמוקה (90 שניות כל בוקר) + סיבובי גב עליון'),
-    tier(sp, 2, 'queued', 'בסיס לשפגאט: Couch Stretch + PNF Hamstring Stretch + Frog Stretch (ירידה ל-15 ס"מ מהרצפה)', {
+    tier(sp, 1, 'queued', 'ישיבת סקוואט עמוקה (90 שניות כל בוקר) + סיבובי גב עליון', {
+      measures: [hold('ישיבת סקוואט עמוקה', 'ישיבת סקוואט עמוקה|Deep Squat Hold', 45, 90)],
+    }),
+    tier(sp, 2, 'locked', 'בסיס לשפגאט: Couch Stretch + PNF Hamstring Stretch + Frog Stretch (ירידה ל-15 ס"מ מהרצפה)', {
       prereq: "ישיבת סקוואט עמוקה 90 שנ' כל בוקר",
       note: 'סיומת של 6 דקות בסוף אימון דחיפה ורגליים כשהשרירים חמים — בלי אימון נפרד.',
       measures: [gap('Frog Stretch — מרחק מהרצפה', 'Frog Stretch', 30, 15)],

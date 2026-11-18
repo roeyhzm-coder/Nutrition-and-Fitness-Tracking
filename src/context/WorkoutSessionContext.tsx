@@ -43,6 +43,13 @@ import type {
 } from '../lib/types'
 import { dayAllExercises, localDateKey, uid } from '../lib/types'
 import {
+  dayLineupWithSkills,
+  focusSkillItems,
+  injectSkillExercises,
+  SKILL_EXERCISE_PREFIX,
+  skillKindOfName,
+} from '../lib/skillWorkout'
+import {
   deleteRemoteWorkoutLog,
   deriveBlockNumber,
   mergeWorkoutLogs,
@@ -284,6 +291,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
     exerciseDefaults,
     persistExerciseDefaults,
     persistExerciseNote,
+    skillTree,
   } = useAppData()
   const [activeWorkout, setActiveWorkout] = useLocalStorage<ActiveWorkout | null>(
     'tn.activeWorkout.v1',
@@ -340,10 +348,21 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       const linkedDay = prev.linkedDayId
         ? programDays?.find((d) => d.id === prev.linkedDayId)
         : undefined
-      const lineup = linkedDay && !linkedDay.isRest ? dayAllExercises(linkedDay) : []
-      const realigned = lineup.length
+      // Skill Tree stages in focus for this template type always come first.
+      const lineup = linkedDay && !linkedDay.isRest ? dayLineupWithSkills(linkedDay, skillTree) : []
+      const reconciled = lineup.length
         ? reconcileWorkoutExercises(prev.exercises, lineup, (ex) => hydrateLoggedExercise(ex, ctx))
         : null
+      // A stage completed mid-workout leaves the lineup, but its logged sets stay.
+      const keptSkill = reconciled
+        ? prev.exercises.filter(
+            (l) =>
+              l.exerciseId.startsWith(SKILL_EXERCISE_PREFIX) &&
+              l.sets.some((s) => s.done) &&
+              !reconciled.some((r) => r.exerciseId === l.exerciseId),
+          )
+        : []
+      const realigned = reconciled ? [...keptSkill, ...reconciled] : null
       const base = realigned
         ? { ...prev, workoutName: workoutLabel(linkedDay!), exercises: realigned }
         : prev
@@ -361,7 +380,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       })
       return changed ? { ...base, exercises } : prev
     })
-  }, [activeWorkoutId, programDays, exerciseDefaults, workoutLogs, setActiveWorkout])
+  }, [activeWorkoutId, programDays, exerciseDefaults, workoutLogs, skillTree, setActiveWorkout])
 
   const startFlexibleWorkout = useCallback(
     (source: FlexibleWorkoutSource) => {
@@ -382,7 +401,11 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
       // Prefer the latest program copy (callers may pass a stale day snapshot),
       // then hydrate each exercise by canonical key: block default → global
       // default → last logged session → seed.
-      const exercises = source.exercises.map((ex) => {
+      const lineup = injectSkillExercises(
+        source.exercises,
+        focusSkillItems(skillTree, skillKindOfName(source.name)),
+      )
+      const exercises = lineup.map((ex) => {
         const live = source.dayId
           ? (findProgramExercise(activeProgram.days, source.dayId, ex.id) ?? ex)
           : ex
@@ -404,7 +427,7 @@ export function WorkoutSessionProvider({ children }: { children: ReactNode }) {
         ...(source.dayId ? { linkedDayId: source.dayId } : {}),
       })
     },
-    [activeWorkout, activeProgram, exerciseDefaults, workoutLogs, setActiveWorkout],
+    [activeWorkout, activeProgram, exerciseDefaults, workoutLogs, skillTree, setActiveWorkout],
   )
 
   const startWorkout = useCallback(

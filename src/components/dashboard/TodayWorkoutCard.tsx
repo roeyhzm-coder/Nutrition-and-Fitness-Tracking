@@ -2,7 +2,8 @@ import { Link } from 'react-router-dom'
 import { useAppData } from '../../context/AppDataContext'
 import { useWorkoutSession } from '../../context/WorkoutSessionContext'
 import { caloriesBurnedOnDate, workoutPerformedOn } from '../../lib/caloriesBurned'
-import { dayAllExercises, localDateKey, weekdayNumber, WEEKDAYS } from '../../lib/types'
+import { localDateKey, weekdayNumber, WEEKDAYS } from '../../lib/types'
+import { dayLineupWithSkills } from '../../lib/skillWorkout'
 import { Card } from '../ui/Card'
 import { dayPlanLabel } from '../../lib/weekPlan'
 import { parseDayMark } from '../../lib/weeklyConsistency'
@@ -10,11 +11,11 @@ import { StartWorkoutButton } from '../workouts/WeeklyPlanParts'
 import { WorkoutCompletedBadge } from '../workouts/WorkoutCompletedBadge'
 
 export function TodayWorkoutCard() {
-  const { activeProgram, consistencyDayMarks, focusTracks } = useAppData()
+  const { activeProgram, consistencyDayMarks, focusTracks, skillTree } = useAppData()
   const { workoutLogs } = useWorkoutSession()
   const todayNumber = weekdayNumber()
   const day = activeProgram?.days.find((d) => d.dayNumber === todayNumber)
-  const exercises = day ? dayAllExercises(day) : []
+  const exercises = day ? dayLineupWithSkills(day, skillTree) : []
   const today = localDateKey()
   const doneToday = workoutLogs.filter((l) => workoutPerformedOn(l) === today)
   const todayMark = parseDayMark(consistencyDayMarks[today])

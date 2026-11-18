@@ -18,7 +18,7 @@ import {
   LEGACY_SEED_IDS,
   SKILL_SEED_MIGRATED_AT,
   SKILL_SEED_REV,
-  SKILL_SEED_V3_AT,
+  SKILL_SEED_REV_AT,
   SKILL_TRACK_CATEGORY,
   type SkillTrackCategory,
   seedSkillBranches,
@@ -443,6 +443,38 @@ function normalizeBranch(raw: unknown, key: string, seed?: SkillBranch): SkillBr
   }
 }
 
+/**
+ * Invariant: at most one tier per track is in focus (the lowest active one);
+ * any other "active" tier is locked, and a track outside active focus keeps
+ * its current tier as "queued". Derived on read, so timestamps stay untouched.
+ */
+function enforceSingleFocusTier(
+  branches: Record<string, SkillBranch>,
+  nodes: Record<string, SkillNode>,
+): void {
+  const byBranch = new Map<string, SkillNode[]>()
+  for (const n of Object.values(nodes)) {
+    if (n.deleted) continue
+    const list = byBranch.get(n.branchId) ?? []
+    list.push(n)
+    byBranch.set(n.branchId, list)
+  }
+  for (const [branchId, list] of byBranch) {
+    const inFocus = branches[branchId]?.status === 'active_focus'
+    let seen = false
+    for (const n of list.sort((a, b) => a.order - b.order)) {
+      if (n.tierStatus !== 'active' && n.tierStatus !== 'queued') continue
+      if (seen) {
+        nodes[n.id] = { ...n, tierStatus: 'locked' }
+        continue
+      }
+      seen = true
+      const want = inFocus ? 'active' : 'queued'
+      if (n.tierStatus === 'active' && !inFocus) nodes[n.id] = { ...n, tierStatus: want }
+    }
+  }
+}
+
 /** Defensive parse; seeds are filled in so a fresh device always has the tree. */
 export function normalizeSkillTree(raw: unknown, today = localDateKey()): SkillTreeState {
   const base = createDefaultSkillTree(today)
@@ -476,7 +508,7 @@ export function normalizeSkillTree(raw: unknown, today = localDateKey()): SkillT
   // values and progression history are kept.
   const resetAt = (at: string) => {
     const bumped = new Date(Date.parse(at) + 1).toISOString()
-    return bumped > SKILL_SEED_V3_AT ? bumped : SKILL_SEED_V3_AT
+    return bumped > SKILL_SEED_REV_AT ? bumped : SKILL_SEED_REV_AT
   }
   for (const seed of Object.values(base.branches)) {
     const b = branches[seed.id]
@@ -498,6 +530,7 @@ export function normalizeSkillTree(raw: unknown, today = localDateKey()): SkillT
       updatedAt: resetAt(n.updatedAt),
     }
   }
+  enforceSingleFocusTier(branches, nodes)
   return {
     blockLabel: str(o.blockLabel, 60) || base.blockLabel,
     blockStartDate: /^\d{4}-\d{2}-\d{2}$/.test(start) ? start : base.blockStartDate,

@@ -21,6 +21,7 @@ import { useAppData } from '../context/AppDataContext'
 import type { DaySession, Exercise, WorkoutDay } from '../lib/types'
 import { dayAllExercises, WEEKDAYS, weekdayNumber } from '../lib/types'
 import { dayPlanLabel } from '../lib/weekPlan'
+import { dayLineupWithSkills, focusSkillItems, skillKindOfDay } from '../lib/skillWorkout'
 import { StartWorkoutButton } from '../components/workouts/WeeklyPlanParts'
 import { DayActionsMenu } from '../components/workouts/DayActionsMenu'
 import { WorkoutHistoryCard } from '../components/workouts/WorkoutHistoryCard'
@@ -84,6 +85,7 @@ function WorkoutPlanView({ tabs }: { tabs: ReactNode }) {
     addSetLog,
     setDayPlan,
     resetDayToOfficialPlan,
+    skillTree,
   } = useAppData()
 
   const todayNumber = weekdayNumber()
@@ -116,6 +118,12 @@ function WorkoutPlanView({ tabs }: { tabs: ReactNode }) {
   const allExercises = useMemo(
     () => (day ? dayAllExercises(day) : []),
     [day],
+  )
+  // What the session will actually run: in-focus skill stages first (by template type).
+  const lineup = useMemo(() => (day ? dayLineupWithSkills(day, skillTree) : []), [day, skillTree])
+  const skillItems = useMemo(
+    () => (day ? focusSkillItems(skillTree, skillKindOfDay(day)) : []),
+    [day, skillTree],
   )
 
   const activeExercise =
@@ -221,7 +229,7 @@ function WorkoutPlanView({ tabs }: { tabs: ReactNode }) {
   const dayTitle = `יום ${day.title}${day.dayNumber === todayNumber ? ' · היום' : ''}`
   const daySummary = day.isRest
     ? 'יום מנוחה'
-    : `${allExercises.length} תרגילים · ${dayPlanLabel(day)}`
+    : `${lineup.length} תרגילים · ${dayPlanLabel(day)}`
 
   return (
     <>
@@ -390,6 +398,34 @@ function WorkoutPlanView({ tabs }: { tabs: ReactNode }) {
                     </Button>
 
                     <div className="space-y-3">
+                      {skillItems.length ? (
+                        <section className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4">
+                          <p className="text-sm font-extrabold text-indigo-900">
+                            🎯 עץ מיומנויות · ראשון באימון
+                          </p>
+                          <p className="text-[11px] text-indigo-800/80">
+                            השלב שבפוקוס נכנס אוטומטית לתחילת האימון לפי סוג האימון
+                          </p>
+                          <ul className="mt-2 space-y-1.5">
+                            {skillItems.map((item) => (
+                              <li
+                                key={item.nodeId}
+                                className="rounded-xl bg-white px-3 py-2 text-xs ring-1 ring-indigo-100"
+                              >
+                                <p className="font-bold text-text" dir="auto">
+                                  {item.exercise.name}{' '}
+                                  <span className="font-semibold text-muted tabular-nums">
+                                    {item.exercise.sets} × {item.exercise.reps}
+                                  </span>
+                                </p>
+                                <p className="mt-0.5 text-[11px] text-indigo-700" dir="auto">
+                                  {item.branchTitle} · שלב {item.order} מתוך {item.tierCount}
+                                </p>
+                              </li>
+                            ))}
+                          </ul>
+                        </section>
+                      ) : null}
                       {day.sessions.map(renderSession)}
 
                       {(day.exercises.length > 0 || day.sessions.length === 0) && (

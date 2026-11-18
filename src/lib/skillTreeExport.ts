@@ -1,4 +1,5 @@
 import { planSlotSwap } from './skillSlotSwap'
+import { focusSkillItems } from './skillWorkout'
 import {
   blockWeekInfo,
   evaluateSkillTree,
@@ -93,6 +94,14 @@ export function formatSkillTreeSection(
     `- ${week.label} | התחלה: ${state.blockStartDate} | ${state.blockWeeks} שבועות | דילואד: ${state.deloadWeeks.join(', ') || '—'} | מבחנים: שבוע ${state.benchmarkWeek}`,
     `- פוקוס פעיל: ${focus.length}/${SKILL_FOCUS_LIMIT} מסלולים (${focus.map((e) => `${e.branch.title} [${trackCategory(e.branch.id)?.kind === 'pull' ? 'משיכה' : trackCategory(e.branch.id)?.kind === 'push' ? 'דחיפה' : 'מותאם'}]`).join(', ') || '—'}) · מומלץ 1 משיכה + 1 דחיפה${focus.length > SKILL_FOCUS_LIMIT ? ' ⚠️ מעל המומלץ' : ''}`,
     queued.length ? `- בתור: ${queued.map((e) => e.branch.title).join(', ')}` : '',
+    ...(['pull', 'push'] as const).map((kind) => {
+      const items = focusSkillItems(state, kind)
+      return items.length
+        ? `- נכנס אוטומטית לתחילת כל אימון ${kind === 'pull' ? 'משיכה' : 'דחיפה/רגליים'} (ומשולב): ${items
+            .map((i) => `${i.exercise.name} ${i.exercise.sets}×${i.exercise.reps} (${i.branchTitle} · שלב ${i.order}/${i.tierCount})`)
+            .join(' | ')}`
+        : ''
+    }),
     closest.length ? `- הכי קרובים לפתיחת השלב הבא: ${closest.join(' | ')}` : '',
     `- סטטוסים: ${Object.values(SKILL_TIER_LABELS).join(' / ')}. התקדמות = הביצוע הטוב ביותר מאז תחילת הבלוק (יומן / עדכון ידני), לא פחות מהבסיס; משקל × חזרות לפי 1RM משוער (Epley).`,
     ...evaluations.map((e) => branchBlock(e, sources)),
