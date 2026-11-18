@@ -1,22 +1,16 @@
-import { useEffect, useState } from 'react'
-import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { ChevronDown, Plus, Trash2 } from 'lucide-react'
+import { useAppData } from '../../context/AppDataContext'
+import { skillKindOfName } from '../../lib/skillWorkout'
 import { parseDecimal } from '../../lib/numericInput'
 import {
   emptyMeasure,
-  emptySlot,
-  SKILL_SLOT_ROLE_LABELS,
-  SKILL_SLOT_TARGET_LABELS,
-  SKILL_TIER_LABELS,
   type SkillSlotExercise,
   type SkillSlotRecipe,
-  type SkillSlotRole,
   type SkillSlotTarget,
   type SkillTierStatus,
-  SKILL_BODY_STAT_LABELS,
   SKILL_ICON_KEYS,
-  SKILL_METRIC_LABELS,
   SKILL_SOURCE_LABELS,
-  type SkillBodyStat,
   type SkillBranch,
   type SkillBranchStatus,
   type SkillMeasure,
@@ -200,14 +194,6 @@ const SOURCE_OPTIONS = (Object.keys(SKILL_SOURCE_LABELS) as SkillSourceType[])
   id,
   label: SKILL_SOURCE_LABELS[id],
 }))
-const METRIC_OPTIONS = (Object.keys(SKILL_METRIC_LABELS) as SkillMetricType[]).map((id) => ({
-  id,
-  label: SKILL_METRIC_LABELS[id],
-}))
-const BODY_OPTIONS = (Object.keys(SKILL_BODY_STAT_LABELS) as SkillBodyStat[]).map((id) => ({
-  id,
-  label: SKILL_BODY_STAT_LABELS[id],
-}))
 
 // ---------------------------------------------------------------------------
 // Branch (master goal)
@@ -355,11 +341,13 @@ function draftToMeasure(d: MeasureDraft, original: SkillMeasure | undefined): Sk
   const manualValue = fromDraft(d.manual, d.metricType)
   const manualChanged =
     JSON.stringify(manualValue) !== JSON.stringify(original?.manual?.value ?? null)
+  const label = d.label.trim()
   return {
     id: d.id,
-    label: d.label.trim(),
+    label,
     sourceType: d.sourceType,
-    linkedExercise: d.linkedExercise.trim(),
+    // Auto-match: with no explicit link, the exercise name is the link.
+    linkedExercise: d.linkedExercise.trim() || label,
     metricType: d.metricType,
     bodyStat: d.metricType === 'body_stat' ? (d.bodyStat ?? 'weight') : null,
     baseline: fromDraft(d.baseline, d.metricType),
@@ -374,284 +362,302 @@ function draftToMeasure(d: MeasureDraft, original: SkillMeasure | undefined): Sk
   }
 }
 
-function MeasureEditor({
-  draft,
-  index,
-  count,
-  exerciseNames,
+type Unit = 'reps' | 'seconds' | 'weight' | 'cm'
+
+function unitOf(metric: SkillMetricType): Unit {
+  if (metric === 'duration_seconds') return 'seconds'
+  if (metric === 'weight_x_reps') return 'weight'
+  if (metric === 'gap_cm') return 'cm'
+  return 'reps'
+}
+
+const UNIT_OPTIONS: { id: Unit; label: string }[] = [
+  { id: 'reps', label: 'חזרות' },
+  { id: 'seconds', label: 'שניות' },
+  { id: 'weight', label: 'ק"ג × חזרות' },
+]
+
+function PillGroup<T extends string>({
+  value,
+  options,
   onChange,
-  onRemove,
-  onMove,
+  label,
 }: {
-  draft: MeasureDraft
-  index: number
-  count: number
-  exerciseNames: string[]
-  onChange: (next: MeasureDraft) => void
-  onRemove: () => void
-  onMove: (dir: -1 | 1) => void
+  value: T
+  options: readonly { id: T; label: string }[]
+  onChange: (next: T) => void
+  label: string
 }) {
-  const listId = `skill-exercises-${draft.id}`
   return (
-    <section className="space-y-2.5 rounded-2xl border border-slate-200 bg-slate-50 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-bold text-slate-700">מדד {index + 1}</p>
-        <div className="flex items-center">
+    <div role="radiogroup" aria-label={label} className="flex flex-wrap gap-1">
+      {options.map((o) => {
+        const on = o.id === value
+        return (
           <button
+            key={o.id}
             type="button"
-            aria-label="הזז למעלה"
-            disabled={index === 0}
-            onClick={() => onMove(-1)}
-            className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-white disabled:opacity-30"
+            role="radio"
+            aria-checked={on}
+            onClick={() => onChange(o.id)}
+            className={[
+              'min-h-8 rounded-full px-3 text-[11px] font-bold transition',
+              on ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50',
+            ].join(' ')}
           >
-            <ArrowUp className="size-4" />
+            {o.label}
           </button>
-          <button
-            type="button"
-            aria-label="הזז למטה"
-            disabled={index === count - 1}
-            onClick={() => onMove(1)}
-            className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-white disabled:opacity-30"
-          >
-            <ArrowDown className="size-4" />
-          </button>
-          <button
-            type="button"
-            aria-label="מחק מדד"
-            disabled={count <= 1}
-            onClick={onRemove}
-            className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30"
-          >
-            <Trash2 className="size-4" />
-          </button>
-        </div>
-      </div>
-      <TextField
-        label="שם המדד"
-        value={draft.label}
-        onChange={(label) => onChange({ ...draft, label })}
-      />
-      <div className="grid grid-cols-2 gap-2">
-        <SelectField
-          label="מקור נתונים"
-          value={draft.sourceType}
-          options={SOURCE_OPTIONS}
-          onChange={(sourceType) =>
-            onChange({
-              ...draft,
-              sourceType,
-              ...(sourceType === 'body_metric'
-                ? { metricType: 'body_stat' as const, bodyStat: draft.bodyStat ?? 'weight' }
-                : draft.metricType === 'body_stat'
-                  ? { metricType: 'sets_x_reps' as const, bodyStat: null }
-                  : {}),
-            })
-          }
-        />
-        {draft.sourceType === 'body_metric' ? (
-          <SelectField
-            label="מדד"
-            value={draft.bodyStat ?? 'weight'}
-            options={BODY_OPTIONS}
-            onChange={(bodyStat) => onChange({ ...draft, bodyStat })}
-          />
-        ) : (
-          <SelectField
-            label="סוג מדידה"
-            value={draft.metricType}
-            options={METRIC_OPTIONS.filter((o) => o.id !== 'body_stat')}
-            onChange={(metricType) => onChange({ ...draft, metricType })}
-          />
-        )}
-      </div>
-      {draft.sourceType !== 'body_metric' ? (
-        <label className="block text-xs text-muted">
-          תרגיל מקושר (אפשר כמה שמות מופרדים ב-|)
-          <input
-            type="text"
-            list={listId}
-            value={draft.linkedExercise}
-            maxLength={300}
-            onChange={(e) => onChange({ ...draft, linkedExercise: e.target.value })}
-            className="field mt-1"
-          />
-          <datalist id={listId}>
-            {exerciseNames.map((name) => (
-              <option key={name} value={name} />
-            ))}
-          </datalist>
-        </label>
-      ) : null}
-      <ValueFields
-        title="בסיס (תחילת הבלוק)"
-        metric={draft.metricType}
-        draft={draft.baseline}
-        onChange={(baseline) => onChange({ ...draft, baseline })}
-      />
-      <ValueFields
-        title="יעד (100%)"
-        metric={draft.metricType}
-        draft={draft.target}
-        onChange={(target) => onChange({ ...draft, target })}
-      />
-      <ValueFields
-        title="ערך נוכחי ידני (ריק = אוטומטי מהיומן)"
-        metric={draft.metricType}
-        draft={draft.manual}
-        onChange={(manual) => onChange({ ...draft, manual })}
-      />
-    </section>
+        )
+      })}
+    </div>
   )
 }
 
-const TIER_OPTIONS = (Object.keys(SKILL_TIER_LABELS) as SkillTierStatus[]).map((id) => ({
-  id,
-  label: SKILL_TIER_LABELS[id],
-}))
-const TARGET_OPTIONS = (Object.keys(SKILL_SLOT_TARGET_LABELS) as SkillSlotTarget[]).map((id) => ({
-  id,
-  label: SKILL_SLOT_TARGET_LABELS[id],
-}))
-const ROLE_OPTIONS = (Object.keys(SKILL_SLOT_ROLE_LABELS) as SkillSlotRole[]).map((id) => ({
-  id,
-  label: SKILL_SLOT_ROLE_LABELS[id],
-}))
+function NumBox({
+  label,
+  value,
+  onChange,
+  decimals = 1,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (next: string) => void
+  decimals?: number
+  placeholder?: string
+}) {
+  return (
+    <label className="block min-w-0 text-[10px] font-semibold text-muted">
+      {label}
+      <NumericInput
+        decimals={decimals}
+        value={value}
+        placeholder={placeholder}
+        onChange={onChange}
+        className="field mt-0.5 px-1.5 text-center tabular-nums"
+      />
+    </label>
+  )
+}
 
-function SlotEditor({
-  slot,
-  index,
-  exerciseNames,
+/** One compact row per exercise: name · unit pills · start | now | goal (+ sets / reps). */
+function MeasureEditor({
+  draft,
+  count,
   onChange,
   onRemove,
 }: {
-  slot: SkillSlotRecipe
-  index: number
-  exerciseNames: string[]
-  onChange: (next: SkillSlotRecipe) => void
+  draft: MeasureDraft
+  count: number
+  onChange: (next: MeasureDraft) => void
   onRemove: () => void
 }) {
-  const listId = `slot-exercises-${index}`
-  const setExercise = (i: number, patch: Partial<SkillSlotExercise>) =>
+  const unit = unitOf(draft.metricType)
+  const shared = unit === 'weight' ? 'reps' : unit === 'cm' ? null : 'sets'
+  const sharedValue = shared ? draft.target[shared] || draft.baseline[shared] : ''
+  function setUnit(next: Unit) {
+    const sets = draft.target.sets || draft.baseline.sets
+    const metricType: SkillMetricType =
+      next === 'seconds'
+        ? 'duration_seconds'
+        : next === 'weight'
+          ? 'weight_x_reps'
+          : next === 'cm'
+            ? 'gap_cm'
+            : sets
+              ? 'sets_x_reps'
+              : 'max_reps'
+    onChange({ ...draft, metricType })
+  }
+  function setShared(value: string) {
+    if (!shared) return
+    const metricType: SkillMetricType =
+      unit === 'reps' ? (value ? 'sets_x_reps' : 'max_reps') : draft.metricType
     onChange({
-      ...slot,
-      exercises: slot.exercises.map((e, j) => (j === i ? { ...e, ...patch } : e)),
+      ...draft,
+      metricType,
+      baseline: { ...draft.baseline, [shared]: value },
+      target: { ...draft.target, [shared]: value },
+      manual: draft.manual.amount ? { ...draft.manual, [shared]: value } : draft.manual,
     })
+  }
+  const unitOptions =
+    unit === 'cm' ? [...UNIT_OPTIONS, { id: 'cm' as const, label: 'ס"מ מהרצפה' }] : UNIT_OPTIONS
   return (
-    <section className="space-y-2.5 rounded-2xl border border-blue-100 bg-blue-50/40 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-bold text-slate-700">מתכון שיבוץ {index + 1}</p>
+    <section className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 p-2.5">
+      <div className="flex items-center gap-1.5">
+        <input
+          type="text"
+          value={draft.label}
+          maxLength={160}
+          aria-label="שם התרגיל"
+          placeholder="שם התרגיל"
+          onChange={(e) => {
+            const label = e.target.value
+            const autoLink = !draft.linkedExercise.trim() || draft.linkedExercise.trim() === draft.label.trim()
+            onChange({ ...draft, label, ...(autoLink ? { linkedExercise: label } : {}) })
+          }}
+          className="field min-w-0 flex-1 py-2 text-sm font-semibold"
+        />
         <button
           type="button"
-          aria-label="מחק מתכון שיבוץ"
+          aria-label="מחק תרגיל"
+          disabled={count <= 1}
           onClick={onRemove}
-          className="flex size-9 items-center justify-center rounded-lg text-muted hover:bg-rose-50 hover:text-rose-600"
+          className="flex size-9 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30"
         >
           <Trash2 className="size-4" />
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <SelectField
-          label="באיזה אימון"
-          value={slot.target}
-          options={TARGET_OPTIONS}
-          onChange={(target) => onChange({ ...slot, target })}
+      <PillGroup label="יחידת מידה" value={unit} options={unitOptions} onChange={setUnit} />
+      <div className={`grid items-end gap-1.5 ${shared ? 'grid-cols-4' : 'grid-cols-3'}`}>
+        <NumBox
+          label="נקודת התחלה"
+          value={draft.baseline.amount}
+          onChange={(amount) => onChange({ ...draft, baseline: { ...draft.baseline, amount } })}
         />
-        <SelectField
-          label="תפקיד הסלוט"
-          value={slot.role}
-          options={ROLE_OPTIONS}
-          onChange={(role) => onChange({ ...slot, role })}
-        />
-      </div>
-      <label className="block text-xs text-muted">
-        מחליף את התרגיל (ריק = מתווסף בסוף האימון; כמה שמות מופרדים ב-|)
-        <input
-          type="text"
-          list={listId}
-          value={slot.replaces}
-          maxLength={300}
-          onChange={(e) => onChange({ ...slot, replaces: e.target.value })}
-          className="field mt-1"
-        />
-        <datalist id={listId}>
-          {exerciseNames.map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
-      </label>
-      <p className="text-xs font-semibold text-text">נכנס לאימון</p>
-      {slot.exercises.map((e, i) => (
-        <div key={i} className="space-y-2 rounded-xl bg-white p-2.5 ring-1 ring-slate-200">
-          <div className="flex items-end gap-1.5">
-            <label className="block min-w-0 flex-1 text-[11px] text-muted">
-              שם התרגיל
-              <input
-                type="text"
-                value={e.name}
-                maxLength={160}
-                onChange={(ev) => setExercise(i, { name: ev.target.value })}
-                className="field mt-1"
-              />
-            </label>
-            <button
-              type="button"
-              aria-label="הסר תרגיל מהמתכון"
-              onClick={() => onChange({ ...slot, exercises: slot.exercises.filter((_, j) => j !== i) })}
-              className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-rose-50 hover:text-rose-600"
-            >
-              <Trash2 className="size-4" />
-            </button>
-          </div>
-          <div className="grid grid-cols-3 gap-1.5">
-            <label className="block text-[11px] text-muted">
-              סטים
-              <NumericInput
-                decimals={0}
-                value={String(e.sets)}
-                onChange={(sets) => setExercise(i, { sets: Math.max(1, Math.round(Number(sets) || 1)) })}
-              />
-            </label>
-            <label className="block text-[11px] text-muted">
-              חזרות / זמן
-              <input
-                type="text"
-                value={e.reps}
-                maxLength={80}
-                onChange={(ev) => setExercise(i, { reps: ev.target.value })}
-                className="field mt-1"
-              />
-            </label>
-            <label className="block text-[11px] text-muted">
-              מנוחה
-              <input
-                type="text"
-                value={e.rest}
-                maxLength={40}
-                onChange={(ev) => setExercise(i, { rest: ev.target.value })}
-                className="field mt-1"
-              />
-            </label>
-          </div>
-        </div>
-      ))}
-      {slot.exercises.length < 6 ? (
-        <Button
-          type="button"
-          className="w-full gap-2"
-          variant="surface"
-          onClick={() =>
+        <NumBox
+          label="איפה אני עכשיו"
+          value={draft.manual.amount}
+          placeholder="מהיומן"
+          onChange={(amount) =>
             onChange({
-              ...slot,
-              exercises: [...slot.exercises, { name: '', sets: 3, reps: '', rest: '2 דקות', notes: '' }],
+              ...draft,
+              manual: { ...draft.manual, amount, ...(shared && sharedValue ? { [shared]: sharedValue } : {}) },
             })
           }
-        >
-          <Plus className="size-4" strokeWidth={2} />
-          תרגיל במתכון
-        </Button>
-      ) : null}
+        />
+        <NumBox
+          label="יעד לסיום"
+          value={draft.target.amount}
+          onChange={(amount) => onChange({ ...draft, target: { ...draft.target, amount } })}
+        />
+        {shared ? (
+          <NumBox
+            label={shared === 'sets' ? 'מספר סטים' : 'חזרות'}
+            decimals={0}
+            value={sharedValue}
+            onChange={setShared}
+          />
+        ) : null}
+      </div>
     </section>
   )
+}
+
+const TIER_PILLS: { id: SkillTierStatus; label: string }[] = [
+  { id: 'active', label: 'בפוקוס פעיל כרגע' },
+  { id: 'mastered', label: 'נשלט ✓' },
+  { id: 'locked', label: 'שלב עתידי 🔒' },
+]
+
+type PlacementTarget = SkillSlotTarget | 'none'
+
+const PLACEMENT_OPTIONS: { id: PlacementTarget; label: string }[] = [
+  { id: 'none', label: 'לא משובץ (נכנס אוטומטית לתחילת האימון)' },
+  { id: 'pull', label: 'אימון משיכה' },
+  { id: 'push', label: 'אימון דחיפה ורגליים' },
+  { id: 'combo', label: 'אימון משולב' },
+  { id: 'morningA', label: 'שגרת בוקר A' },
+  { id: 'morningB', label: 'שגרת בוקר B' },
+]
+
+const KEEP_CHAIN = '__keep__'
+const APPEND = '__append__'
+
+/** Exercise names of the workout a placement targets (for "מחליף את"). */
+function useWorkoutExerciseNames(target: PlacementTarget): string[] {
+  const { workoutDays, morningRoutine } = useAppData()
+  return useMemo(() => {
+    if (target === 'none') return []
+    if (target === 'morningA' || target === 'morningB') {
+      const id = target === 'morningA' ? 'A' : 'B'
+      return morningRoutine.routines[id].exercises.map((e) => `${e.nameHe} ${e.nameEn}`.trim())
+    }
+    const want = target === 'combo' ? 'both' : target
+    const names = workoutDays.flatMap((d) =>
+      (d.sessions ?? []).filter((s) => skillKindOfName(s.name) === want).flatMap((s) => s.exercises.map((e) => e.name)),
+    )
+    return [...new Set(names)]
+  }, [target, workoutDays, morningRoutine])
+}
+
+/** "באיזה אימון זה משובץ?" + "מחליף את" for one recipe of the stage. */
+function PlacementEditor({
+  slot,
+  fallback,
+  onChange,
+}: {
+  slot: SkillSlotRecipe | null
+  /** Incoming exercise for a new placement (the stage's first exercise). */
+  fallback: SkillSlotExercise
+  onChange: (next: SkillSlotRecipe | null) => void
+}) {
+  const target: PlacementTarget = slot?.target ?? 'none'
+  const names = useWorkoutExerciseNames(target)
+  const firstAlias = slot?.replaces.split('|')[0]?.trim() ?? ''
+  const chosen = !slot
+    ? APPEND
+    : !slot.replaces.trim()
+      ? APPEND
+      : names.includes(slot.replaces.trim())
+        ? slot.replaces.trim()
+        : KEEP_CHAIN
+  return (
+    <div className="space-y-1.5 rounded-2xl border border-slate-200 bg-white p-2.5">
+      <SelectField
+        label="באיזה אימון זה משובץ?"
+        value={target}
+        options={PLACEMENT_OPTIONS}
+        onChange={(next) => {
+          if (next === 'none') return onChange(null)
+          onChange(
+            slot
+              ? { ...slot, target: next }
+              : { target: next, role: 'primary_strength_slot', replaces: '', exercises: [fallback] },
+          )
+        }}
+      />
+      {slot ? (
+        <>
+          <label className="block text-xs text-muted">
+            מחליף את התרגיל
+            <select
+              value={chosen}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === KEEP_CHAIN) return
+                onChange({ ...slot, replaces: v === APPEND ? '' : v })
+              }}
+              className="field mt-1"
+            >
+              {chosen === KEEP_CHAIN ? <option value={KEEP_CHAIN}>{firstAlias} (התאמה אוטומטית)</option> : null}
+              <option value={APPEND}>— לא מחליף (מתווסף בסוף האימון)</option>
+              {names.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="text-[11px] text-slate-600" dir="auto">
+            נכנס לאימון: {slot.exercises.map((e) => `${e.name} (${e.sets}×${e.reps})`).join(' + ') || '—'}
+          </p>
+        </>
+      ) : null}
+    </div>
+  )
+}
+
+function incomingFrom(measure: MeasureDraft | undefined): SkillSlotExercise {
+  const sets = Math.max(1, Math.round(Number(measure?.target.sets) || 3))
+  const amount = measure?.target.amount || ''
+  const reps =
+    measure?.metricType === 'duration_seconds'
+      ? `${amount || 20} שניות`
+      : measure?.metricType === 'weight_x_reps'
+        ? `${measure.target.reps || 5}`
+        : `${amount || 5}`
+  return { name: measure?.label.trim() || 'תרגיל השלב', sets, reps, rest: '2 דקות', notes: '' }
 }
 
 export function SkillNodeModal({
@@ -686,19 +692,14 @@ export function SkillNodeModal({
   if (!draft || !node) return null
 
   const originals = new Map(node.measures.map((m) => [m.id, m]))
-
-  function moveMeasure(index: number, dir: -1 | 1) {
-    const next = [...measures]
-    const target = index + dir
-    if (target < 0 || target >= next.length) return
-    ;[next[index], next[target]] = [next[target], next[index]]
-    setMeasures(next)
-  }
+  const tierPills =
+    draft.tierStatus === 'queued' ? [...TIER_PILLS, { id: 'queued' as const, label: 'בתור ⏳' }] : TIER_PILLS
+  const listId = `skill-exercises-${draft.id}`
 
   return (
     <Modal open={open} title={isNew ? 'שלב חדש' : `עריכת שלב ${draft.order}`} onClose={onClose} wide>
       <form
-        className="space-y-3"
+        className="space-y-3.5"
         dir="rtl"
         onSubmit={(e) => {
           e.preventDefault()
@@ -714,51 +715,38 @@ export function SkillNodeModal({
                 ...sl,
                 replaces: sl.replaces.trim(),
                 exercises: sl.exercises
-                  .map((e) => ({ ...e, name: e.name.trim(), reps: e.reps.trim(), rest: e.rest.trim() }))
-                  .filter((e) => e.name),
+                  .map((x) => ({ ...x, name: x.name.trim(), reps: x.reps.trim(), rest: x.rest.trim() }))
+                  .filter((x) => x.name),
               }))
               .filter((sl) => sl.exercises.length),
           })
         }}
       >
         <TextField
-          label="שם השלב"
+          label="שם השלב / התרגיל"
           value={draft.title}
           onChange={(title) => setDraft({ ...draft, title })}
           maxLength={200}
         />
-        <SelectField
-          label="סטטוס השלב"
-          value={draft.tierStatus}
-          options={TIER_OPTIONS}
-          onChange={(tierStatus) => setDraft({ ...draft, tierStatus })}
-        />
-        <TextField
-          label="תנאי פתיחה (מה צריך לשלוט בו קודם)"
-          value={draft.prerequisites}
-          onChange={(prerequisites) => setDraft({ ...draft, prerequisites })}
-          multiline
-          maxLength={400}
-        />
-        <TextField
-          label="הערה"
-          value={draft.note}
-          onChange={(note) => setDraft({ ...draft, note })}
-          multiline
-          maxLength={500}
-        />
-        <p className="pt-1 text-xs font-bold text-slate-700">מדדי שליטה (Mastery Gate — כולם ב-100%)</p>
+        <div className="space-y-1">
+          <p className="text-xs text-muted">סטטוס השלב</p>
+          <PillGroup
+            label="סטטוס השלב"
+            value={draft.tierStatus}
+            options={tierPills}
+            onChange={(tierStatus) => setDraft({ ...draft, tierStatus })}
+          />
+        </div>
+
         <div className="space-y-2">
+          <p className="text-xs font-bold text-slate-700">מדדי ההתקדמות</p>
           {measures.map((m, i) => (
             <MeasureEditor
               key={m.id}
               draft={m}
-              index={i}
               count={measures.length}
-              exerciseNames={exerciseNames}
               onChange={(next) => setMeasures(measures.map((x, j) => (j === i ? next : x)))}
               onRemove={() => setMeasures(measures.filter((_, j) => j !== i))}
-              onMove={(dir) => moveMeasure(i, dir)}
             />
           ))}
           {measures.length < 8 ? (
@@ -766,38 +754,93 @@ export function SkillNodeModal({
               type="button"
               className="w-full gap-2"
               variant="surface"
-              onClick={() => setMeasures([...measures, measureToDraft(emptyMeasure())])}
+              onClick={() =>
+                setMeasures([...measures, measureToDraft({ ...emptyMeasure(), sourceType: 'workout_exercise' })])
+              }
             >
               <Plus className="size-4" strokeWidth={2} />
-              מדד נוסף
+              תרגיל נוסף
             </Button>
           ) : null}
         </div>
 
         <div className="space-y-2">
-          <p className="pt-1 text-xs font-bold text-slate-700">מתכון שיבוץ לאימון (החלפה חכמה)</p>
-          {slots.map((sl, i) => (
-            <SlotEditor
+          <p className="text-xs font-bold text-slate-700">שיבוץ באימון</p>
+          {(slots.length ? slots : [null]).map((sl, i) => (
+            <PlacementEditor
               key={i}
               slot={sl}
-              index={i}
-              exerciseNames={exerciseNames}
-              onChange={(next) => setSlots(slots.map((x, j) => (j === i ? next : x)))}
-              onRemove={() => setSlots(slots.filter((_, j) => j !== i))}
+              fallback={incomingFrom(measures[0])}
+              onChange={(next) =>
+                setSlots(
+                  slots.length
+                    ? next
+                      ? slots.map((x, j) => (j === i ? next : x))
+                      : slots.filter((_, j) => j !== i)
+                    : next
+                      ? [next]
+                      : [],
+                )
+              }
             />
           ))}
-          {slots.length < 4 ? (
-            <Button
-              type="button"
-              className="w-full gap-2"
-              variant="surface"
-              onClick={() => setSlots([...slots, emptySlot()])}
-            >
-              <Plus className="size-4" strokeWidth={2} />
-              מתכון שיבוץ
-            </Button>
-          ) : null}
         </div>
+
+        <details className="group rounded-2xl border border-slate-200 bg-white">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between px-3 text-xs font-bold text-slate-600">
+            הגדרות מתקדמות
+            <ChevronDown className="size-4 transition-transform group-open:rotate-180" strokeWidth={2} />
+          </summary>
+          <div className="space-y-2.5 border-t border-slate-100 p-3">
+            <TextField
+              label="תנאי פתיחה"
+              value={draft.prerequisites}
+              onChange={(prerequisites) => setDraft({ ...draft, prerequisites })}
+              multiline
+              maxLength={400}
+            />
+            <TextField
+              label="הערה"
+              value={draft.note}
+              onChange={(note) => setDraft({ ...draft, note })}
+              multiline
+              maxLength={500}
+            />
+            {measures.map((m, i) => (
+              <div key={m.id} className="space-y-1.5 rounded-xl bg-slate-50 p-2">
+                <p className="truncate text-[11px] font-bold text-slate-700" dir="auto">
+                  {m.label || `תרגיל ${i + 1}`}
+                </p>
+                <label className="block text-[11px] text-muted">
+                  שמות לזיהוי ביומן (מופרדים ב-|)
+                  <input
+                    type="text"
+                    list={listId}
+                    value={m.linkedExercise}
+                    maxLength={300}
+                    onChange={(e) =>
+                      setMeasures(measures.map((x, j) => (j === i ? { ...x, linkedExercise: e.target.value } : x)))
+                    }
+                    className="field mt-1"
+                  />
+                </label>
+                <SelectField
+                  label="מקור נתונים"
+                  value={m.sourceType}
+                  options={SOURCE_OPTIONS}
+                  onChange={(sourceType) =>
+                    setMeasures(measures.map((x, j) => (j === i ? { ...x, sourceType } : x)))
+                  }
+                />
+              </div>
+            ))}
+            <datalist id={listId}>
+              {exerciseNames.map((name) => (
+                <option key={name} value={name} />
+              ))}
+            </datalist>
+          </div>
+        </details>
 
         <Button type="submit" className="w-full" variant="accent" disabled={!draft.title.trim()}>
           שמור שלב

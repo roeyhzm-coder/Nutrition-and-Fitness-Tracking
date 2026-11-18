@@ -17,8 +17,10 @@ import { dayAllExercises, localDateKey, parseLocalDateKey, uid, WEEKDAY_SHORT } 
 import {
   LEGACY_SEED_IDS,
   SKILL_SEED_MIGRATED_AT,
+  SKILL_FULL_RESET_BELOW,
   SKILL_SEED_REV,
   SKILL_SEED_REV_AT,
+  SKILL_TRACK_RESETS,
   SKILL_TRACK_CATEGORY,
   type SkillTrackCategory,
   seedSkillBranches,
@@ -133,6 +135,8 @@ export type SkillNode = {
   /** ISO time the slots were written into the plan (null = not applied yet). */
   slotsAppliedAt: string | null
   progressions: SkillProgression[]
+  /** Date key the progress counts from (set by "reset track"); else the block start. */
+  progressSince?: string
   updatedAt: string
   /** Seed revision (seed entities only); see SKILL_SEED_REV. */
   seedRev?: number
@@ -149,6 +153,8 @@ export type SkillBranch = {
   nextUnlockTitle: string
   updatedAt: string
   seedRev?: number
+  /** The plan still holds later-tier exercises: swap the current tier back in (see SkillPlanSync). */
+  rewindPending?: boolean
   deleted?: boolean
 }
 
@@ -419,6 +425,7 @@ function normalizeNode(raw: unknown, key: string, seed?: SkillNode): SkillNode |
     slots: Array.isArray(o.slots) ? o.slots.slice(0, 4).map(normalizeSlot) : (seed?.slots ?? []),
     slotsAppliedAt: typeof o.slotsAppliedAt === 'string' ? iso(o.slotsAppliedAt) : null,
     progressions,
+    ...(/^\d{4}-\d{2}-\d{2}$/.test(str(o.progressSince, 10)) ? { progressSince: str(o.progressSince, 10) } : {}),
     updatedAt: iso(o.updatedAt),
     ...(num(o.seedRev) != null ? { seedRev: num(o.seedRev) as number } : {}),
     ...(o.deleted === true ? { deleted: true } : {}),
@@ -439,6 +446,7 @@ function normalizeBranch(raw: unknown, key: string, seed?: SkillBranch): SkillBr
     nextUnlockTitle: str(o.nextUnlockTitle, 300),
     updatedAt: iso(o.updatedAt),
     ...(num(o.seedRev) != null ? { seedRev: num(o.seedRev) as number } : {}),
+    ...(o.rewindPending === true ? { rewindPending: true } : {}),
     ...(o.deleted === true ? { deleted: true } : {}),
   }
 }
@@ -470,7 +478,7 @@ function enforceSingleFocusTier(
       }
       seen = true
       const want = inFocus ? 'active' : 'queued'
-      if (n.tierStatus === 'active' && !inFocus) nodes[n.id] = { ...n, tierStatus: want }
+      if (n.tierStatus !== want) nodes[n.id] = { ...n, tierStatus: want }
     }
   }
 }
@@ -510,25 +518,44 @@ export function normalizeSkillTree(raw: unknown, today = localDateKey()): SkillT
     const bumped = new Date(Date.parse(at) + 1).toISOString()
     return bumped > SKILL_SEED_REV_AT ? bumped : SKILL_SEED_REV_AT
   }
+  const fullReset = (rev: number, branchId: string) =>
+    rev < SKILL_FULL_RESET_BELOW ||
+    Object.entries(SKILL_TRACK_RESETS).some(([r, ids]) => rev < Number(r) && ids.includes(branchId))
+  const keepManual = (seed: SkillNode, n: SkillNode) => {
+    const manual = new Map(n.measures.map((m) => [m.id, m]))
+    return seed.measures.map((m) => {
+      const old = manual.get(m.id)
+      return old?.manual && old.label === m.label ? { ...m, manual: old.manual } : m
+    })
+  }
   for (const seed of Object.values(base.branches)) {
     const b = branches[seed.id]
-    if (b && !b.deleted && (b.seedRev ?? 0) < SKILL_SEED_REV) {
-      branches[seed.id] = { ...seed, updatedAt: resetAt(b.updatedAt) }
+    const rev = b?.seedRev ?? 0
+    if (!b || b.deleted || rev >= SKILL_SEED_REV) continue
+    // Seed content and focus (1 pull + 1 push) refresh; a reset track also
+    // swaps its current tier back into the plan.
+    branches[seed.id] = {
+      ...seed,
+      updatedAt: resetAt(b.updatedAt),
+      ...(rev >= SKILL_FULL_RESET_BELOW && fullReset(rev, seed.id) ? { rewindPending: true } : {}),
     }
   }
   for (const seed of Object.values(base.nodes)) {
     const n = nodes[seed.id]
-    if (!n || n.deleted || (n.seedRev ?? 0) >= SKILL_SEED_REV) continue
-    const manual = new Map(n.measures.map((m) => [m.id, m]))
-    nodes[seed.id] = {
-      ...seed,
-      measures: seed.measures.map((m) => {
-        const old = manual.get(m.id)
-        return old?.manual && old.label === m.label ? { ...m, manual: old.manual } : m
-      }),
-      progressions: n.progressions,
-      updatedAt: resetAt(n.updatedAt),
-    }
+    const rev = n?.seedRev ?? 0
+    if (!n || n.deleted || rev >= SKILL_SEED_REV) continue
+    nodes[seed.id] = fullReset(rev, seed.branchId)
+      ? { ...seed, measures: keepManual(seed, n), progressions: n.progressions, updatedAt: resetAt(n.updatedAt) }
+      : {
+          // Content refresh only: the tier keeps its status and history.
+          ...seed,
+          tierStatus: n.tierStatus,
+          slotsAppliedAt: n.slotsAppliedAt,
+          measures: keepManual(seed, n),
+          progressions: n.progressions,
+          ...(n.progressSince ? { progressSince: n.progressSince } : {}),
+          updatedAt: resetAt(n.updatedAt),
+        }
   }
   enforceSingleFocusTier(branches, nodes)
   return {
@@ -801,6 +828,98 @@ export function soloFocusInCategory(state: SkillTreeState, branchId: string): Sk
     }
   }
   return next
+}
+
+/**
+ * "אפס התקדמות מסלול": every tier back to 0% (Tier 1 in focus, the rest
+ * locked, manual values cleared, only logs from `today` count) and the track
+ * joins active focus.
+ */
+export function resetBranchProgress(state: SkillTreeState, branchId: string, today = localDateKey()): SkillTreeState {
+  const branch = state.branches[branchId]
+  if (!branch) return state
+  const at = now()
+  const nodes = { ...state.nodes }
+  liveNodes(state, branchId).forEach((n, i) => {
+    nodes[n.id] = {
+      ...n,
+      tierStatus: i === 0 ? 'active' : 'locked',
+      measures: n.measures.map((m) => ({ ...m, manual: null })),
+      slotsAppliedAt: null,
+      progressSince: today,
+      updatedAt: at,
+    }
+  })
+  return {
+    ...state,
+    nodes,
+    branches: { ...state.branches, [branchId]: { ...branch, status: 'active_focus', updatedAt: at } },
+  }
+}
+
+/**
+ * "בטל השלמת שלב": a mastered tier becomes the tier in focus again (the tier
+ * that was current is locked); a completed track returns to active focus.
+ */
+export function unmasterTier(state: SkillTreeState, nodeId: string): SkillTreeState {
+  const node = state.nodes[nodeId]
+  const branch = node ? state.branches[node.branchId] : undefined
+  if (!node || !branch || node.tierStatus !== 'mastered') return state
+  const at = now()
+  const status: SkillBranchStatus =
+    branch.status === 'queued_next_block' ? 'queued_next_block' : 'active_focus'
+  const nodes = { ...state.nodes }
+  for (const n of liveNodes(state, node.branchId)) {
+    if (n.id !== nodeId && (n.tierStatus === 'active' || n.tierStatus === 'queued')) {
+      nodes[n.id] = { ...n, tierStatus: 'locked', updatedAt: at }
+    }
+  }
+  nodes[nodeId] = {
+    ...node,
+    tierStatus: status === 'active_focus' ? 'active' : 'queued',
+    updatedAt: at,
+  }
+  return {
+    ...state,
+    nodes,
+    branches: { ...state.branches, [branch.id]: { ...branch, status, updatedAt: at } },
+  }
+}
+
+/**
+ * Save a new stage. When nothing is left to work on in the track (e.g. 5/5
+ * mastered), the follow-up stage becomes the one in focus right away.
+ */
+export function addStage(state: SkillTreeState, node: SkillNode): SkillTreeState {
+  const branch = state.branches[node.branchId]
+  const open = liveNodes(state, node.branchId).some(
+    (n) => n.id !== node.id && (n.tierStatus === 'active' || n.tierStatus === 'queued'),
+  )
+  if (!branch || open) return upsertNode(state, node)
+  const at = now()
+  const status: SkillBranchStatus =
+    branch.status === 'queued_next_block' ? 'queued_next_block' : 'active_focus'
+  return {
+    ...state,
+    nodes: {
+      ...state.nodes,
+      [node.id]: {
+        ...node,
+        tierStatus: status === 'active_focus' ? 'active' : 'queued',
+        updatedAt: at,
+      },
+    },
+    branches: { ...state.branches, [branch.id]: { ...branch, status, updatedAt: at } },
+  }
+}
+
+/** Plan rewind handled (see SkillPlanSync). */
+export function clearRewind(state: SkillTreeState, branchId: string): SkillTreeState {
+  const branch = state.branches[branchId]
+  if (!branch?.rewindPending) return state
+  const rest: SkillBranch = { ...branch, updatedAt: now() }
+  delete rest.rewindPending
+  return { ...state, branches: { ...state.branches, [branchId]: rest } }
 }
 
 export function markSlotsApplied(state: SkillTreeState, nodeId: string): SkillTreeState {
@@ -1189,7 +1308,9 @@ export function evaluateSkillTree(
 ): BranchEvaluation[] {
   const since = state.blockStartDate
   return liveBranches(state).map((branch) => {
-    const nodes = liveNodes(state, branch.id).map((n) => evaluateNode(n, sources, since))
+    const nodes = liveNodes(state, branch.id).map((n) =>
+      evaluateNode(n, sources, n.progressSince && n.progressSince > since ? n.progressSince : since),
+    )
     const masteredCount = nodes.filter((n) => n.status === 'mastered').length
     const activeNode = nodes.find((n) => n.status === 'active') ?? null
     const progress = nodes.length
@@ -1206,8 +1327,9 @@ export function evaluateSkillTree(
           (!activeNode || n.node.order > activeNode.node.order),
       ) ?? null
     const complete = nodes.length > 0 && masteredCount === nodes.length
+    // The track's own status decides its filter tab (never derived from the tiers).
     const focus: BranchFocus =
-      complete || branch.status === 'completed' ? 'completed' : activeNode ? 'active' : 'queued'
+      branch.status === 'completed' ? 'completed' : branch.status === 'active_focus' ? 'active' : 'queued'
     return {
       branch,
       nodes,
@@ -1252,6 +1374,26 @@ export function formatSkillValue(measure: SkillMeasure, value: SkillValue | null
       const unit = BODY_STAT_UNITS[measure.bodyStat ?? 'weight']
       return unit === '%' ? `${fmt(value.amount)}%` : `${fmt(value.amount)} ${unit}`
     }
+  }
+}
+
+/** "5 מתוך 10 חזרות (3 סטים)" — the one-line progress control text. */
+export function progressText(measure: SkillMeasure, current: SkillValue | null): string {
+  const t = measure.target
+  const c = current?.amount ?? measure.baseline.amount ?? 0
+  const sets = t.sets && t.sets > 1 ? ` (${fmt(t.sets)} סטים)` : ''
+  switch (measure.metricType) {
+    case 'sets_x_reps':
+    case 'max_reps':
+      return `${fmt(c)} מתוך ${fmt(t.amount)} חזרות${sets}`
+    case 'duration_seconds':
+      return `${fmt(c)} מתוך ${fmt(t.amount)} שנ'${sets}`
+    case 'weight_x_reps':
+      return `${c > 0 ? fmt(c) : 'משקל גוף'} מתוך ${fmt(t.amount)} ק"ג × ${fmt(t.reps)} חזרות`
+    case 'gap_cm':
+      return `${fmt(c)} ס"מ ⬅ יעד ${fmt(t.amount)} ס"מ מהרצפה`
+    case 'body_stat':
+      return `${formatSkillValue(measure, current)} ⬅ ${formatSkillValue(measure, t)}`
   }
 }
 

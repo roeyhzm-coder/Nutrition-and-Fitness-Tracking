@@ -13,11 +13,11 @@ import {
   moveNode,
   newBranch,
   newNode,
-  percent,
   queueBranch,
   setBlockSettings,
   setMeasureManual,
   SKILL_FOCUS_LIMIT,
+  addStage,
   soloFocusInCategory,
   trackCategory,
   upsertBranch,
@@ -82,46 +82,18 @@ function BlockWeeksStrip({
 }
 
 function FocusMeter({ count, pull, push }: { count: number; pull: number; push: number }) {
-  const over = count > SKILL_FOCUS_LIMIT
-  const unbalanced = pull > 1 || push > 1
+  const warn = count > SKILL_FOCUS_LIMIT || pull > 1 || push > 1
   return (
-    <div className="rounded-2xl bg-white/10 p-2.5 ring-1 ring-inset ring-white/20">
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <p className="font-bold">
-          פוקוס פעיל: {count}/{SKILL_FOCUS_LIMIT} מסלולים{' '}
-          <span className="font-medium text-blue-100">
-            ({pull} משיכה · {push} דחיפה)
-          </span>
-        </p>
-        {over || unbalanced ? <AlertTriangle className="size-4 shrink-0 text-amber-300" strokeWidth={2.25} /> : null}
-      </div>
-      <div className="mt-1.5 flex gap-1" aria-hidden>
-        {Array.from({ length: Math.max(SKILL_FOCUS_LIMIT, count) }, (_, i) => (
-          <span
-            key={i}
-            className={[
-              'h-1.5 flex-1 rounded-full',
-              i < count ? (i >= SKILL_FOCUS_LIMIT ? 'bg-amber-300' : 'bg-white') : 'bg-white/20',
-            ].join(' ')}
-          />
-        ))}
-      </div>
-      {over || unbalanced ? (
-        <p className="mt-1.5 text-[11px] font-semibold text-amber-200">
-          מומלץ 2 מסלולים בלבד: 1 משיכה + 1 דחיפה — העבר מסלול לבתור כדי לשמור על התאוששות.
-        </p>
-      ) : (
-        <p className="mt-1.5 text-[11px] text-blue-100/90">
-          מומלץ: 1 מסלול משיכה + 1 מסלול דחיפה. העברת מסלול לפוקוס מחליפה אוטומטית את המסלול מאותה קטגוריה.
-        </p>
-      )}
-    </div>
+    <p className={`flex items-center gap-1.5 text-xs font-bold ${warn ? 'text-amber-200' : 'text-white'}`}>
+      {warn ? <AlertTriangle className="size-3.5 shrink-0" strokeWidth={2.25} /> : null}
+      פוקוס פעיל: {count}/{SKILL_FOCUS_LIMIT} מסלולים ({pull} משיכה · {push} דחיפה)
+    </p>
   )
 }
 
 function HowItWorks() {
-  const [openRaw, setOpen] = useLocalStorage<boolean>('tn.skillTree.howItWorks.open', true)
-  const open = openRaw !== false
+  const [openRaw, setOpen] = useLocalStorage<boolean>('tn.skillTree.howItWorks.open.v2', false)
+  const open = openRaw === true
   return (
     <section className="rounded-2xl border border-blue-100 bg-blue-50/70 text-blue-950">
       <button
@@ -153,7 +125,7 @@ export function SkillTreePanel() {
     morningRoutine,
   } = useAppData()
   const { evaluations } = useSkillTreeEvaluation()
-  const { writeSlots, advanceStage } = useSkillStageActions()
+  const { writeSlots, advanceStage, resetTrack, undoMastery } = useSkillStageActions()
   const exerciseNames = useLinkableExerciseNames()
   const today = useTodayKey()
   const week = blockWeekInfo(skillTree, today)
@@ -196,11 +168,6 @@ export function SkillTreePanel() {
     }),
     [evaluations],
   )
-  const overall = evaluations.length
-    ? evaluations.reduce((sum, e) => sum + e.progress, 0) / evaluations.length
-    : 0
-  const tiersMastered = evaluations.reduce((sum, e) => sum + e.masteredCount, 0)
-  const tiersTotal = evaluations.reduce((sum, e) => sum + e.tierCount, 0)
 
   const modalBranch = tierModal
     ? (evaluations.find((e) => e.nodes.some((n) => n.node.id === tierModal.nodeId)) ?? null)
@@ -284,45 +251,28 @@ export function SkillTreePanel() {
 
   return (
     <div className="space-y-4" dir="rtl">
-      <section className="space-y-3 overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 p-4 text-white shadow-lg shadow-blue-700/25">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-xs font-semibold text-blue-100">
-              <GitBranch className="size-3.5" strokeWidth={2.25} />
-              {week.label}
-            </p>
-            <h2 className="mt-1 font-display text-lg font-bold leading-tight">עץ מיומנויות ואבני דרך</h2>
-            <p className="mt-0.5 text-xs text-blue-100/90">
-              {evaluations.length} מסלולים · {tiersMastered}/{tiersTotal} שלבים נשלטו · מתעדכן מהאימונים ושגרת הבוקר
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
-            <span className="font-display text-3xl font-extrabold leading-none tabular-nums">
-              {percent(overall)}%
-            </span>
-            <button
-              type="button"
-              aria-label="הגדרות בלוק"
-              onClick={() => setSettingsOpen(true)}
-              className="flex size-9 items-center justify-center rounded-xl bg-white/15 text-white transition hover:bg-white/25"
-            >
-              <Settings2 className="size-4" strokeWidth={2} />
-            </button>
-          </div>
+      <section className="space-y-2.5 overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 px-4 py-3 text-white shadow-lg shadow-blue-700/25">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="flex items-center gap-1.5 font-display text-lg font-bold leading-tight">
+            <GitBranch className="size-4" strokeWidth={2.25} />
+            עץ מיומנויות
+          </h2>
+          <button
+            type="button"
+            aria-label="הגדרות בלוק"
+            onClick={() => setSettingsOpen(true)}
+            className="flex size-8 items-center justify-center rounded-xl bg-white/15 text-white transition hover:bg-white/25"
+          >
+            <Settings2 className="size-4" strokeWidth={2} />
+          </button>
         </div>
+        <BlockWeeksStrip
+          week={week.started ? week.week : 0}
+          total={skillTree.blockWeeks}
+          deload={skillTree.deloadWeeks}
+          benchmark={skillTree.benchmarkWeek}
+        />
         <FocusMeter count={counts.active} pull={counts.activePull} push={counts.activePush} />
-        <div>
-          <BlockWeeksStrip
-            week={week.started ? week.week : 0}
-            total={skillTree.blockWeeks}
-            deload={skillTree.deloadWeeks}
-            benchmark={skillTree.benchmarkWeek}
-          />
-          <p className="mt-1.5 text-[10px] text-blue-100/80">
-            D = דילואד (שבועות {skillTree.deloadWeeks.join(', ') || '—'}) · ★ = שבוע מבחנים (
-            {skillTree.benchmarkWeek})
-          </p>
-        </div>
       </section>
 
       <HowItWorks />
@@ -379,6 +329,11 @@ export function SkillTreePanel() {
               onActivateNode={(nodeId) => setTierModal({ nodeId, mode: 'confirm' })}
               onPromote={promote}
               onToggleFocus={() => toggleFocus(e)}
+              onResetTrack={() => showToast(resetTrack(e.branch.id))}
+              onUndoMastery={(nodeId) => {
+                const message = undoMastery(nodeId)
+                if (message) showToast(message)
+              }}
             />
           ))}
         </div>
@@ -434,7 +389,11 @@ export function SkillTreePanel() {
         isNew={branchDraft?.isNew ?? false}
         onClose={() => setBranchDraft(null)}
         onSave={(branch) => {
-          updateSkillTree((prev) => upsertBranch(prev, branch))
+          // The chosen status always wins; joining focus keeps 1 pull + 1 push.
+          updateSkillTree((prev) => {
+            const next = upsertBranch(prev, branch)
+            return branch.status === 'active_focus' ? soloFocusInCategory(next, branch.id) : next
+          })
           if (branchDraft?.isNew) setExpanded([...expanded, branch.id])
           setBranchDraft(null)
         }}
@@ -450,7 +409,9 @@ export function SkillTreePanel() {
         exerciseNames={exerciseNames}
         onClose={() => setNodeDraft(null)}
         onSave={(node) => {
-          updateSkillTree((prev) => upsertNode(prev, node))
+          updateSkillTree((prev) =>
+            nodeDraft?.isNew ? soloFocusInCategory(addStage(prev, node), node.branchId) : upsertNode(prev, node),
+          )
           setNodeDraft(null)
         }}
         onDelete={(id) => {

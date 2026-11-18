@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import { BottomNav } from './BottomNav'
 import { ActiveWorkoutTracker } from '../workouts/ActiveWorkoutTracker'
 import { SyncNoticeToast } from './SyncNoticeToast'
+import { SkillPlanSync } from '../skills/useSkillTree'
 
 export function AppShell() {
   return (
@@ -9,6 +10,7 @@ export function AppShell() {
       <div className="flex-1 pb-[calc(10rem+env(safe-area-inset-bottom,0px))]">
         <Outlet />
       </div>
+      <SkillPlanSync />
       <BottomNav />
       <ActiveWorkoutTracker />
       <SyncNoticeToast />

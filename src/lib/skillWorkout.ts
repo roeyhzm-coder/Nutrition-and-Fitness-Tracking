@@ -12,9 +12,13 @@ import {
   trackCategory,
   type SkillMeasure,
   type SkillNode,
+  type SkillSlotExercise,
+  type SkillSlotRecipe,
   type SkillTrackCategory,
   type SkillTreeState,
 } from './skillTree'
+import { createOfficialPrograms, DEFAULT_ACTIVE_PROGRAM_ID } from '../data/workouts'
+import { normalizeMorningState } from './morningRoutine'
 import type { Exercise, WorkoutDay } from './types'
 import { dayAllExercises } from './types'
 
@@ -169,3 +173,25 @@ export function skillItemForExercise(
     null
   )
 }
+
+/** The official Block 3 plan / default morning routine exercise a recipe first replaced. */
+export function originalPlanExercise(slot: SkillSlotRecipe): SkillSlotExercise | null {
+  if (slot.target === 'morningA' || slot.target === 'morningB') {
+    const routine = normalizeMorningState(null).routines[slot.target === 'morningA' ? 'A' : 'B']
+    const hit = routine.exercises.find((e) => matchesLink(`${e.nameHe} ${e.nameEn}`, slot.replaces))
+    return hit
+      ? { name: `${hit.nameHe} ${hit.nameEn}`.trim(), sets: 1, reps: hit.target, rest: '—', notes: hit.description }
+      : null
+  }
+  const want = slot.target === 'combo' ? 'both' : slot.target
+  const program = createOfficialPrograms().find((p) => p.id === DEFAULT_ACTIVE_PROGRAM_ID)
+  for (const day of program?.days ?? []) {
+    for (const session of day.sessions ?? []) {
+      if (skillKindOfName(session.name) !== want) continue
+      const hit = session.exercises.find((e) => matchesLink(e.name, slot.replaces))
+      if (hit) return { name: hit.name, sets: hit.sets, reps: hit.reps, rest: hit.rest ?? '', notes: hit.notes ?? '' }
+    }
+  }
+  return null
+}
+

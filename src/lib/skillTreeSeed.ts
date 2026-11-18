@@ -35,9 +35,40 @@ export const SKILL_SEED_V2_AT = '2026-11-17T10:30:00.000Z'
  * reset to the seed on load — independent of its timestamp, so a stale client
  * can never resurrect an old tier state again. Bump when the seed changes.
  */
-export const SKILL_SEED_REV = 4
-/** Floor timestamp for the current seed revision's reset (rev 4: clean Stage 1 baseline). */
-export const SKILL_SEED_REV_AT = '2026-11-18T17:30:00.000Z'
+export const SKILL_SEED_REV = 5
+/** Floor timestamp for the current seed revision's migration. */
+export const SKILL_SEED_REV_AT = '2026-11-19T08:00:00.000Z'
+/** Seed entities older than this revision are fully reset (rev 4: clean Stage 1 baseline). */
+export const SKILL_FULL_RESET_BELOW = 4
+/**
+ * Targeted resets: tracks fully reset when coming from below the revision.
+ * Other tracks only get the refreshed seed content (baselines) and keep their state.
+ */
+export const SKILL_TRACK_RESETS: Readonly<Record<number, readonly string[]>> = {
+  5: ['sk-handstand'],
+}
+
+/**
+ * Realistic start for a target (never at, or above, the target): reps ~50%,
+ * holds of 30 s+ ~50% (rounded to 5 s), short holds ~20% (15 s → 3 s),
+ * loads ~50% (rounded down to 2.5 kg). Distance-to-floor goals keep their own start.
+ */
+function startFor(metric: SkillMeasure['metricType'], target: SkillValue, own: SkillValue): SkillValue {
+  const t = target.amount
+  if (t == null || metric === 'gap_cm' || metric === 'body_stat') return own
+  let amount: number
+  switch (metric) {
+    case 'duration_seconds':
+      amount = t >= 30 ? Math.round((t * 0.5) / 5) * 5 : Math.max(1, Math.round(t * 0.2))
+      break
+    case 'weight_x_reps':
+      amount = Math.floor((t * 0.5) / 2.5) * 2.5
+      break
+    default:
+      amount = Math.max(1, Math.round(t * 0.5))
+  }
+  return { ...own, amount: Math.min(amount, t > 1 ? t - 1 : 0), reps: target.reps, sets: target.sets }
+}
 
 export type SkillTrackCategory = 'pull' | 'push'
 /** Training-day category of each seed track (badge on the card + 1 pull / 1 push focus). */
@@ -143,7 +174,7 @@ function tier(
       linkedExercise: m.linkedExercise,
       metricType: m.metricType,
       bodyStat: null,
-      baseline: m.baseline,
+      baseline: startFor(m.metricType, m.target, m.baseline),
       target: m.target,
       manual: null,
     })),

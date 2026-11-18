@@ -8,6 +8,7 @@ import type { MorningExercise, MorningIllustrationKind, MorningRoutineState } fr
 import {
   matchesLink,
   SKILL_SLOT_TARGET_LABELS,
+  type SkillNode,
   type SkillSlotExercise,
   type SkillSlotRecipe,
 } from './skillTree'
@@ -254,6 +255,41 @@ export function applyMorningSlots(
     if (!id) continue
     const current = out[id] ?? morning.routines[id].exercises
     out[id] = swapList(current, slot, morningName, toMorningExercise).list
+  }
+  return out
+}
+
+/**
+ * Swap a track back to tier `toOrder` in the plan (reset / un-master).
+ * Recipes are grouped per workout slot (target + role); for each group the
+ * exercise that belongs to tier `toOrder` (the latest one at or below it, else
+ * the original plan exercise from `original`) replaces whatever later tiers
+ * swapped in. Nothing to restore (e.g. an appended finisher) → it is removed.
+ */
+export function rewindRecipes(
+  nodes: SkillNode[],
+  toOrder: number,
+  original: (slot: SkillSlotRecipe) => SkillSlotExercise | null,
+): SkillSlotRecipe[] {
+  const groups = new Map<string, { order: number; slot: SkillSlotRecipe }[]>()
+  for (const n of [...nodes].filter((x) => !x.deleted).sort((a, b) => a.order - b.order)) {
+    for (const slot of n.slots) {
+      const key = `${slot.target}|${slot.role}`
+      groups.set(key, [...(groups.get(key) ?? []), { order: n.order, slot }])
+    }
+  }
+  const out: SkillSlotRecipe[] = []
+  for (const list of groups.values()) {
+    const later = list.filter((x) => x.order > toOrder)
+    if (!later.length) continue
+    const home = [...list].reverse().find((x) => x.order <= toOrder)
+    const first = list[0]!.slot
+    const exercises = home ? home.slot.exercises : [original(first)].filter((e): e is SkillSlotExercise => !!e)
+    const laterNames = later.flatMap((x) => x.slot.exercises.map((e) => e.name.trim()))
+    const keep = new Set(exercises.map((e) => e.name.trim()))
+    const chain = [...new Set(laterNames.filter((n) => n && !keep.has(n)))]
+    if (!chain.length) continue
+    out.push({ ...first, replaces: chain.join('|'), exercises })
   }
   return out
 }
