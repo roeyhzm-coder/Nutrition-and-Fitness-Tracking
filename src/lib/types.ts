@@ -270,6 +270,12 @@ export type UserProfile = {
   lastAiExportAt: string | null
   /** ISO time the AI cycle (interval/anchor) was last edited; drives last-write-wins sync. */
   aiCheckinUpdatedAt: string | null
+  /** Days between body-fat / circumference measurements (dashboard reminder). */
+  bodyCheckIntervalDays: number
+  /** Manual reset of the measurement reminder (YYYY-MM-DD); the latest body-log entry also resets it. */
+  bodyCheckAnchorAt: string | null
+  /** ISO time the measurement reminder was last edited; last-write-wins sync. */
+  bodyCheckUpdatedAt: string | null
 }
 
 export const EMPTY_PROFILE: UserProfile = {
@@ -290,6 +296,9 @@ export const EMPTY_PROFILE: UserProfile = {
   aiCheckinIntervalDays: 28,
   lastAiExportAt: null,
   aiCheckinUpdatedAt: null,
+  bodyCheckIntervalDays: 30,
+  bodyCheckAnchorAt: null,
+  bodyCheckUpdatedAt: null,
 }
 
 function normalizeIntervalDays(value: unknown, fallback = 28): number {
@@ -333,6 +342,15 @@ export function normalizeProfile(
     aiCheckinUpdatedAt:
       typeof next.aiCheckinUpdatedAt === 'string' && next.aiCheckinUpdatedAt.length >= 10
         ? next.aiCheckinUpdatedAt
+        : null,
+    bodyCheckIntervalDays: normalizeIntervalDays(profile?.bodyCheckIntervalDays ?? next.bodyCheckIntervalDays, 30),
+    bodyCheckAnchorAt:
+      typeof next.bodyCheckAnchorAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(next.bodyCheckAnchorAt.slice(0, 10))
+        ? next.bodyCheckAnchorAt.slice(0, 10)
+        : null,
+    bodyCheckUpdatedAt:
+      typeof next.bodyCheckUpdatedAt === 'string' && next.bodyCheckUpdatedAt.length >= 10
+        ? next.bodyCheckUpdatedAt
         : null,
   }
 }

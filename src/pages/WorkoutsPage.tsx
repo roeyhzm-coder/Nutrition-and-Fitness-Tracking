@@ -218,9 +218,9 @@ function WorkoutPlanView({ tabs }: { tabs: ReactNode }) {
         <PageHeader title="אימונים" subtitle="אין ימי אימון" />
         <div className="space-y-5 px-4 py-5">
           {tabs}
-          <BlockStatusCard />
           <ProgramManager />
           <FocusTracksCard />
+          <BlockStatusCard />
           <ActivityLogCard />
           <WeeklyPlanEditor />
         </div>
@@ -253,7 +253,6 @@ function WorkoutPlanView({ tabs }: { tabs: ReactNode }) {
 
       <div className="space-y-5 px-4 py-5">
         {tabs}
-        <BlockStatusCard />
         <WorkoutCompletedBadge />
         <FocusTracksCard />
         <WorkoutLibrary
@@ -473,6 +472,7 @@ function WorkoutPlanView({ tabs }: { tabs: ReactNode }) {
         ) : null}
 
         <WorkoutHistoryCard collapseAfter={3} />
+        <BlockStatusCard />
         <ActivityLogCard />
         <WeeklyPlanEditor />
       </div>

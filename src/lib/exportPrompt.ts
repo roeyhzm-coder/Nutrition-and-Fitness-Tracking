@@ -1081,7 +1081,7 @@ ${PHASE_BLUEPRINT.join('\n')}
 - יעד משקל לשלב: ${fmtNum(goal.targetWeightKg, 2)} ק״ג | יעד שומן: עד ${fmtNum(goal.targetBodyFatPct, 2)}%
 - יעדי מאקרו יומיים: ${fmtNum(macroTargets.calories)} קק״ל | חלבון: ${fmtNum(macroTargets.protein)}ג׳ | שומן: ${fmtNum(macroTargets.fats)}ג׳ | פחמימות: ${fmtNum(macroTargets.carbs)}ג׳`,
     historySection,
-    formatBodyLogSection(input.bodyLogHistory ?? []),
+    formatBodyLogSection(input.bodyLogHistory ?? [], input.weightLogs),
     measurementHistorySection,
     pastBlocksSection,
     adherenceLines.length || splitSummary !== NA || activitiesSummary !== NA

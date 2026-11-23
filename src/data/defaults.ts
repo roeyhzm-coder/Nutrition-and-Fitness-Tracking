@@ -125,6 +125,9 @@ export const DEFAULT_PROFILE: UserProfile = {
   aiCheckinIntervalDays: 28,
   lastAiExportAt: null,
   aiCheckinUpdatedAt: null,
+  bodyCheckIntervalDays: 30,
+  bodyCheckAnchorAt: null,
+  bodyCheckUpdatedAt: null,
 }
 
 export const SEED_WEIGHT_ENTRY: WeightEntry = {

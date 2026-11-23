@@ -296,24 +296,40 @@ export function formatMeasure(value: number | null, unit: string): string {
   return unit === '%' ? `${fmt(value)}%` : `${fmt(value)} ${unit}`
 }
 
-/** AI export section: chronological monthly readings with deltas. */
-export function formatBodyLogSection(history: BodyLogEntry[]): string {
+/** Body weight logged on that day (latest weigh-in of the day), if any. */
+export function weightOnDate(weightLogs: WeightEntry[], date: string): number | null {
+  const hit = [...weightLogs]
+    .filter((w) => w.weightKg > 0 && w.loggedAt.slice(0, 10) === date)
+    .sort((a, b) => a.loggedAt.localeCompare(b.loggedAt))
+    .at(-1)
+  return hit ? Math.round(hit.weightKg * 100) / 100 : null
+}
+
+/** AI export: the full history table (newest first) with deltas and same-day weight. */
+export function formatBodyLogSection(history: BodyLogEntry[], weightLogs: WeightEntry[] = []): string {
   if (!history.length) return ''
   const deltas = bodyLogDeltas(history)
-  const lines = history.map((entry) => {
-    const row = deltas.get(entry.id) ?? {}
-    const parts = BODY_LOG_FIELDS.flatMap((f) => {
-      const d = row[f.key]
-      if (!d) return []
-      const change = d.vsPrevious == null ? '' : ` (${formatSigned(d.vsPrevious, f.unit)} מהקודם)`
-      return [`${f.short}: ${formatMeasure(d.value, f.unit)}${change}`]
-    })
-    return `- ${entry.date} | ${parts.join(' | ')}${entry.note ? ` | הערה: ${entry.note}` : ''}`
-  })
   const stats = latestBodyStats(history)
   const fatTrend =
     stats.baselineFatPct != null && stats.bodyFatPct != null
       ? `- מגמת שומן מהבסיס: ${formatMeasure(stats.baselineFatPct, '%')} ➔ ${formatMeasure(stats.bodyFatPct, '%')} (${formatSigned(Math.round((stats.bodyFatPct - stats.baselineFatPct) * 100) / 100, '%')})`
       : ''
-  return ['## מעקב אחוזי שומן והיקפים חודשי', fatTrend, ...lines].filter(Boolean).join('\n')
+  const cell = (entry: BodyLogEntry, key: BodyLogField, unit: string) => {
+    const d = deltas.get(entry.id)?.[key]
+    if (!d) return '—'
+    return d.vsPrevious == null ? formatMeasure(d.value, unit) : `${formatMeasure(d.value, unit)} (${formatSigned(d.vsPrevious, unit)})`
+  }
+  const rows = [...history].reverse().map((entry) => {
+    const weight = weightOnDate(weightLogs, entry.date)
+    return `| ${entry.date} | ${cell(entry, 'bodyFatPct', '%')} | ${weight != null ? `${weight} ק"ג` : '—'} | ${cell(entry, 'waistCm', 'ס"מ')} | ${cell(entry, 'chestCm', 'ס"מ')} | ${cell(entry, 'armCm', 'ס"מ')} | ${cell(entry, 'shouldersCm', 'ס"מ')} | ${cell(entry, 'thighCm', 'ס"מ')} | ${entry.note || '—'} |`
+  })
+  return [
+    '## טבלת היסטוריית אחוזי שומן ומדדים (מעקב חודשי)',
+    fatTrend,
+    '| תאריך | אחוז שומן (שינוי מהקודם) | משקל | מותן | חזה | זרוע | כתפיים | ירך | הערה |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    ...rows,
+  ]
+    .filter(Boolean)
+    .join('\n')
 }

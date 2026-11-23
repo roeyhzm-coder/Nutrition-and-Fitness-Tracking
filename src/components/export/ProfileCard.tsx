@@ -1,3 +1,5 @@
+import { todayKey } from '../../lib/types'
+import { BodyLogHistoryButton, useBodyLogSaver } from '../profile/BodyLogHistory'
 import { useState } from 'react'
 import { useAppData } from '../../context/AppDataContext'
 import {
@@ -69,6 +71,7 @@ function toForm(
 }
 
 export function ProfileCard() {
+  const { mergeDay } = useBodyLogSaver()
   const { profile, setProfile, goal, setGoal, weightLogs, recordBodyMeasurement, latestBody } =
     useAppData()
   const latestWeight = latestWeighInKg(weightLogs, [], [
@@ -138,6 +141,13 @@ export function ProfileCard() {
             ...goal,
             masterTargetWeightKg: parsePositiveDecimal(form.targetWeightKg),
           })
+          // A new waist / neck calculation lands in today's history entry (other dates untouched).
+          if (
+            estimatedBodyFatPct != null &&
+            (waistCm !== profile.waistCircumferenceCm || neckCm !== profile.neckCircumferenceCm)
+          ) {
+            mergeDay(todayKey(), { bodyFatPct: Math.round(estimatedBodyFatPct * 100) / 100, waistCm }, 'חישוב נוסחת חיל הים')
+          }
           recordBodyMeasurement({
             weightKg:
               latestWeight ?? parsePositiveDecimal(form.startWeightKg),
@@ -225,6 +235,7 @@ export function ProfileCard() {
               ) : null}
             </p>
           ) : null}
+          <BodyLogHistoryButton className="mt-3" />
         </div>
 
         {measurementError || error ? (

@@ -1740,28 +1740,38 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const remoteProfile = remote.profile
         setProfileRaw((localRaw) => {
           const local = normalizeProfile(localRaw)
+          // The measurement reminder is last-write-wins on its own stamp too.
+          const withBodyCheck = (merged: UserProfile): UserProfile =>
+            (local.bodyCheckUpdatedAt ?? '') > (remoteProfile.bodyCheckUpdatedAt ?? '')
+              ? normalizeProfile({
+                  ...merged,
+                  bodyCheckIntervalDays: local.bodyCheckIntervalDays,
+                  bodyCheckAnchorAt: local.bodyCheckAnchorAt,
+                  bodyCheckUpdatedAt: local.bodyCheckUpdatedAt,
+                })
+              : merged
           const localStamp = local.aiCheckinUpdatedAt ?? ''
           const remoteStamp = remoteProfile.aiCheckinUpdatedAt ?? ''
           // The AI cycle (interval + anchor) is last-write-wins on its own stamp,
           // so a stale pull can never move the anchor or the interval.
           if (localStamp > remoteStamp) {
-            return normalizeProfile({
+            return withBodyCheck(normalizeProfile({
               ...remoteProfile,
               aiCheckinIntervalDays: local.aiCheckinIntervalDays,
               lastAiExportAt: local.lastAiExportAt,
               aiCheckinUpdatedAt: local.aiCheckinUpdatedAt,
-            })
+            }))
           }
-          if (remoteStamp) return normalizeProfile(remoteProfile)
+          if (remoteStamp) return withBodyCheck(normalizeProfile(remoteProfile))
           // Legacy rows without a stamp: keep the newest known anchor.
-          return normalizeProfile({
+          return withBodyCheck(normalizeProfile({
             ...remoteProfile,
             lastAiExportAt: latestDateKey(
               remoteProfile.lastAiExportAt,
               local.lastAiExportAt,
               readLastAiExportAt(),
             ),
-          })
+          }))
         })
       }
       if (remote.activityLogs !== undefined) {

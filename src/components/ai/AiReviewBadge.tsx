@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { BellRing, RotateCcw, Sparkles } from 'lucide-react'
+import { BellRing, Pencil, RotateCcw, Sparkles } from 'lucide-react'
 import {
   aiCheckinLabel,
   clampIntervalDays,
@@ -39,6 +39,13 @@ export function AiReviewBadge({
   onSave,
   hint,
   footer,
+  label = aiCheckinLabel,
+  onDueClick,
+  showEditIcon = false,
+  resetLabel = 'עדכנתי עם AI היום — התחל מחזור חדש',
+  dueMessage = 'הגיע הזמן לעדכון AI — העתק את הייצוא, התייעץ, ואז התחל מחזור חדש.',
+  anchorLabel = 'תאריך העדכון האחרון',
+  icon,
 }: {
   /** Modal title, e.g. "תזכורת עדכון AI". */
   title: string
@@ -47,6 +54,16 @@ export function AiReviewBadge({
   onSave: (next: AiReviewCycle) => void
   hint?: string
   footer?: ReactNode
+  /** Pill text for the remaining days (default: the AI check-in wording). */
+  label?: (remaining: number) => string
+  /** When due, a tap on the pill runs this instead of opening the editor. */
+  onDueClick?: () => void
+  /** Separate ✏️ button next to the pill for the cycle editor. */
+  showEditIcon?: boolean
+  resetLabel?: string
+  dueMessage?: string
+  anchorLabel?: string
+  icon?: ReactNode
 }) {
   const today = useTodayKey()
   const remaining = daysUntilReview(cycle.anchorDate, cycle.intervalDays, today)
@@ -83,26 +100,46 @@ export function AiReviewBadge({
     setOpen(false)
   }
 
+  const text = label(remaining)
+  const pill = (
+    <button
+      type="button"
+      onClick={due && onDueClick ? onDueClick : openEditor}
+      aria-label={due && onDueClick ? text : `${text} — עריכת מחזור`}
+      className={[
+        'inline-flex min-w-0 max-w-full cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] leading-none transition',
+        showEditIcon ? 'min-h-8 flex-1' : '',
+        due
+          ? 'border-rose-300 bg-rose-600 font-bold text-white shadow-sm shadow-rose-600/25 hover:bg-rose-700'
+          : 'border-slate-200 bg-white font-medium text-muted hover:border-slate-300 hover:text-text',
+      ].join(' ')}
+    >
+      {due ? (
+        <BellRing className="size-3 shrink-0 motion-safe:animate-pulse" />
+      ) : (
+        (icon ?? <Sparkles className="size-3 shrink-0" />)
+      )}
+      <span className="truncate">{text}</span>
+    </button>
+  )
+
   return (
     <>
-      <button
-        type="button"
-        onClick={openEditor}
-        aria-label={`${aiCheckinLabel(remaining)} — עריכת מחזור העדכון`}
-        className={[
-          'inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] leading-none transition',
-          due
-            ? 'border-rose-300 bg-rose-600 font-bold text-white shadow-sm shadow-rose-600/25 hover:bg-rose-700'
-            : 'border-slate-200 bg-white font-medium text-muted hover:border-slate-300 hover:text-text',
-        ].join(' ')}
-      >
-        {due ? (
-          <BellRing className="size-3 shrink-0 motion-safe:animate-pulse" />
-        ) : (
-          <Sparkles className="size-3 shrink-0" />
-        )}
-        <span className="truncate">{aiCheckinLabel(remaining)}</span>
-      </button>
+      {showEditIcon ? (
+        <span className="flex min-w-0 flex-1 items-center gap-1">
+          {pill}
+          <button
+            type="button"
+            onClick={openEditor}
+            aria-label={`עריכת מחזור — ${title}`}
+            className="flex size-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-muted transition hover:border-blue-200 hover:text-blue-600"
+          >
+            <Pencil className="size-3.5" strokeWidth={1.75} />
+          </button>
+        </span>
+      ) : (
+        pill
+      )}
 
       <Modal open={open} title={title} onClose={() => setOpen(false)}>
         <div className="space-y-4" dir="rtl">
@@ -114,7 +151,7 @@ export function AiReviewBadge({
           >
             <p className="font-semibold">
               {due
-                ? 'הגיע הזמן לעדכון AI — העתק את הייצוא, התייעץ, ואז התחל מחזור חדש.'
+                ? dueMessage
                 : `נותרו ${remaining} ימים מתוך ${cycle.intervalDays}`}
             </p>
             <p className="mt-0.5 text-xs opacity-80">
@@ -124,7 +161,7 @@ export function AiReviewBadge({
 
           <Button className="w-full gap-2" variant="accent" onClick={resetToday}>
             <RotateCcw className="size-4" strokeWidth={2} />
-            עדכנתי עם AI היום — התחל מחזור חדש
+            {resetLabel}
           </Button>
 
           <div className="space-y-3 border-t border-slate-100 pt-3">
@@ -155,7 +192,7 @@ export function AiReviewBadge({
               ))}
             </div>
             <label className="block text-xs text-muted">
-              תאריך העדכון האחרון
+              {anchorLabel}
               <input
                 type="date"
                 value={anchorDraft}
