@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { buildAiExportPrompt, buildWeeklyCountRows, parseImportJson } from '../../lib/exportPrompt'
 import { buildExportJson, downloadTextFile } from '../../lib/dynamicExport'
+import { liveBlockReports } from '../../lib/blockReport'
 import { extractBodyMeasurementsHistory } from '../../lib/bodyMeasurements'
 import { localDateKey } from '../../lib/types'
 import {
@@ -44,6 +45,7 @@ export function AiExportPanel() {
     importMealsAndRecipes,
     morningRoutine,
     skillTree,
+    bodyLogHistory,
   } = useAppData()
   const { workoutLogs } = useWorkoutSession()
   const [copied, setCopied] = useState(false)
@@ -83,6 +85,7 @@ export function AiExportPanel() {
         bodyMeasurements,
         morningRoutine,
         skillTree,
+        bodyLogHistory,
       }),
     [
       setLogs,
@@ -112,6 +115,7 @@ export function AiExportPanel() {
       bodyMeasurements,
       morningRoutine,
       skillTree,
+      bodyLogHistory,
     ],
   )
 
@@ -145,6 +149,8 @@ export function AiExportPanel() {
         weekNotes: consistencyWeekNotes,
         weekStartsOn,
       }),
+      monthlyBodyLog: bodyLogHistory.map(({ source: _source, ...entry }) => entry),
+      blockReports: liveBlockReports(skillTree.blockReports),
       ...morningExportEntities(morningRoutine, weekStartsOn),
       ...skillTreeExportEntities(skillTree, {
         workoutLogs,

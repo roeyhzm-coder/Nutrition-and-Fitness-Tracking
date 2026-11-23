@@ -26,6 +26,9 @@ type GoalPhaseCardProps = {
   goal: GoalSettings
   onSaveGoal: (goal: GoalSettings) => void
   currentWeight?: number | null
+  /** Latest reading from the monthly body-fat & circumference log. */
+  currentBodyFatPct?: number | null
+  currentWaistCm?: number | null
   onFinishPhase: () => void
 }
 
@@ -68,6 +71,8 @@ export function GoalPhaseCard({
   goal,
   onSaveGoal,
   currentWeight,
+  currentBodyFatPct,
+  currentWaistCm,
   onFinishPhase,
 }: GoalPhaseCardProps) {
   const [open, setOpen] = useState<'short' | 'master' | null>(null)
@@ -153,6 +158,10 @@ export function GoalPhaseCard({
                 {goal.targetBodyFatPct != null
                   ? `${formatPct(goal.targetBodyFatPct)}%`
                   : '—'}
+              </p>
+              <p className="text-[11px] text-muted">
+                נוכחי: {currentBodyFatPct != null ? `${formatPct(currentBodyFatPct)}%` : '—'}
+                {currentWaistCm != null ? ` · מותן ${formatKg(currentWaistCm)}` : ''}
               </p>
             </div>
           </div>

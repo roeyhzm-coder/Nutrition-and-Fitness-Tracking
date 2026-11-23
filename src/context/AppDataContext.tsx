@@ -174,6 +174,17 @@ import {
   SKILL_TREE_STORAGE_KEY,
   type SkillTreeState,
 } from '../lib/skillTree'
+import { reconcileFocusSlotDays, reconcileFocusSlotTemplates } from '../lib/skillFocusSlot'
+import {
+  BODY_LOG_STORAGE_KEY,
+  bodyLogHistory as deriveBodyLogHistory,
+  latestBodyStats,
+  mergeBodyLog,
+  normalizeBodyLog,
+  type BodyLogEntry,
+  type BodyLogState,
+  type LatestBodyStats,
+} from '../lib/bodyLog'
 
 type RecipesSyncStatus = 'idle' | 'loading' | 'synced' | 'error'
 
@@ -217,6 +228,13 @@ type AppDataContextValue = {
   skillTree: SkillTreeState
   /** Apply a pure edit (see lib/skillTree upsert/delete/move helpers). */
   updateSkillTree: (fn: (prev: SkillTreeState) => SkillTreeState) => void
+  /** Monthly body-fat & circumference log (stored entries incl. tombstones). */
+  bodyLog: BodyLogState
+  /** Chronological history: stored + legacy weigh-in readings + block seeds. */
+  bodyLogHistory: BodyLogEntry[]
+  /** Latest body fat / waist from the monthly log (single source for all cards + export). */
+  latestBody: LatestBodyStats
+  updateBodyLog: (fn: (prev: BodyLogState) => BodyLogState) => void
   weightLogs: WeightEntry[]
   bodyMeasurements: BodyMeasurement[]
   recordBodyMeasurement: (input: {
@@ -638,6 +656,19 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const [bodyMeasurements, setBodyMeasurements] = useLocalStorage<
     BodyMeasurement[]
   >('tn.bodyMeasurements.v1', [])
+  const [bodyLogRaw, setBodyLogRaw] = useLocalStorage<BodyLogState>(BODY_LOG_STORAGE_KEY, {})
+  const bodyLog = useMemo(() => normalizeBodyLog(bodyLogRaw), [bodyLogRaw])
+  const bodyLogHistory = useMemo(
+    () => deriveBodyLogHistory(bodyLog, { weightLogs, blockStartDate: skillTree.blockStartDate }),
+    [bodyLog, weightLogs, skillTree.blockStartDate],
+  )
+  const latestBody = useMemo(() => latestBodyStats(bodyLogHistory), [bodyLogHistory])
+  const updateBodyLog = useCallback(
+    (fn: (prev: BodyLogState) => BodyLogState) => {
+      setBodyLogRaw((raw) => fn(normalizeBodyLog(raw)))
+    },
+    [setBodyLogRaw],
+  )
   const [foodLogs, setFoodLogs] = useLocalStorage<FoodLogEntry[]>(
     'tn.foodLogs',
     [],
@@ -738,6 +769,22 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     },
     [activeProgram, setWorkoutPrograms],
   )
+
+  // Pull focus slot (1 in, 1 out): whenever the focused pull track changes —
+  // from any screen, a seed migration or another device — its exercise takes
+  // the queued track's place in the active plan + pull templates. Idempotent.
+  useEffect(() => {
+    if (!activeProgram) return
+    if (reconcileFocusSlotDays(activeProgram.days, skillTree).changes.length) {
+      const programId = activeProgram.id
+      setWorkoutPrograms((prev) =>
+        updateActiveProgramDays(prev, programId, (days) => reconcileFocusSlotDays(days, skillTree).days),
+      )
+    }
+    if (reconcileFocusSlotTemplates(workoutTemplates, skillTree).changed) {
+      setWorkoutTemplates((prev) => reconcileFocusSlotTemplates(prev, skillTree).templates)
+    }
+  }, [activeProgram, skillTree, workoutTemplates, setWorkoutPrograms, setWorkoutTemplates])
 
   const updateWorkoutDay = useCallback(
     (dayId: string, patch: Partial<WorkoutDay>) => {
@@ -1361,6 +1408,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     consistencyWeekNotes,
     morningRoutine,
     skillTree,
+    bodyLog,
     foodCategories,
     savedMeals,
     recipes,
@@ -1635,6 +1683,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const remoteTree = remote.skillTree
         setSkillTreeRaw((local) => mergeSkillTree(normalizeSkillTree(local), remoteTree))
       }
+      if (remote.bodyLog) {
+        const remoteLog = remote.bodyLog
+        setBodyLogRaw((local) => mergeBodyLog(normalizeBodyLog(local), remoteLog))
+      }
       if (remote.foodCategories !== undefined && remote.foodCategories.length) {
         setFoodCategories(remote.foodCategories)
       }
@@ -1744,6 +1796,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setConsistencyWeekNotes,
       setMorningRoutineRaw,
       setSkillTreeRaw,
+      setBodyLogRaw,
       setFoodCategories,
       setSavedMeals,
       setRecipes,
@@ -1928,6 +1981,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     consistencyWeekNotes,
     morningRoutine,
     skillTree,
+    bodyLog,
     foodCategories,
     savedMeals,
     recipes,
@@ -2575,6 +2629,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setMorningAiReview,
       skillTree,
       updateSkillTree,
+      bodyLog,
+      bodyLogHistory,
+      latestBody,
+      updateBodyLog,
       weightLogs,
       bodyMeasurements,
       recordBodyMeasurement,
@@ -2687,6 +2745,10 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setMorningAiReview,
       skillTree,
       updateSkillTree,
+      bodyLog,
+      bodyLogHistory,
+      latestBody,
+      updateBodyLog,
       weightLogs,
       bodyMeasurements,
       recordBodyMeasurement,

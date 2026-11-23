@@ -1,3 +1,4 @@
+import { blockEndDate, formatDateHe, weeksBetween } from '../../lib/blockCycle'
 import { useEffect, useMemo, useState } from 'react'
 import { ChevronDown, Plus, Trash2 } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
@@ -881,82 +882,163 @@ export function SkillNodeModal({
 // Block settings
 // ---------------------------------------------------------------------------
 
+export type BlockSettingsPatch = {
+  blockLabel: string
+  blockTitle: string
+  blockStartDate: string
+  blockWeeks: number
+  deloadWeeks: number[]
+  benchmarkWeek: number
+}
+
+const WEEK_PRESETS = [8, 10, 12] as const
+
+/** Block name, dates (start + duration ⇄ end date), deload and benchmark weeks. */
 export function SkillBlockSettingsModal({
   open,
   state,
   onClose,
   onSave,
+  title = 'ניהול בלוק ותאריכי יעד',
 }: {
   open: boolean
   state: SkillTreeState
   onClose: () => void
-  onSave: (patch: {
-    blockLabel: string
-    blockStartDate: string
-    blockWeeks: number
-    deloadWeeks: number[]
-    benchmarkWeek: number
-  }) => void
+  onSave: (patch: BlockSettingsPatch) => void
+  title?: string
 }) {
   const [label, setLabel] = useState(state.blockLabel)
+  const [theme, setTheme] = useState(state.blockTitle)
   const [start, setStart] = useState(state.blockStartDate)
   const [weeks, setWeeks] = useState(String(state.blockWeeks))
   const [deload, setDeload] = useState(state.deloadWeeks.join(', '))
   const [benchmark, setBenchmark] = useState(String(state.benchmarkWeek))
+  const [custom, setCustom] = useState(false)
   useEffect(() => {
     if (!open) return
     setLabel(state.blockLabel)
+    setTheme(state.blockTitle)
     setStart(state.blockStartDate)
     setWeeks(String(state.blockWeeks))
     setDeload(state.deloadWeeks.join(', '))
     setBenchmark(String(state.benchmarkWeek))
+    setCustom(!WEEK_PRESETS.includes(state.blockWeeks as (typeof WEEK_PRESETS)[number]))
   }, [open, state])
   const validStart = /^\d{4}-\d{2}-\d{2}$/.test(start)
+  const totalWeeks = Math.min(52, Math.max(1, Math.round(parseDecimal(weeks) ?? 12)))
+  const end = validStart ? blockEndDate(start, totalWeeks) : ''
+
+  function pickWeeks(n: number) {
+    setCustom(false)
+    setWeeks(String(n))
+    // Keep the benchmark in the last week when it was there before.
+    if (Math.round(parseDecimal(benchmark) ?? 0) === totalWeeks) setBenchmark(String(n))
+  }
 
   return (
-    <Modal open={open} title="הגדרות בלוק" onClose={onClose}>
+    <Modal open={open} title={title} onClose={onClose}>
       <form
         className="space-y-3"
         dir="rtl"
         onSubmit={(e) => {
           e.preventDefault()
           if (!validStart) return
-          const totalWeeks = Math.min(52, Math.max(1, Math.round(parseDecimal(weeks) ?? 12)))
           onSave({
             blockLabel: label.trim() || state.blockLabel,
+            blockTitle: theme.trim(),
             blockStartDate: start,
             blockWeeks: totalWeeks,
             deloadWeeks: deload
               .split(/[,\s]+/)
               .map((x) => Math.round(Number(x)))
               .filter((n) => Number.isFinite(n) && n > 0 && n <= totalWeeks),
-            benchmarkWeek: Math.round(parseDecimal(benchmark) ?? totalWeeks),
+            benchmarkWeek: Math.min(totalWeeks, Math.max(1, Math.round(parseDecimal(benchmark) ?? totalWeeks))),
           })
         }}
       >
-        <TextField label="שם הבלוק" value={label} onChange={setLabel} maxLength={60} />
+        <div className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-2">
+          <TextField label="שם הבלוק" value={label} onChange={setLabel} maxLength={60} />
+          <TextField label="נושא הבלוק" value={theme} onChange={setTheme} maxLength={120} />
+        </div>
         <label className="block text-xs text-muted">
           תאריך התחלה (שבוע 1) — הביצועים נספרים מתאריך זה
-          <input
-            type="date"
-            value={start}
-            onChange={(e) => setStart(e.target.value)}
-            className="field mt-1"
-          />
+          <input type="date" value={start} onChange={(e) => setStart(e.target.value)} className="field mt-1" />
         </label>
+        <fieldset>
+          <legend className="text-xs text-muted">משך הבלוק</legend>
+          <div className="mt-1 grid grid-cols-4 gap-1.5">
+            {WEEK_PRESETS.map((n) => {
+              const active = !custom && totalWeeks === n
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => pickWeeks(n)}
+                  className={[
+                    'min-h-10 rounded-xl text-sm font-bold tabular-nums transition',
+                    active ? 'bg-blue-600 text-white shadow-sm' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+                  ].join(' ')}
+                >
+                  {n} ש׳
+                </button>
+              )
+            })}
+            <button
+              type="button"
+              aria-pressed={custom}
+              onClick={() => setCustom(true)}
+              className={[
+                'min-h-10 rounded-xl text-sm font-bold transition',
+                custom ? 'bg-blue-600 text-white shadow-sm' : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+              ].join(' ')}
+            >
+              מותאם
+            </button>
+          </div>
+        </fieldset>
         <div className="grid grid-cols-2 gap-2">
           <label className="block text-xs text-muted">
             מספר שבועות
-            <NumericInput decimals={0} value={weeks} onChange={setWeeks} />
+            <NumericInput
+              decimals={0}
+              value={weeks}
+              onChange={(v) => {
+                setCustom(true)
+                setWeeks(v)
+              }}
+            />
           </label>
+          <label className="block text-xs text-muted">
+            תאריך סיום
+            <input
+              type="date"
+              value={end}
+              min={validStart ? start : undefined}
+              onChange={(e) => {
+                if (!validStart || !/^\d{4}-\d{2}-\d{2}$/.test(e.target.value) || e.target.value < start) return
+                setCustom(true)
+                setWeeks(String(weeksBetween(start, e.target.value)))
+              }}
+              className="field mt-1"
+              disabled={!validStart}
+            />
+          </label>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <TextField label="שבועות דילואד (בפסיקים)" value={deload} onChange={setDeload} maxLength={60} />
           <label className="block text-xs text-muted">
             שבוע מבחנים
             <NumericInput decimals={0} value={benchmark} onChange={setBenchmark} />
           </label>
         </div>
-        <TextField label="שבועות דילואד (מופרדים בפסיק)" value={deload} onChange={setDeload} maxLength={60} />
+        {validStart ? (
+          <p className="rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600">
+            {formatDateHe(start)} ➔ {formatDateHe(end)} · {totalWeeks} שבועות
+          </p>
+        ) : null}
         <Button type="submit" className="w-full" variant="accent" disabled={!validStart}>
-          שמור הגדרות
+          שמור הגדרות בלוק
         </Button>
       </form>
     </Modal>

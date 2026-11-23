@@ -11,6 +11,7 @@
  */
 
 import type { BodyMeasurement } from './bodyMeasurements'
+import { normalizeBlockReports, type BlockReport } from './blockReport'
 import type { MorningRoutineState } from './morningRoutine'
 import type { SetLog, WeightEntry, WorkoutDay, WorkoutLog } from './types'
 import { dayAllExercises, localDateKey, parseLocalDateKey, uid, WEEKDAY_SHORT } from './types'
@@ -155,11 +156,15 @@ export type SkillBranch = {
   seedRev?: number
   /** The plan still holds later-tier exercises: swap the current tier back in (see SkillPlanSync). */
   rewindPending?: boolean
+  /** Why a queued track waits (e.g. missing equipment); shown as a badge while out of focus. */
+  holdNote?: string
   deleted?: boolean
 }
 
 export type SkillTreeState = {
   blockLabel: string
+  /** Block theme shown next to the label, e.g. "כוח ומיומנויות קליסטניקס". */
+  blockTitle: string
   blockStartDate: string
   blockWeeks: number
   deloadWeeks: number[]
@@ -167,7 +172,11 @@ export type SkillTreeState = {
   settingsUpdatedAt: string
   branches: Record<string, SkillBranch>
   nodes: Record<string, SkillNode>
+  /** Archived end-of-block benchmark reports (see lib/blockReport). */
+  blockReports: Record<string, BlockReport>
 }
+
+export const DEFAULT_BLOCK_TITLE = 'כוח ומיומנויות קליסטניקס'
 
 export const SKILL_TREE_STORAGE_KEY = 'tn.skillTree.v1'
 export { SKILL_TREE_PAYLOAD_KEY } from './weeklyConsistency'
@@ -265,6 +274,7 @@ function weekStartOf(today: string): string {
 export function createDefaultSkillTree(today = localDateKey()): SkillTreeState {
   return {
     blockLabel: 'בלוק 3',
+    blockTitle: DEFAULT_BLOCK_TITLE,
     blockStartDate: weekStartOf(today),
     blockWeeks: 12,
     deloadWeeks: [5, 10],
@@ -272,6 +282,7 @@ export function createDefaultSkillTree(today = localDateKey()): SkillTreeState {
     settingsUpdatedAt: EPOCH,
     branches: Object.fromEntries(seedSkillBranches().map((b) => [b.id, b])),
     nodes: Object.fromEntries(seedSkillNodes().map((n) => [n.id, n])),
+    blockReports: {},
   }
 }
 
@@ -447,6 +458,7 @@ function normalizeBranch(raw: unknown, key: string, seed?: SkillBranch): SkillBr
     updatedAt: iso(o.updatedAt),
     ...(num(o.seedRev) != null ? { seedRev: num(o.seedRev) as number } : {}),
     ...(o.rewindPending === true ? { rewindPending: true } : {}),
+    ...(str(o.holdNote, 160).trim() ? { holdNote: str(o.holdNote, 160).trim() } : {}),
     ...(o.deleted === true ? { deleted: true } : {}),
   }
 }
@@ -560,6 +572,7 @@ export function normalizeSkillTree(raw: unknown, today = localDateKey()): SkillT
   enforceSingleFocusTier(branches, nodes)
   return {
     blockLabel: str(o.blockLabel, 60) || base.blockLabel,
+    blockTitle: typeof o.blockTitle === 'string' ? str(o.blockTitle, 120) : base.blockTitle,
     blockStartDate: /^\d{4}-\d{2}-\d{2}$/.test(start) ? start : base.blockStartDate,
     blockWeeks: Math.min(52, Math.max(1, num(o.blockWeeks) ?? base.blockWeeks)),
     deloadWeeks: deload,
@@ -567,6 +580,7 @@ export function normalizeSkillTree(raw: unknown, today = localDateKey()): SkillT
     settingsUpdatedAt: iso(o.settingsUpdatedAt),
     branches,
     nodes,
+    blockReports: normalizeBlockReports(o.blockReports),
   }
 }
 
@@ -587,6 +601,7 @@ export function mergeSkillTree(local: SkillTreeState, remote: SkillTreeState): S
     remote.settingsUpdatedAt > local.settingsUpdatedAt ? remote : local
   return {
     blockLabel: settings.blockLabel,
+    blockTitle: settings.blockTitle,
     blockStartDate:
       remote.settingsUpdatedAt === local.settingsUpdatedAt
         ? // Neither device set it explicitly: keep the earliest implicit start.
@@ -600,6 +615,7 @@ export function mergeSkillTree(local: SkillTreeState, remote: SkillTreeState): S
     settingsUpdatedAt: settings.settingsUpdatedAt,
     branches: lww(local.branches, remote.branches),
     nodes: lww(local.nodes, remote.nodes),
+    blockReports: lww(local.blockReports, remote.blockReports),
   }
 }
 
@@ -733,7 +749,9 @@ export function setMeasureManual(
 
 export function setBlockSettings(
   state: SkillTreeState,
-  patch: Partial<Pick<SkillTreeState, 'blockLabel' | 'blockStartDate' | 'blockWeeks' | 'deloadWeeks' | 'benchmarkWeek'>>,
+  patch: Partial<
+    Pick<SkillTreeState, 'blockLabel' | 'blockTitle' | 'blockStartDate' | 'blockWeeks' | 'deloadWeeks' | 'benchmarkWeek'>
+  >,
 ): SkillTreeState {
   return { ...state, ...patch, settingsUpdatedAt: now() }
 }

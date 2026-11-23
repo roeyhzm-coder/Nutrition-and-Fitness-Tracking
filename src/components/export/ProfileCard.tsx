@@ -69,7 +69,7 @@ function toForm(
 }
 
 export function ProfileCard() {
-  const { profile, setProfile, goal, setGoal, weightLogs, recordBodyMeasurement } =
+  const { profile, setProfile, goal, setGoal, weightLogs, recordBodyMeasurement, latestBody } =
     useAppData()
   const latestWeight = latestWeighInKg(weightLogs, [], [
     goal.startWeightKg,
@@ -213,6 +213,18 @@ export function ProfileCard() {
             מחושב בזמן אמת לפי נוסחת חיל הים לגברים (מותניים, צוואר וגובה
             מהפרופיל). לא ניתן לעריכה ידנית.
           </p>
+          {latestBody.bodyFatPct != null ? (
+            <p className="mt-2 text-sm font-semibold tabular-nums text-text">
+              <a href="#body-fat" className="underline-offset-2 hover:underline">
+                אחוז שומן מדוד (מעקב חודשי): {formatNiceNumber(latestBody.bodyFatPct, 2)}%
+              </a>
+              {latestBody.bodyFatDate ? (
+                <span className="ms-1 text-[11px] font-normal text-muted">
+                  ({new Date(latestBody.bodyFatDate).toLocaleDateString('he-IL')})
+                </span>
+              ) : null}
+            </p>
+          ) : null}
         </div>
 
         {measurementError || error ? (

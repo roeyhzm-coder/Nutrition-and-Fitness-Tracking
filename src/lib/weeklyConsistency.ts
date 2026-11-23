@@ -67,6 +67,8 @@ export function parseWeekNotes(raw: unknown): ConsistencyWeekNotes {
 export const MORNING_PAYLOAD_KEY = '__morningRoutine'
 /** Reserved key for the skill tree payload (see lib/skillTree). */
 export const SKILL_TREE_PAYLOAD_KEY = '__skillTree'
+/** Reserved key for the monthly body-fat & circumference log (see lib/bodyLog). */
+export const BODY_LOG_PAYLOAD_KEY = '__bodyLog'
 
 /**
  * Split a raw `consistency_day_marks` payload into day marks, week notes and the
@@ -77,14 +79,16 @@ export function splitConsistencyPayload(raw: unknown): {
   notes: ConsistencyWeekNotes | undefined
   morning: unknown
   skillTree: unknown
+  bodyLog: unknown
 } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { marks: {}, notes: undefined, morning: undefined, skillTree: undefined }
+    return { marks: {}, notes: undefined, morning: undefined, skillTree: undefined, bodyLog: undefined }
   }
   const {
     [WEEK_NOTES_MARKS_KEY]: rawNotes,
     [MORNING_PAYLOAD_KEY]: morning,
     [SKILL_TREE_PAYLOAD_KEY]: skillTree,
+    [BODY_LOG_PAYLOAD_KEY]: bodyLog,
     ...marks
   } = raw as Record<string, unknown>
   return {
@@ -92,6 +96,7 @@ export function splitConsistencyPayload(raw: unknown): {
     notes: rawNotes === undefined ? undefined : parseWeekNotes(rawNotes),
     morning,
     skillTree,
+    bodyLog,
   }
 }
 

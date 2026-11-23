@@ -70,6 +70,8 @@ export function useLinkableExerciseNames(): string[] {
  */
 export function useSkillStageActions(): {
   writeSlots: (node: SkillNode) => string | null
+  /** Write several recipes in one plan update (batch stage advances). */
+  writeRecipes: (slots: SkillSlotRecipe[]) => string | null
   advanceStage: (nodeId: string) => string | null
   resetTrack: (branchId: string) => string
   undoMastery: (nodeId: string) => string | null
@@ -145,7 +147,7 @@ export function useSkillStageActions(): {
     return `↩️ שלב ${node.order} חזר לפוקוס — ${node.title}`
   }
 
-  return { writeSlots, advanceStage, resetTrack, undoMastery, rewindPlan }
+  return { writeSlots, writeRecipes, advanceStage, resetTrack, undoMastery, rewindPlan }
 }
 
 /**

@@ -27,6 +27,7 @@ import { normalizeMacroPresets } from '../data/defaults'
 import {
   MORNING_PAYLOAD_KEY,
   SKILL_TREE_PAYLOAD_KEY,
+  BODY_LOG_PAYLOAD_KEY,
   splitConsistencyPayload,
   WEEK_NOTES_MARKS_KEY,
   type ConsistencyDayMarks,
@@ -45,6 +46,7 @@ import {
 } from './savedMealsSync'
 import { normalizeMorningState, type MorningRoutineState } from './morningRoutine'
 import { normalizeSkillTree, type SkillTreeState } from './skillTree'
+import { normalizeBodyLog, type BodyLogState } from './bodyLog'
 
 const DEVICE_KEY = 'tn.deviceId'
 
@@ -126,6 +128,8 @@ export type SyncedAppState = {
   morningRoutine?: MorningRoutineState
   /** Undefined when the remote payload predates the skill tree (keep local). */
   skillTree?: SkillTreeState
+  /** Undefined when the remote payload predates the monthly body log (keep local). */
+  bodyLog?: BodyLogState
   foodCategories: FoodCategory[]
   /** Undefined when the remote table lacks the extended columns. */
   savedMeals?: SavedMeal[]
@@ -304,6 +308,8 @@ function parseRow(
       consistency.skillTree === undefined
         ? undefined
         : normalizeSkillTree(consistency.skillTree),
+    bodyLog:
+      consistency.bodyLog === undefined ? undefined : normalizeBodyLog(consistency.bodyLog),
     foodCategories: (data.food_categories as FoodCategory[]) ?? [],
     ...(flags.hasExtended
       ? {
@@ -488,6 +494,7 @@ function buildNutritionPayloads(
         ? { [MORNING_PAYLOAD_KEY]: state.morningRoutine }
         : {}),
       ...(state.skillTree ? { [SKILL_TREE_PAYLOAD_KEY]: state.skillTree } : {}),
+      ...(state.bodyLog ? { [BODY_LOG_PAYLOAD_KEY]: state.bodyLog } : {}),
     },
     food_categories: state.foodCategories,
     user_profile: state.profile ?? null,

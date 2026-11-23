@@ -4,6 +4,7 @@ import { useAppData } from '../../context/AppDataContext'
 import { useLocalStorage } from '../../hooks/useLocalStorage'
 import { useTodayKey } from '../../hooks/useTodayKey'
 import { planSlotSwap } from '../../lib/skillSlotSwap'
+import { describeFocusSlotChanges, reconcileFocusSlotDays } from '../../lib/skillFocusSlot'
 import {
   activateTier,
   blockWeekInfo,
@@ -194,8 +195,12 @@ export function SkillTreePanel() {
     const node = skillTree.nodes[nodeId]
     if (!node) return null
     const rival = focusRival(node.branchId)
-    updateSkillTree((prev) => soloFocusInCategory(activateTier(prev, nodeId, { slotsApplied }), node.branchId))
-    return rival ? `${rival.branch.title} עבר לבתור.` : null
+    const focus = (prev: typeof skillTree) =>
+      soloFocusInCategory(activateTier(prev, nodeId, { slotsApplied }), node.branchId)
+    // The pull focus slot follows automatically (AppData reconciler); preview it for the toast.
+    const slot = describeFocusSlotChanges(reconcileFocusSlotDays(workoutDays, focus(skillTree)).changes)
+    updateSkillTree(focus)
+    return [rival ? `${rival.branch.title} עבר לבתור.` : null, slot].filter(Boolean).join(' ') || null
   }
 
   function confirmTier(apply: boolean) {

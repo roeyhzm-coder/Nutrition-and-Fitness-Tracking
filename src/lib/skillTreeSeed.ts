@@ -35,9 +35,13 @@ export const SKILL_SEED_V2_AT = '2026-11-17T10:30:00.000Z'
  * reset to the seed on load — independent of its timestamp, so a stale client
  * can never resurrect an old tier state again. Bump when the seed changes.
  */
-export const SKILL_SEED_REV = 5
-/** Floor timestamp for the current seed revision's migration. */
-export const SKILL_SEED_REV_AT = '2026-11-19T08:00:00.000Z'
+export const SKILL_SEED_REV = 6
+/**
+ * Floor timestamp for the current seed revision's migration.
+ * Rev 6: the pull/dip station can't fit Front Lever rows → Front Lever queued
+ * (equipment note), One-Arm Chin-Up joins focus next to Handstand.
+ */
+export const SKILL_SEED_REV_AT = '2026-11-23T08:00:00.000Z'
 /** Seed entities older than this revision are fully reset (rev 4: clean Stage 1 baseline). */
 export const SKILL_FULL_RESET_BELOW = 4
 /**
@@ -194,8 +198,20 @@ function track(
   subtitle: string,
   status: SkillBranch['status'],
   nextUnlockTitle: string,
+  holdNote?: string,
 ): SkillBranch {
-  return { id, order, icon, title, subtitle, status, nextUnlockTitle, updatedAt: EPOCH, seedRev: SKILL_SEED_REV }
+  return {
+    id,
+    order,
+    icon,
+    title,
+    subtitle,
+    status,
+    nextUnlockTitle,
+    updatedAt: EPOCH,
+    seedRev: SKILL_SEED_REV,
+    ...(holdNote ? { holdNote } : {}),
+  }
 }
 
 // Exercise-name aliases (`|`) used both for measures and for the swap targets.
@@ -249,11 +265,51 @@ const PS5B = 'Full Nordic Curl (ללא ידיים)'
 
 const chain = (...aliases: string[]) => aliases.join('|')
 
+export const FRONT_LEVER_HOLD_NOTE = 'ממתין לציוד מתאים ל-Front Lever'
+
+/**
+ * Pull focus slot ("1 נכנס, 1 יוצא"): the one exercise in the pull workout
+ * (משיכה) that belongs to whichever pull track is in active focus. When the
+ * focus changes, the queued track's exercise there is swapped in place for the
+ * focused track's — never appended, never duplicated (see lib/skillFocusSlot).
+ * `owns` lists every variant a track may have put in that slot (its tier
+ * recipes upgrade it in place, e.g. Tuck → Advanced Tuck FL Rows).
+ */
+export type SkillFocusHandoff = {
+  target: 'pull'
+  owns: string
+  exercise: SkillSlotExercise
+}
+const ARCHER_PULL = 'Archer Pull-ups|Uneven Chin-ups|מתח קשת'
+export const SKILL_FOCUS_HANDOFFS: Readonly<Record<string, SkillFocusHandoff>> = {
+  'sk-front-lever': {
+    target: 'pull',
+    owns: chain(TUCK_ROWS, FL3, FL4, FL5),
+    exercise: ex('חתירת פרונט לבר מקופל (Tuck Front Lever Rows)', 3, '6-8', '2-3 דקות', 'כשסוגרים 3x8 עוברים ל-Advanced Tuck.'),
+  },
+  'sk-one-arm': {
+    target: 'pull',
+    owns: ARCHER_PULL,
+    exercise: ex(
+      'Archer Pull-ups / Uneven Chin-ups (מתח קשת)',
+      3,
+      '3-5 לכל צד',
+      '2 דקות',
+      'מסלול One-Arm Chin-Up: היד העובדת מושכת, היד השנייה רק מייצבת. כשסוגרים 3×5 לכל צד — מעבר ל-OAC Negatives.',
+    ),
+  },
+  'sk-muscle-up': {
+    target: 'pull',
+    owns: HIGH_PULL,
+    exercise: ex('מתח מתפרץ גבוה (High Pull-ups)', 3, '3-4', '2-3 דקות'),
+  },
+}
+
 export function seedSkillBranches(): SkillBranch[] {
   return [
     track('sk-muscle-up', 1, 'muscleUp', 'Muscle-Up & Explosive Bar Mastery', 'משיכה מתפרצת ומאסל-אפ', 'queued_next_block', 'Strict Bar Muscle-Up נקי ללא קיפ'),
-    track('sk-front-lever', 2, 'frontLever', 'Front Lever Mastery', 'פרונט לבר וכוח משיכה אופקי', 'active_focus', 'Advanced Tuck Front Lever Rows'),
-    track('sk-one-arm', 3, 'oneArm', 'One-Arm Chin-Up & Streetlifting Pull', 'מתח יד אחת ומשיכה מקסימלית', 'queued_next_block', 'Archer Pull-ups / Uneven Chin-ups'),
+    track('sk-front-lever', 2, 'frontLever', 'Front Lever Mastery', 'פרונט לבר וכוח משיכה אופקי', 'queued_next_block', 'Advanced Tuck Front Lever Rows', FRONT_LEVER_HOLD_NOTE),
+    track('sk-one-arm', 3, 'oneArm', 'One-Arm Chin-Up & Streetlifting Pull', 'מתח יד אחת ומשיכה מקסימלית', 'active_focus', 'Archer Pull-ups / Uneven Chin-ups'),
     track('sk-handstand', 4, 'handstand', 'Handstand & Freestanding HSPU', 'עמידת ידיים ולחיצה אנכית', 'active_focus', 'Freestanding Handstand 15 שניות'),
     track('sk-planche', 5, 'flame', 'Planche & Heavy Push Mastery', 'פלאנש ודחיפה כבדה', 'queued_next_block', 'Tuck Planche Hold'),
     track('sk-core-flag', 6, 'flag', 'Human Flag & Elite Core Compression', 'דגל אנושי, V-Sit וליבה', 'queued_next_block', 'Full L-Sit + Windshield Wipers'),
@@ -317,7 +373,7 @@ export function seedSkillNodes(): SkillNode[] {
     }),
 
     // 2. Front Lever — slot: אימון 1 (א׳/ג׳), Tuck FL Rows.
-    tier(fl, 1, 'active', 'Tuck Front Lever Hold (20 שניות) + Hollow Body Hold (60 שניות)', {
+    tier(fl, 1, 'queued', 'Tuck Front Lever Hold (20 שניות) + Hollow Body Hold (60 שניות)', {
       measures: [
         hold('Tuck Front Lever Hold', TUCK_FL_HOLD, 10, 20, { sets: 3 }),
         hold('Hollow Body Hold', HOLLOW, 30, 60),
@@ -351,7 +407,7 @@ export function seedSkillNodes(): SkillNode[] {
     }),
 
     // 3. One-Arm Chin-Up — tier 2/4/5 slot: אימון 1 hang; tier 3: אימון 3 weighted chin-ups.
-    tier(oa, 1, 'queued', 'מתח סופינציה +32.5 ק"ג × 2 חזרות', {
+    tier(oa, 1, 'active', 'מתח סופינציה +32.5 ק"ג × 2 חזרות', {
       measures: [weighted('מתח סופינציה עם משקל', HEAVY_CHIN, [25, 2], [32.5, 2])],
     }),
     tier(oa, 2, 'locked', "תלייה אקטיבית בשכמה ביד אחת (3×25 שנ') + מתח סופינציה כבד (40-42.5 ק\"ג × 2 / 30 ק\"ג × 6) + כפיפת מרפקים בשיפוע עם החזקה ב-90° (18 ק\"ג × 8)", {

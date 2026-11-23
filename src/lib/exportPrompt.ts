@@ -52,6 +52,9 @@ import { formatAiReviewSchedule, formatMorningRoutineSection } from './morningEx
 import { normalizeMorningState } from './morningRoutine'
 import type { SkillTreeState } from './skillTree'
 import { formatSkillTreeSection } from './skillTreeExport'
+import { formatBodyLogSection, latestBodyStats, type BodyLogEntry } from './bodyLog'
+import { buildBenchmarkCandidates, formatBlockBenchmarkSection } from './blockCycle'
+import { focusSkillItems } from './skillWorkout'
 import {
   buildActiveBlockStrengthRows,
   buildStrengthRowsFromLogs,
@@ -825,6 +828,8 @@ export function buildAiExportPrompt(input: {
   bodyMeasurements?: BodyMeasurement[]
   morningRoutine?: MorningRoutineState
   skillTree?: SkillTreeState
+  /** Monthly body-fat & circumference log (chronological). */
+  bodyLogHistory?: BodyLogEntry[]
 }): string {
   const phaseStart = input.goal.startDate
   const { profile, goal, macroTargets } = input
@@ -850,7 +855,9 @@ export function buildAiExportPrompt(input: {
     input.bodyMeasurements ?? [],
     [goal.startWeightKg, profile.startWeightKg],
   )
+  const monthlyBody = latestBodyStats(input.bodyLogHistory ?? [])
   const latestFat =
+    monthlyBody.bodyFatPct ??
     [...sortedWeights].reverse().find((w) => w.bodyFatPct != null)
       ?.bodyFatPct ??
     [...(input.bodyMeasurements ?? [])]
@@ -860,6 +867,9 @@ export function buildAiExportPrompt(input: {
     profile.estimatedBodyFatPct ??
     null
   const latestWaist =
+    (monthlyBody.waistCm != null && monthlyBody.waistDate
+      ? { waistCircumferenceCm: monthlyBody.waistCm, recordedAt: monthlyBody.waistDate }
+      : null) ??
     [...(input.bodyMeasurements ?? [])]
       .filter((row) => row.waistCircumferenceCm != null)
       .sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))
@@ -1071,6 +1081,7 @@ ${PHASE_BLUEPRINT.join('\n')}
 - יעד משקל לשלב: ${fmtNum(goal.targetWeightKg, 2)} ק״ג | יעד שומן: עד ${fmtNum(goal.targetBodyFatPct, 2)}%
 - יעדי מאקרו יומיים: ${fmtNum(macroTargets.calories)} קק״ל | חלבון: ${fmtNum(macroTargets.protein)}ג׳ | שומן: ${fmtNum(macroTargets.fats)}ג׳ | פחמימות: ${fmtNum(macroTargets.carbs)}ג׳`,
     historySection,
+    formatBodyLogSection(input.bodyLogHistory ?? []),
     measurementHistorySection,
     pastBlocksSection,
     adherenceLines.length || splitSummary !== NA || activitiesSummary !== NA
@@ -1103,6 +1114,18 @@ ${weekNotesSection}`
     tracksSection ? `## מסלולי מיקוד\n${tracksSection}` : '',
     planSection,
     strengthSection,
+    input.skillTree
+      ? formatBlockBenchmarkSection({
+          tree: input.skillTree,
+          candidates: buildBenchmarkCandidates({
+            days: activeDays,
+            workoutLogs,
+            setLogs: input.setLogs,
+            since: input.skillTree.blockStartDate,
+            extraExercises: focusSkillItems(input.skillTree, 'both').map((i) => i.exercise),
+          }),
+        })
+      : '',
     workoutLogsSection
       ? `## אימונים אחרונים (עד ${RECENT_WORKOUT_DAYS} ימים)\n${workoutLogsSection}`
       : '',

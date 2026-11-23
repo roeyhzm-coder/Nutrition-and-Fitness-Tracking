@@ -417,6 +417,11 @@ export function SkillBranchCard({
                 <span className="truncate">{category.badge}</span>
               </span>
             ) : null}
+            {!inFocus && branch.holdNote ? (
+              <span className="mt-0.5 ms-1 inline-flex max-w-full items-center rounded-full bg-amber-50 px-2 py-px text-[10px] font-extrabold text-amber-800">
+                <span className="truncate">⚠️ {branch.holdNote}</span>
+              </span>
+            ) : null}
           </div>
           {focus !== 'completed' ? (
             <button

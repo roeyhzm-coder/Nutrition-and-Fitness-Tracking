@@ -28,6 +28,7 @@ import { WorkoutHistoryCard } from '../components/workouts/WorkoutHistoryCard'
 import { WorkoutCompletedBadge } from '../components/workouts/WorkoutCompletedBadge'
 import { WeeklyPlanEditor } from '../components/workouts/WeeklyPlanEditor'
 import { FocusTracksCard } from '../components/workouts/FocusTracksCard'
+import { BlockStatusCard } from '../components/workouts/BlockStatusCard'
 import type { ExerciseForm } from '../lib/exerciseForm'
 import {
   EMPTY_EXERCISE_FORM,
@@ -217,6 +218,7 @@ function WorkoutPlanView({ tabs }: { tabs: ReactNode }) {
         <PageHeader title="אימונים" subtitle="אין ימי אימון" />
         <div className="space-y-5 px-4 py-5">
           {tabs}
+          <BlockStatusCard />
           <ProgramManager />
           <FocusTracksCard />
           <ActivityLogCard />
@@ -251,6 +253,7 @@ function WorkoutPlanView({ tabs }: { tabs: ReactNode }) {
 
       <div className="space-y-5 px-4 py-5">
         {tabs}
+        <BlockStatusCard />
         <WorkoutCompletedBadge />
         <FocusTracksCard />
         <WorkoutLibrary

@@ -12,6 +12,7 @@ import { FinishPhaseModal } from '../components/dashboard/FinishPhaseModal'
 import { PhaseHistoryCard } from '../components/dashboard/PhaseHistoryCard'
 import { TodayWorkoutCard } from '../components/dashboard/TodayWorkoutCard'
 import { FocusTracksStatusRow } from '../components/dashboard/FocusTracksStatusRow'
+import { BlockStatusPill } from '../components/dashboard/BlockStatusPill'
 import { WorkoutHistoryCard } from '../components/workouts/WorkoutHistoryCard'
 import { MorningConsistencySummary } from '../components/morning/MorningConsistency'
 import { useAppData } from '../context/AppDataContext'
@@ -30,6 +31,7 @@ export function DashboardPage() {
     phase,
     stateSyncStatus,
     focusTracks,
+    latestBody,
   } = useAppData()
   const { workoutLogs } = useWorkoutSession()
 
@@ -49,6 +51,7 @@ export function DashboardPage() {
       <AiCheckinBadge />
 
       <div className="space-y-5 px-4 py-5">
+        <BlockStatusPill />
         <FocusTracksStatusRow />
 
         <Card title={`יעדי קלוריות היום · ${PHASE_LABELS[phase]}`}>
@@ -119,6 +122,8 @@ export function DashboardPage() {
           goal={goal}
           onSaveGoal={setGoal}
           currentWeight={latest?.weightKg}
+          currentBodyFatPct={latestBody.bodyFatPct}
+          currentWaistCm={latestBody.waistCm}
           onFinishPhase={() => setFinishOpen(true)}
         />
         <PhaseHistoryCard />

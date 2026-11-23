@@ -92,15 +92,18 @@ const BLOCK_3_TEMPLATES: WorkoutTemplate[] = [
     ),
     b3(
       {
-        name: 'חתירת פרונט לבר מקופל (Tuck Front Lever Rows)',
+        // Pull focus slot (One-Arm Chin-Up track). The pull/dip station can't fit
+        // Tuck Front Lever Rows; the slot follows the focused pull track.
+        name: 'Archer Pull-ups / Uneven Chin-ups (מתח קשת)',
         sets: 3,
-        reps: '6-8',
-        rest: '2-3 דקות',
+        reps: '3-5 לכל צד',
+        rest: '2 דקות',
         weight: BW,
         metric: 'reps',
-        notes: 'כשסוגרים 3x8 עוברים ל-Advanced Tuck.',
+        notes:
+          'מסלול One-Arm Chin-Up: היד העובדת מושכת, היד השנייה רק מייצבת. כשסוגרים 3×5 לכל צד — מעבר ל-OAC Negatives.',
       },
-      repeatSet(3, null, 6),
+      repeatSet(3, null, 3),
     ),
     b3(
       {
