@@ -19,6 +19,7 @@ import {
   PlanExerciseNotes,
   ExerciseMedia,
 } from './ExerciseFields'
+import { AntagonistStrip, AntagonistToggle } from './AntagonistPosing'
 
 type TemplateEditorProps = {
   open: boolean
@@ -180,17 +181,21 @@ export function TemplateEditor({
                 >
                   <ExerciseMedia exercise={ex} />
                   <div className="min-w-0 flex-1">
-                    <button
-                      type="button"
-                      className="w-full text-right"
-                      onClick={() => {
-                        setEditingEx(ex)
-                        setExForm(exerciseToForm(ex))
-                      }}
-                    >
-                      <p className="font-medium text-text">{ex.name}</p>
-                      <ExerciseDetails exercise={ex} />
-                    </button>
+                    <div className="flex items-start gap-1">
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-right"
+                        onClick={() => {
+                          setEditingEx(ex)
+                          setExForm(exerciseToForm(ex))
+                        }}
+                      >
+                        <p className="font-medium text-text">{ex.name}</p>
+                        <ExerciseDetails exercise={ex} />
+                      </button>
+                      <AntagonistToggle name={ex.name} className="-me-1" />
+                    </div>
+                    <AntagonistStrip name={ex.name} className="mt-1.5" />
                     {ex.name.trim() ? (
                       <PlanExerciseNotes
                         exercise={ex}

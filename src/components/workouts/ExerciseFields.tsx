@@ -12,6 +12,7 @@ import { NumericInput } from '../ui/NumericInput'
 import { useAppData } from '../../context/AppDataContext'
 import { ExerciseNotesAccordion } from './ExerciseNotesAccordion'
 import { MetricToggle } from './MetricToggle'
+import { AntagonistEditorFields } from './AntagonistPosing'
 
 const inputClass = 'field'
 
@@ -125,6 +126,7 @@ export function ExerciseFormFields({ form, setForm }: ExerciseFormFieldsProps) {
         rows={2}
         className={`${inputClass} resize-y`}
       />
+      <AntagonistEditorFields name={form.name} />
       <input
         {...bind('mediaUrl')}
         type="url"

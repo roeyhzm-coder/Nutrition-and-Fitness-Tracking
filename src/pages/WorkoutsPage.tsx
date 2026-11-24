@@ -14,6 +14,7 @@ import {
   ExerciseFormFields,
   ExerciseMedia,
 } from '../components/workouts/ExerciseFields'
+import { AntagonistStrip, AntagonistToggle } from '../components/workouts/AntagonistPosing'
 import { Button } from '../components/ui/button'
 import { IconButton } from '../components/ui/IconButton'
 import { Modal } from '../components/ui/Modal'
@@ -149,16 +150,20 @@ function WorkoutPlanView({ tabs }: { tabs: ReactNode }) {
         <div className="flex items-start gap-2 px-3 py-3">
           <ExerciseMedia exercise={ex} />
           <div className="min-w-0 flex-1">
-            <button
-              type="button"
-              className="min-h-11 w-full text-right"
-              onClick={() =>
-                setActiveExerciseId(activeExerciseId === ex.id ? null : ex.id)
-              }
-            >
-              <p className="font-semibold text-text">{ex.name}</p>
-              <ExerciseDetails exercise={ex} />
-            </button>
+            <div className="flex items-start gap-1">
+              <button
+                type="button"
+                className="min-h-11 min-w-0 flex-1 text-right"
+                onClick={() =>
+                  setActiveExerciseId(activeExerciseId === ex.id ? null : ex.id)
+                }
+              >
+                <p className="font-semibold text-text">{ex.name}</p>
+                <ExerciseDetails exercise={ex} />
+              </button>
+              <AntagonistToggle name={ex.name} className="-me-1" />
+            </div>
+            <AntagonistStrip name={ex.name} className="mt-1.5" />
             <PlanExerciseNotes exercise={ex} />
           </div>
           <IconButton

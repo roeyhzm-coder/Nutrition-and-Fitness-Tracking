@@ -43,6 +43,7 @@ import { IconButton } from '../ui/IconButton'
 import { NumericInput } from '../ui/NumericInput'
 import { ExerciseNotesAccordion } from './ExerciseNotesAccordion'
 import { MetricToggle } from './MetricToggle'
+import { AntagonistStrip, AntagonistToggle } from './AntagonistPosing'
 
 const inputClass =
   'field px-2 text-center tabular-nums'
@@ -313,7 +314,10 @@ function ExerciseBlock({ exercise, index, skill, completedStage, onAdvanceSkill 
           ) : null}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-text">{exercise.name}</p>
+          <div className="flex items-start gap-1">
+            <p className="min-w-0 flex-1 pt-1 font-semibold text-text">{exercise.name}</p>
+            <AntagonistToggle name={exercise.name} className="-me-1" />
+          </div>
           <div className="mt-1 flex flex-wrap gap-1.5 text-xs">
             <span className="rounded-lg bg-slate-100 px-2 py-0.5 text-text">
               {exercise.targetSets} × {exercise.targetReps}
@@ -331,6 +335,7 @@ function ExerciseBlock({ exercise, index, skill, completedStage, onAdvanceSkill 
               </span>
             ) : null}
           </div>
+          <AntagonistStrip name={exercise.name} className="mt-1.5" />
           <p className="mt-1 text-[11px] text-muted">
             ברירת מחדל: {formatDefaultSummary(exercise, defaults)}
           </p>

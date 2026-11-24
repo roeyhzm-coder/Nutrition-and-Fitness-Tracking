@@ -69,6 +69,8 @@ export const MORNING_PAYLOAD_KEY = '__morningRoutine'
 export const SKILL_TREE_PAYLOAD_KEY = '__skillTree'
 /** Reserved key for the monthly body-fat & circumference log (see lib/bodyLog). */
 export const BODY_LOG_PAYLOAD_KEY = '__bodyLog'
+/** Reserved key for per-exercise antagonist posing prefs (see lib/antagonistPosing). */
+export const ANTAGONIST_PAYLOAD_KEY = '__antagonistPosing'
 
 /**
  * Split a raw `consistency_day_marks` payload into day marks, week notes and the
@@ -80,15 +82,17 @@ export function splitConsistencyPayload(raw: unknown): {
   morning: unknown
   skillTree: unknown
   bodyLog: unknown
+  antagonist: unknown
 } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { marks: {}, notes: undefined, morning: undefined, skillTree: undefined, bodyLog: undefined }
+    return { marks: {}, notes: undefined, morning: undefined, skillTree: undefined, bodyLog: undefined, antagonist: undefined }
   }
   const {
     [WEEK_NOTES_MARKS_KEY]: rawNotes,
     [MORNING_PAYLOAD_KEY]: morning,
     [SKILL_TREE_PAYLOAD_KEY]: skillTree,
     [BODY_LOG_PAYLOAD_KEY]: bodyLog,
+    [ANTAGONIST_PAYLOAD_KEY]: antagonist,
     ...marks
   } = raw as Record<string, unknown>
   return {
@@ -97,6 +101,7 @@ export function splitConsistencyPayload(raw: unknown): {
     morning,
     skillTree,
     bodyLog,
+    antagonist,
   }
 }
 

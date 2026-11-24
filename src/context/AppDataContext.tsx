@@ -185,6 +185,14 @@ import {
   type BodyLogState,
   type LatestBodyStats,
 } from '../lib/bodyLog'
+import {
+  ANTAGONIST_STORAGE_KEY,
+  mergeAntagonistState,
+  normalizeAntagonistState,
+  withAntagonistPref,
+  type AntagonistPref,
+  type AntagonistState,
+} from '../lib/antagonistPosing'
 
 type RecipesSyncStatus = 'idle' | 'loading' | 'synced' | 'error'
 
@@ -235,6 +243,13 @@ type AppDataContextValue = {
   /** Latest body fat / waist from the monthly log (single source for all cards + export). */
   latestBody: LatestBodyStats
   updateBodyLog: (fn: (prev: BodyLogState) => BodyLogState) => void
+  /** Per-exercise antagonist posing prefs, keyed by canonical exercise name. */
+  antagonistPosing: AntagonistState
+  /** Save the toggle / custom cue for an exercise name (local + cloud, instant). */
+  setAntagonistPref: (
+    exerciseName: string,
+    patch: Partial<Pick<AntagonistPref, 'show_antagonist_posing' | 'antagonist_cue'>>,
+  ) => void
   weightLogs: WeightEntry[]
   bodyMeasurements: BodyMeasurement[]
   recordBodyMeasurement: (input: {
@@ -668,6 +683,25 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setBodyLogRaw((raw) => fn(normalizeBodyLog(raw)))
     },
     [setBodyLogRaw],
+  )
+  const [antagonistRaw, setAntagonistRaw] = useLocalStorage<AntagonistState>(
+    ANTAGONIST_STORAGE_KEY,
+    {},
+  )
+  const antagonistPosing = useMemo(
+    () => normalizeAntagonistState(antagonistRaw),
+    [antagonistRaw],
+  )
+  const setAntagonistPref = useCallback(
+    (
+      exerciseName: string,
+      patch: Partial<Pick<AntagonistPref, 'show_antagonist_posing' | 'antagonist_cue'>>,
+    ) => {
+      setAntagonistRaw((raw) =>
+        withAntagonistPref(normalizeAntagonistState(raw), exerciseName, patch),
+      )
+    },
+    [setAntagonistRaw],
   )
   const [foodLogs, setFoodLogs] = useLocalStorage<FoodLogEntry[]>(
     'tn.foodLogs',
@@ -1409,6 +1443,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     morningRoutine,
     skillTree,
     bodyLog,
+    antagonistPosing,
     foodCategories,
     savedMeals,
     recipes,
@@ -1687,6 +1722,12 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         const remoteLog = remote.bodyLog
         setBodyLogRaw((local) => mergeBodyLog(normalizeBodyLog(local), remoteLog))
       }
+      if (remote.antagonistPosing) {
+        const remotePrefs = remote.antagonistPosing
+        setAntagonistRaw((local) =>
+          mergeAntagonistState(normalizeAntagonistState(local), remotePrefs),
+        )
+      }
       if (remote.foodCategories !== undefined && remote.foodCategories.length) {
         setFoodCategories(remote.foodCategories)
       }
@@ -1807,6 +1848,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setMorningRoutineRaw,
       setSkillTreeRaw,
       setBodyLogRaw,
+      setAntagonistRaw,
       setFoodCategories,
       setSavedMeals,
       setRecipes,
@@ -1992,6 +2034,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     morningRoutine,
     skillTree,
     bodyLog,
+    antagonistPosing,
     foodCategories,
     savedMeals,
     recipes,
@@ -2643,6 +2686,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       bodyLogHistory,
       latestBody,
       updateBodyLog,
+      antagonistPosing,
+      setAntagonistPref,
       weightLogs,
       bodyMeasurements,
       recordBodyMeasurement,
@@ -2759,6 +2804,8 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       bodyLogHistory,
       latestBody,
       updateBodyLog,
+      antagonistPosing,
+      setAntagonistPref,
       weightLogs,
       bodyMeasurements,
       recordBodyMeasurement,
