@@ -105,10 +105,16 @@ export const PHASE_BLUEPRINT = [
 
 const RECENT_WORKOUT_DAYS = 14
 
+/** Permanent program context: who built Blocks 1–2 and how every new block must build on them. */
+export const COACH_LINEAGE_SECTION = `## רקע מתודולוגי והשראה מבלוקים 1–2 (Coach Lineage)
+**רקע מתודולוגי והשראה מבלוקים 1–2:** את בלוק 1 ובלוק 2 בנה עבורי אלוף הארץ במתח עם משקל ומומחה לקליסטניקס. בכל ניתוח, עדכון או בנייה של בלוק חדש, יש לשאוב תמיד השראה מהמבנה והמתודולוגיה של בלוקים 1 ו-2 (שילוב כוח משוקלל בפירמידה הפוכה, עבודה מתפרצת, החזקות איזומטריות וסקילים), ובמקביל לקדם, לשנות וריאציות ולהתאים את העומסים והתרגילים באופן אקטיבי לפי המשקלים ומבדקי הכוח העדכניים שלי בפועל.`
+
 const RECALIBRATION_DIRECTIVE = `## הנחיית כיול דינמי ל-AI (Dynamic Recalibration Directive)
 1. שלד התוכנית המקורי משמש כקו מנחה בלבד. אין להיצמד למספרים היסטוריים אם קצב ההתקדמות בפועל שונה מהתכנון.
 2. בסיום שלב או בצומת החלטה, יש לנתח את המצב הפיזיולוגי הקיים (קצב עלייה/ירידה שבועי, שינוי אחוזי שומן ועומס אימונים) ולבצע כיול מחדש (Recalibration): לקבוע האם יש צורך בהארכת השלב, מעבר מיידי לחיטוב, או שלב תחזוקה.
-3. ספק יעדי קלוריות ומאקרו מדויקים והתאמות אימונים מעשיות לשלב הבא בהתאם לנתוני האמת שהושגו.`
+3. ספק יעדי קלוריות ומאקרו מדויקים והתאמות אימונים מעשיות לשלב הבא בהתאם לנתוני האמת שהושגו.
+4. בבניית בלוק אימונים חדש או בעדכון בלוק קיים — פעל לפי "רקע מתודולוגי והשראה מבלוקים 1–2" שלמעלה: שמור על המתודולוגיה של המאמן (פירמידה הפוכה במשקל, עבודה מתפרצת, החזקות איזומטריות וסקילים), והתאם עומסים לפי טבלת "מבדקי חוזק — פתיחה / סיום בלוק" (שיא סיום בלוק N = בסיס פתיחת בלוק N+1, לעולם לא משקל נמוך מהשיא).
+5. עץ המיומנויות מחובר לתרגילים הקיימים בלבד (1 נכנס, 1 יוצא): אל תוסיף עותק כפול של תרגיל שכבר קיים באימון או בשגרת הבוקר — הצע החלפה במקום. מגבלת ציוד: עמדת מתח ביתית (ללא Front Lever Rows) — לכן Archer Pull-ups במקום Tuck FL Rows.`
 
 function fmtNum(value: number | null | undefined, digits = 0) {
   if (value == null || !Number.isFinite(value)) return NA
@@ -917,21 +923,6 @@ export function buildAiExportPrompt(input: {
       ].join('\n')
     : ''
 
-  const measurementHistory = [...(input.bodyMeasurements ?? [])].sort((a, b) =>
-    a.recordedAt.localeCompare(b.recordedAt),
-  )
-  const measurementHistorySection = measurementHistory.length
-    ? [
-        '## היסטוריית מדידות גוף (מותניים / צוואר / שומן)',
-        measurementHistory
-          .map((row) => {
-            const day = row.recordedAt.slice(0, 10)
-            return `- ${day} | משקל: ${fmtNum(row.weightKg, 2)} ק״ג | מותן: ${fmtNum(row.waistCircumferenceCm, 1)} ס״מ | צוואר: ${fmtNum(row.neckCircumferenceCm, 1)} ס״מ | שומן: ${fmtNum(row.bodyFatPercentage, 2)}%`
-          })
-          .join('\n'),
-      ].join('\n')
-    : ''
-
   const programs = input.workoutPrograms ?? []
   const activeProgram =
     programs.find((program) => program.id === DEFAULT_ACTIVE_PROGRAM_ID) ??
@@ -1080,9 +1071,9 @@ ${PHASE_BLUEPRINT.join('\n')}
 - התקדמות בשלב: יום ${phaseDay} מתוך ${goal.totalDays} (שבוע ${phaseWeek} מתוך ${phaseTotalWeeks})
 - יעד משקל לשלב: ${fmtNum(goal.targetWeightKg, 2)} ק״ג | יעד שומן: עד ${fmtNum(goal.targetBodyFatPct, 2)}%
 - יעדי מאקרו יומיים: ${fmtNum(macroTargets.calories)} קק״ל | חלבון: ${fmtNum(macroTargets.protein)}ג׳ | שומן: ${fmtNum(macroTargets.fats)}ג׳ | פחמימות: ${fmtNum(macroTargets.carbs)}ג׳`,
+    COACH_LINEAGE_SECTION,
     historySection,
     formatBodyLogSection(input.bodyLogHistory ?? [], input.weightLogs),
-    measurementHistorySection,
     pastBlocksSection,
     adherenceLines.length || splitSummary !== NA || activitiesSummary !== NA
       ? [

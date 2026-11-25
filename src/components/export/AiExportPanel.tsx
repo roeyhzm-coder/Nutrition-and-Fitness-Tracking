@@ -151,6 +151,7 @@ export function AiExportPanel() {
       }),
       monthlyBodyLog: bodyLogHistory.map(({ source: _source, ...entry }) => entry),
       blockReports: liveBlockReports(skillTree.blockReports),
+      blockBaselines: Object.values(skillTree.blockBaselines).filter((b) => !b.deleted),
       ...morningExportEntities(morningRoutine, weekStartsOn),
       ...skillTreeExportEntities(skillTree, {
         workoutLogs,

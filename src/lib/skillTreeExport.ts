@@ -1,5 +1,5 @@
 import { planSlotSwap } from './skillSlotSwap'
-import { focusSkillItems } from './skillWorkout'
+import { focusSkillItems, skillItemSource } from './skillWorkout'
 import {
   blockWeekInfo,
   evaluateSkillTree,
@@ -97,8 +97,11 @@ export function formatSkillTreeSection(
     ...(['pull', 'push'] as const).map((kind) => {
       const items = focusSkillItems(state, kind)
       return items.length
-        ? `- נכנס אוטומטית לתחילת כל אימון ${kind === 'pull' ? 'משיכה' : 'דחיפה/רגליים'} (ומשולב): ${items
-            .map((i) => `${i.exercise.name} ${i.exercise.sets}×${i.exercise.reps} (${i.branchTitle} · שלב ${i.order}/${i.tierCount})`)
+        ? `- שלב בפוקוס (${kind === 'pull' ? 'משיכה' : 'דחיפה'}) — נמדד מהתרגיל הקיים, ללא הזרקה/כפילות: ${items
+            .map((i) => {
+              const src = skillItemSource(i, sources.programDays, sources.morningRoutine)
+              return `${i.exercise.name} (${i.branchTitle} · שלב ${i.order}/${i.tierCount}) ← ${src.label}`
+            })
             .join(' | ')}`
         : ''
     }),

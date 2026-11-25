@@ -32,7 +32,11 @@ function template(
   }
 }
 
-const B3_UPDATED_AT = '2026-11-16T00:00:00.000Z'
+/**
+ * Stamp of the Block 3 prescription (rev 1 = 2026-11-25 rebuild). Saved
+ * defaults older than this never override the official Block 3 numbers.
+ */
+export const B3_UPDATED_AT = '2026-11-25T00:00:00.000Z'
 
 type B3Set = [weightKg: number | null, reps: number]
 
@@ -96,14 +100,14 @@ const BLOCK_3_TEMPLATES: WorkoutTemplate[] = [
         // Tuck Front Lever Rows; the slot follows the focused pull track.
         name: 'Archer Pull-ups / Uneven Chin-ups (מתח קשת)',
         sets: 3,
-        reps: '3-5 לכל צד',
-        rest: '2 דקות',
+        reps: '4-6 לכל צד',
+        rest: '2-3 דקות',
         weight: BW,
         metric: 'reps',
         notes:
-          'מסלול One-Arm Chin-Up: היד העובדת מושכת, היד השנייה רק מייצבת. כשסוגרים 3×5 לכל צד — מעבר ל-OAC Negatives.',
+          'מסלול One-Arm Chin-Up: היד העובדת מושכת, היד השנייה רק מייצבת. מחליף את Tuck FL Rows (לא אפשרי בעמדת המתח הביתית). כשסוגרים 3×6 לכל צד — מעבר ל-OAC Negatives.',
       },
-      repeatSet(3, null, 3),
+      repeatSet(3, null, 4),
     ),
     b3(
       {
@@ -111,9 +115,9 @@ const BLOCK_3_TEMPLATES: WorkoutTemplate[] = [
         sets: 2,
         reps: '4-5',
         rest: '2-3 דקות',
-        weight: BW,
+        weight: 'משקל גוף (מקסימום מהירות וגובה)',
         metric: 'reps',
-        notes: 'עלייה מתפרצת עד נגיעת חזה בבר בכל חזרה.',
+        notes: 'עלייה מתפרצת עד נגיעת חזה בבר בכל חזרה — מקסימום מהירות וגובה.',
       },
       repeatSet(2, null, 4),
     ),
@@ -133,7 +137,7 @@ const BLOCK_3_TEMPLATES: WorkoutTemplate[] = [
       {
         name: 'כפיפת מרפקים בישיבה בשיפוע + החזקה סטטית ב-90 מעלות',
         sets: 2,
-        reps: '6-8 + החזקה 10 שניות',
+        reps: '6-8 + 10 שנ׳ החזקה',
         rest: '1-2 דקות',
         weight: '16-18 ק"ג',
         metric: 'reps',
@@ -143,13 +147,13 @@ const BLOCK_3_TEMPLATES: WorkoutTemplate[] = [
     ),
     b3(
       {
-        name: 'הרמת רגליים ישרות למוט (Toes To Bar)',
+        name: 'הרמת רגליים ישרות למוט (Toes To Bar) עם עצירה 2 שנ׳ למעלה',
         sets: 3,
         reps: '6-8',
         rest: '1-2 דקות',
         weight: BW,
         metric: 'reps',
-        notes: 'כשסוגרים 3x8 מוסיפים החזקה של 2 שניות למעלה.',
+        notes: 'עצירה של 2 שניות כשהרגליים נוגעות במוט, ירידה מבוקרת ללא תנופה.',
       },
       repeatSet(3, null, 6),
     ),
@@ -212,7 +216,7 @@ const BLOCK_3_TEMPLATES: WorkoutTemplate[] = [
         rest: '1-2 דקות',
         weight: BW,
         metric: 'reps',
-        notes: 'רגליים מוגבהות, ניתוק מלא של הידיים בכל חזרה.',
+        notes: 'חזרות כוח מתפרצות (לא נפח): רגליים מוגבהות, ניתוק מלא של הידיים בכל חזרה, מנוחה מלאה בין סטים.',
       },
       repeatSet(2, null, 6),
     ),
@@ -893,4 +897,116 @@ export function backfillProgramMedia(
       exercises: (d.exercises ?? []).map(withSeedMedia),
     })),
   }))
+}
+
+// ---------------------------------------------------------------------------
+// Block 3 prescription migration (rev 1, 2026-11-25)
+// ---------------------------------------------------------------------------
+
+/**
+ * Bump to re-apply the official Block 3 weekly schedule + Pull 3 / Push 3
+ * prescriptions onto existing local + Supabase state. Stored on the program
+ * (`rxRev`), so it runs once per account — the synced program carries the
+ * marker to every other device. Logged workouts are never touched.
+ */
+export const BLOCK3_RX_REV = 1
+
+const BLOCK3_SEED_IDS = { pull: 'tpl-b3-pull', push: 'tpl-b3-push', combo: 'tpl-b3-combo' } as const
+
+function canonicalName(name: string): string {
+  return name
+    .normalize('NFKC')
+    .toLocaleLowerCase('he')
+    .replace(/["'״׳]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function sessionKind(name: string): Exclude<DayKind, 'rest'> | null {
+  if (/משולב|combo|full/i.test(name)) return 'combo'
+  if (/דחיפה|רגליים|push/i.test(name)) return 'push'
+  if (/משיכה|pull/i.test(name)) return 'pull'
+  return null
+}
+
+/** Fresh seed session; exercise ids are reused from the old plan when the name matches. */
+function seedSessionKeepingIds(templateId: string, previous: Exercise[]): DaySession {
+  const tpl = SEED_WORKOUT_TEMPLATES.find((t) => t.id === templateId)
+  if (!tpl) throw new Error(`Unknown seed template: ${templateId}`)
+  const byName = new Map(previous.map((ex) => [canonicalName(ex.name), ex]))
+  const used = new Set<string>()
+  return {
+    id: uid(),
+    name: tpl.name,
+    sourceTemplateId: tpl.id,
+    exercises: tpl.exercises.map((ex) => {
+      const prev = byName.get(canonicalName(ex.name))
+      const id = prev && !used.has(prev.id) ? prev.id : uid()
+      used.add(id)
+      return { ...structuredClone(ex), id, ...(prev?.imageUrl && !ex.imageUrl ? { imageUrl: prev.imageUrl } : {}) }
+    }),
+  }
+}
+
+/**
+ * Official Block 3 week: Sun Pull 3 · Mon Push 3 · Tue Pull 3 · Wed Push 3 ·
+ * Thu rest · Fri Combined 3 · Sat rest. Pull 3 / Push 3 get the Block 3
+ * prescription; the Combined 3 session the user already has is kept (no
+ * injected skill copies). Library templates tpl-b3-pull / tpl-b3-push are
+ * refreshed too. Idempotent per `rxRev`.
+ */
+export function applyBlock3Prescription(state: WorkoutPlanState): WorkoutPlanState & { changed: boolean } {
+  const program = state.programs.find((p) => p.id === DEFAULT_ACTIVE_PROGRAM_ID)
+  if (!program || (program.rxRev ?? 0) >= BLOCK3_RX_REV) return { ...state, changed: false }
+
+  const sessions = program.days.flatMap((d) => d.sessions ?? [])
+  const all = program.days.flatMap((d) => [...(d.sessions ?? []).flatMap((s) => s.exercises), ...(d.exercises ?? [])])
+  const previousOf = (kind: Exclude<DayKind, 'rest'>) =>
+    sessions.filter((s) => sessionKind(s.name) === kind).flatMap((s) => s.exercises)
+  const existingCombo = sessions.find(
+    (s) => s.sourceTemplateId === BLOCK3_SEED_IDS.combo || sessionKind(s.name) === 'combo',
+  )
+  const combo: DaySession = existingCombo
+    ? {
+        ...existingCombo,
+        id: uid(),
+        // Drop runtime skill-tree copies that an older bundle may have persisted.
+        exercises: existingCombo.exercises.filter((ex) => !ex.id.startsWith('skill-')),
+      }
+    : seedSessionKeepingIds(BLOCK3_SEED_IDS.combo, all)
+
+  const days: WorkoutDay[] = OFFICIAL_WEEK.map((kind, i) => {
+    const dayNumber = i + 1
+    const old = program.days.find((d) => d.dayNumber === dayNumber)
+    const base = {
+      id: old?.id ?? `day-${dayNumber}`,
+      dayNumber,
+      title: WEEKDAYS[i],
+      exercises: [] as Exercise[],
+    }
+    if (kind === 'rest') return { ...base, focus: 'מנוחה', isRest: true, sessions: [] }
+    const session =
+      kind === 'combo'
+        ? { ...combo, id: uid(), exercises: combo.exercises.map((ex) => ({ ...ex })) }
+        : seedSessionKeepingIds(BLOCK3_SEED_IDS[kind], previousOf(kind))
+    return { ...base, focus: FOCUS_BY_KIND[kind], isRest: false, sessions: [session] }
+  })
+
+  const now = new Date().toISOString()
+  const programs = state.programs.map((p) =>
+    p.id === program.id ? { ...p, days, rxRev: BLOCK3_RX_REV, updatedAt: now } : p,
+  )
+  const templates = state.templates.map((t) => {
+    if (t.id !== BLOCK3_SEED_IDS.pull && t.id !== BLOCK3_SEED_IDS.push) return t
+    const seed = SEED_WORKOUT_TEMPLATES.find((s) => s.id === t.id)
+    return seed ? { ...structuredClone(seed), name: seed.name, updatedAt: now } : t
+  })
+  return { ...state, programs, templates, changed: true }
+}
+
+/** Official Pull 3 / Push 3 exercises (seed values, used to re-stamp stale saved defaults). */
+export function block3PrescribedExercises(): Exercise[] {
+  return SEED_WORKOUT_TEMPLATES.filter((t) => t.id === BLOCK3_SEED_IDS.pull || t.id === BLOCK3_SEED_IDS.push).flatMap(
+    (t) => t.exercises,
+  )
 }

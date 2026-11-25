@@ -6,8 +6,9 @@ import {
   BODY_LOG_FIELDS,
   bodyLogDeltas,
   deleteBodyLogEntry,
-  formatMeasure,
+  formatFatWithNavy,
   formatSigned,
+  formatMeasure,
   hasAnyMeasure,
   upsertBodyLogEntry,
   weightOnDate,
@@ -24,7 +25,7 @@ import { NumericInput } from '../ui/NumericInput'
 type Form = Record<BodyLogField, string> & { date: string; note: string }
 
 function emptyForm(): Form {
-  return { date: todayKey(), note: '', bodyFatPct: '', waistCm: '', chestCm: '', armCm: '', shouldersCm: '', thighCm: '' }
+  return { date: todayKey(), note: '', bodyFatPct: '', waistCm: '', neckCm: '', chestCm: '', armCm: '', shouldersCm: '', thighCm: '' }
 }
 
 function toForm(entry: BodyLogEntry): Form {
@@ -62,14 +63,24 @@ export function useBodyLogSaver() {
       }
     },
     /** Merge fields into that day's entry (create it if missing); other days stay untouched. */
-    mergeDay(date: string, patch: Partial<Pick<BodyLogEntry, BodyLogField>>, note: string) {
+    mergeDay(
+      date: string,
+      patch: Partial<Pick<BodyLogEntry, BodyLogField>>,
+      note: string,
+      extras: Partial<Pick<BodyLogEntry, 'navyFatPct' | 'weightKg'>> = {},
+    ) {
       const sameDay = [...bodyLogHistory].reverse().find((e) => e.date === date) ?? null
       const base = sameDay ? { ...sameDay } : null
+      const navy = extras.navyFatPct ?? base?.navyFatPct ?? null
       const input: BodyLogInput = {
         date,
         note: base?.note || note,
-        bodyFatPct: patch.bodyFatPct ?? base?.bodyFatPct ?? null,
+        // A measured reading wins; the Navy estimate only fills an empty day.
+        bodyFatPct: patch.bodyFatPct ?? base?.bodyFatPct ?? navy,
         waistCm: patch.waistCm ?? base?.waistCm ?? null,
+        neckCm: patch.neckCm ?? base?.neckCm ?? null,
+        navyFatPct: navy,
+        weightKg: extras.weightKg ?? base?.weightKg ?? null,
         chestCm: patch.chestCm ?? base?.chestCm ?? null,
         armCm: patch.armCm ?? base?.armCm ?? null,
         shouldersCm: patch.shouldersCm ?? base?.shouldersCm ?? null,
@@ -218,7 +229,7 @@ function BodyLogHistoryTable({ onEdit }: { onEdit: (entry: BodyLogEntry) => void
         <tbody>
           {rows.map((entry) => {
             const fat = deltas.get(entry.id)?.bodyFatPct
-            const weight = weightOnDate(weightLogs, entry.date)
+            const weight = entry.weightKg ?? weightOnDate(weightLogs, entry.date)
             const circ = circumferences.filter((f) => entry[f.key] != null)
             return (
               <tr key={entry.id} className="border-b border-slate-100 align-top">
@@ -227,8 +238,8 @@ function BodyLogHistoryTable({ onEdit }: { onEdit: (entry: BodyLogEntry) => void
                   {entry.note ? <p className="mt-0.5 max-w-24 text-[10px] font-normal text-muted">{entry.note}</p> : null}
                 </td>
                 <td className="whitespace-nowrap px-1.5 py-2.5">
-                  <span className="font-display font-bold tabular-nums text-text">
-                    {formatMeasure(entry.bodyFatPct, '%')}
+                  <span className="font-display font-bold tabular-nums text-text" dir="ltr">
+                    {formatFatWithNavy(entry)}
                   </span>
                   {fat?.vsPrevious != null ? (
                     <span
@@ -276,7 +287,7 @@ function BodyLogHistoryTable({ onEdit }: { onEdit: (entry: BodyLogEntry) => void
   )
 }
 
-/** "📊 טבלת היסטוריית אחוזי שומן ומדדים": button + modal (table ⇄ edit form). */
+/** "📊 טבלת מדידות גוף ואחוזי שומן (מאוחדת)": button + modal (table ⇄ edit form). */
 export function BodyLogHistoryButton({ className = '' }: { className?: string }) {
   const { bodyLogHistory } = useAppData()
   const [open, setOpen] = useState(false)
@@ -294,7 +305,7 @@ export function BodyLogHistoryButton({ className = '' }: { className?: string })
       {createPortal(
       <Modal
         open={open}
-        title={editing ? `עריכת מדידה · ${formatDayHe(editing.date)}` : 'היסטוריית אחוזי שומן ומדדים'}
+        title={editing ? `עריכת מדידה · ${formatDayHe(editing.date)}` : 'היסטוריית מדידות גוף ואחוזי שומן'}
         onClose={close}
         wide
       >

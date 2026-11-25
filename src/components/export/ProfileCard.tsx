@@ -146,7 +146,10 @@ export function ProfileCard() {
             estimatedBodyFatPct != null &&
             (waistCm !== profile.waistCircumferenceCm || neckCm !== profile.neckCircumferenceCm)
           ) {
-            mergeDay(todayKey(), { bodyFatPct: Math.round(estimatedBodyFatPct * 100) / 100, waistCm }, 'חישוב נוסחת חיל הים')
+            mergeDay(todayKey(), { waistCm, neckCm }, 'חישוב נוסחת חיל הים', {
+              navyFatPct: Math.round(estimatedBodyFatPct * 100) / 100,
+              weightKg: latestWeight ?? null,
+            })
           }
           recordBodyMeasurement({
             weightKg:

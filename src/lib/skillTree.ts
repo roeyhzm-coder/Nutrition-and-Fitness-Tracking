@@ -11,7 +11,7 @@
  */
 
 import type { BodyMeasurement } from './bodyMeasurements'
-import { normalizeBlockReports, type BlockReport } from './blockReport'
+import { normalizeBlockBaselines, normalizeBlockReports, type BlockBaseline, type BlockReport } from './blockReport'
 import type { MorningRoutineState } from './morningRoutine'
 import type { SetLog, WeightEntry, WorkoutDay, WorkoutLog } from './types'
 import { dayAllExercises, localDateKey, parseLocalDateKey, uid, WEEKDAY_SHORT } from './types'
@@ -174,6 +174,8 @@ export type SkillTreeState = {
   nodes: Record<string, SkillNode>
   /** Archived end-of-block benchmark reports (see lib/blockReport). */
   blockReports: Record<string, BlockReport>
+  /** Start-of-block baselines keyed by block start date (see lib/blockReport). */
+  blockBaselines: Record<string, BlockBaseline>
 }
 
 export const DEFAULT_BLOCK_TITLE = 'כוח ומיומנויות קליסטניקס'
@@ -283,6 +285,7 @@ export function createDefaultSkillTree(today = localDateKey()): SkillTreeState {
     branches: Object.fromEntries(seedSkillBranches().map((b) => [b.id, b])),
     nodes: Object.fromEntries(seedSkillNodes().map((n) => [n.id, n])),
     blockReports: {},
+    blockBaselines: {},
   }
 }
 
@@ -546,8 +549,11 @@ export function normalizeSkillTree(raw: unknown, today = localDateKey()): SkillT
     if (!b || b.deleted || rev >= SKILL_SEED_REV) continue
     // Seed content and focus (1 pull + 1 push) refresh; a reset track also
     // swaps its current tier back into the plan.
+    // From rev 6 on, a content refresh keeps the user's own focus / queue choice.
+    const keepFocus = rev >= 6 && !fullReset(rev, seed.id)
     branches[seed.id] = {
       ...seed,
+      ...(keepFocus ? { status: b.status, holdNote: b.holdNote } : {}),
       updatedAt: resetAt(b.updatedAt),
       ...(rev >= SKILL_FULL_RESET_BELOW && fullReset(rev, seed.id) ? { rewindPending: true } : {}),
     }
@@ -581,6 +587,7 @@ export function normalizeSkillTree(raw: unknown, today = localDateKey()): SkillT
     branches,
     nodes,
     blockReports: normalizeBlockReports(o.blockReports),
+    blockBaselines: normalizeBlockBaselines(o.blockBaselines),
   }
 }
 
@@ -616,6 +623,7 @@ export function mergeSkillTree(local: SkillTreeState, remote: SkillTreeState): S
     branches: lww(local.branches, remote.branches),
     nodes: lww(local.nodes, remote.nodes),
     blockReports: lww(local.blockReports, remote.blockReports),
+    blockBaselines: lww(local.blockBaselines, remote.blockBaselines),
   }
 }
 

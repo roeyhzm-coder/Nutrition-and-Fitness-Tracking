@@ -3,13 +3,13 @@ import { CalendarClock, Pencil } from 'lucide-react'
 import { useAppData } from '../../context/AppDataContext'
 import { useTodayKey } from '../../hooks/useTodayKey'
 import { blockTimeline, countdownLabel, formatDateHe } from '../../lib/blockCycle'
-import { liveBlockReports } from '../../lib/blockReport'
+import { baselineForBlock, liveBlockReports } from '../../lib/blockReport'
 import { setBlockSettings } from '../../lib/skillTree'
 import { SkillBlockSettingsModal } from '../skills/SkillEditModals'
 import { Button } from '../ui/button'
 import { IconButton } from '../ui/IconButton'
 import { ProgressBar } from '../ui/ProgressBar'
-import { BlockAssessmentModal } from './BlockAssessmentModal'
+import { BlockAssessmentModal, type BenchmarkMode } from './BlockAssessmentModal'
 
 /** "ניהול בלוק ותאריכי יעד": block name, dates, week, countdown, edit + end-of-block flow. */
 export function BlockStatusCard() {
@@ -17,8 +17,11 @@ export function BlockStatusCard() {
   const today = useTodayKey()
   const t = blockTimeline(skillTree, today)
   const lastReport = liveBlockReports(skillTree.blockReports)[0] ?? null
+  const baseline = baselineForBlock(skillTree.blockBaselines, skillTree.blockStartDate)
+  // The start test is the call to action until a baseline exists (early in the block).
+  const startDue = !baseline && t.week <= 2 && !t.due
   const [editOpen, setEditOpen] = useState(false)
-  const [assessOpen, setAssessOpen] = useState(false)
+  const [assessMode, setAssessMode] = useState<BenchmarkMode | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const timer = useRef<number | null>(null)
   useEffect(() => () => {
@@ -83,14 +86,34 @@ export function BlockStatusCard() {
         {weekTag ? <span className="text-[11px] font-semibold text-slate-500">{weekTag}</span> : null}
       </div>
 
-      <Button
-        type="button"
-        variant={t.due ? 'accent' : 'surface'}
-        className="w-full"
-        onClick={() => setAssessOpen(true)}
-      >
-        🏁 סיום בלוק ומבדקי חוזק
-      </Button>
+      <div className="space-y-1.5" aria-label="מבדקי חוזק — פתיחה / סיום בלוק">
+        <p className="text-[11px] font-bold text-slate-600">מבדקי חוזק — פתיחה / סיום בלוק</p>
+        <div className="grid grid-cols-2 gap-2">
+          <Button
+            type="button"
+            variant={startDue ? 'accent' : 'surface'}
+            className="w-full px-2 text-xs"
+            onClick={() => setAssessMode('start')}
+          >
+            🎯 מבדק פתיחת בלוק
+          </Button>
+          <Button
+            type="button"
+            variant={t.due ? 'accent' : 'surface'}
+            className="w-full px-2 text-xs"
+            onClick={() => setAssessMode('end')}
+          >
+            🏁 סיום בלוק ומבדקים
+          </Button>
+        </div>
+        <p className="text-[11px] text-muted">
+          {baseline
+            ? `✓ בסיס פתיחה נרשם (${baseline.rows.length} תרגילים · ${formatDateHe(baseline.recordedAt.slice(0, 10))}${
+                baseline.rows.every((r) => r.source === 'handover') ? ' · משיאי הבלוק הקודם' : ''
+              })`
+            : 'טרם נרשם בסיס פתיחה — בצע מבדק פתיחה לכיול המשקלים.'}
+        </p>
+      </div>
 
       {lastReport ? (
         <p className="text-[11px] text-muted">
@@ -109,10 +132,11 @@ export function BlockStatusCard() {
         }}
       />
       <BlockAssessmentModal
-        open={assessOpen}
-        onClose={() => setAssessOpen(false)}
+        open={assessMode != null}
+        mode={assessMode ?? 'end'}
+        onClose={() => setAssessMode(null)}
         onDone={(message) => {
-          setAssessOpen(false)
+          setAssessMode(null)
           showToast(message)
         }}
       />

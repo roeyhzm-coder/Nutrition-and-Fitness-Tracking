@@ -9,8 +9,8 @@
  */
 
 import { collectProgramExerciseSlots, estimated1Rm, isHoldExercise } from './blockStrength'
-import type { BenchmarkKind, BenchmarkLoad, BenchmarkRow, BlockReport } from './blockReport'
-import { liveBlockReports } from './blockReport'
+import type { BaselineSource, BenchmarkKind, BenchmarkLoad, BenchmarkRow, BlockBaseline, BlockReport } from './blockReport'
+import { baselineForBlock, liveBlockReports } from './blockReport'
 import type { SkillTreeState } from './skillTree'
 import { localDateKey, parseLocalDateKey } from './types'
 import type { Exercise, ExerciseDefaultSet, SetLog, WorkoutDay, WorkoutLog } from './types'
@@ -124,6 +124,50 @@ export type BenchmarkCandidate = {
   baseline: BenchmarkLoad | null
   peak: BenchmarkLoad | null
   sessions: number
+  /** Where the baseline came from: a start-of-block test, the previous block's peak, or the first logged session. */
+  baselineSource?: BaselineSource | 'log'
+}
+
+/**
+ * The official start-of-block baseline (test / handover) replaces the
+ * "first logged session" baseline per exercise. Exercises that exist only in
+ * the baseline record are appended so the comparison stays complete.
+ */
+export function withBlockBaseline(
+  candidates: BenchmarkCandidate[],
+  baseline: BlockBaseline | null,
+): BenchmarkCandidate[] {
+  const fromLog = (c: BenchmarkCandidate): BenchmarkCandidate =>
+    c.baseline ? { ...c, baselineSource: 'log' } : { ...c }
+  if (!baseline?.rows.length) return candidates.map(fromLog)
+  const byName = new Map(baseline.rows.map((r) => [norm(r.exerciseName), r]))
+  const out = candidates.map((c): BenchmarkCandidate => {
+    const row = byName.get(norm(c.exerciseName))
+    if (!row) return fromLog(c)
+    byName.delete(norm(c.exerciseName))
+    return { ...c, kind: c.sessions ? c.kind : row.kind, baseline: row.load, baselineSource: row.source }
+  })
+  for (const row of byName.values()) {
+    out.push({ exerciseName: row.exerciseName, kind: row.kind, baseline: row.load, peak: null, sessions: 0, baselineSource: row.source })
+  }
+  return out
+}
+
+/** Benchmark candidates of the live block, with its recorded start-of-block baseline applied. */
+export function liveBlockCandidates(
+  tree: SkillTreeState,
+  input: Omit<Parameters<typeof buildBenchmarkCandidates>[0], 'since'>,
+): BenchmarkCandidate[] {
+  return withBlockBaseline(
+    buildBenchmarkCandidates({ ...input, since: tree.blockStartDate }),
+    baselineForBlock(tree.blockBaselines, tree.blockStartDate),
+  )
+}
+
+export const BASELINE_SOURCE_LABELS: Record<BaselineSource | 'log', string> = {
+  test: 'מבדק פתיחה',
+  handover: 'שיא הבלוק הקודם',
+  log: 'אימון ראשון בבלוק',
 }
 
 function best(sets: BenchmarkLoad[], kind: BenchmarkKind): BenchmarkLoad | null {
@@ -155,11 +199,19 @@ export function buildBenchmarkCandidates(input: {
   }
   for (const ex of input.extraExercises ?? []) add(ex.name, ex.metric === 'seconds')
   const metricByName = new Map<string, boolean>()
+  // Prescribed with a working weight → loaded, even before the first logged set.
+  const plannedLoaded = new Set<string>()
+  const note = (ex: Exercise) => {
+    metricByName.set(norm(ex.name), ex.metric === 'seconds')
+    if ((ex.defaultSets ?? []).some((s) => s.weightKg != null && s.weightKg > 0) || (ex.defaultWeightKg ?? 0) > 0) {
+      plannedLoaded.add(norm(ex.name))
+    }
+  }
   for (const day of input.days) {
     for (const session of day.sessions ?? []) {
-      for (const ex of session.exercises) metricByName.set(norm(ex.name), ex.metric === 'seconds')
+      for (const ex of session.exercises) note(ex)
     }
-    for (const ex of day.exercises ?? []) metricByName.set(norm(ex.name), ex.metric === 'seconds')
+    for (const ex of day.exercises ?? []) note(ex)
   }
   for (const slot of collectProgramExerciseSlots(input.days)) {
     add(slot.exerciseName, metricByName.get(norm(slot.exerciseName)) ?? false)
@@ -195,7 +247,7 @@ export function buildBenchmarkCandidates(input: {
     const ordered: Session[] = [...(byDate?.entries() ?? [])]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, sets]) => ({ date, sets }))
-    const loaded = ordered.some((s) => s.sets.some((x) => x.weightKg != null))
+    const loaded = ordered.some((s) => s.sets.some((x) => x.weightKg != null)) || plannedLoaded.has(norm(name))
     const kind: BenchmarkKind = seconds || (!loaded && isHoldExercise(name)) ? 'hold' : loaded ? 'loaded' : 'bodyweight'
     const baseline = ordered[0] ? best(ordered[0].sets, kind) : null
     const peak = best(ordered.flatMap((s) => s.sets), kind)
@@ -263,23 +315,69 @@ export type Calibration = {
   reason: string
 }
 
-const LOAD_STEP = 2.5
+const BELT_STEP = 2.5
+
+export type LoadEquipment = 'belt' | 'dumbbell' | 'other'
+
+const DUMBBELL_RE =
+  /בולגרי|bulgarian|rdl|דדליפט|הרחק|lateral|כפיפת|curl|skull|פשיטת|לחיצת כתפיים|shoulder press|משקולות? יד|משקולת|dumbbell/i
+const BELT_RE = /מתח|מקבילים|pull-?up|chin|dips?\b|muscle/i
+
+/** Equipment behind a loaded exercise decides the load step (belt 2.5 kg plates vs 1-2 kg dumbbell jumps). */
+export function loadEquipment(name: string): LoadEquipment {
+  if (DUMBBELL_RE.test(name)) return 'dumbbell'
+  if (BELT_RE.test(name)) return 'belt'
+  return 'other'
+}
+
+/** current + step on the step grid (nearest), always strictly above the current load. */
+function nextOnGrid(current: number, step: number): number {
+  const nearest = Math.round((Math.round((current + step) / step) * step) * 100) / 100
+  return nearest > current ? nearest : Math.round((Math.ceil(current / step + 1e-9) * step) * 100) / 100
+}
 
 /**
- * Improved → +2.5 kg (weighted), +1 rep (+2 from 10 reps up) on bodyweight
- * work, +5 s on holds. Static / regressed → repeat the peak (no change).
+ * Next-block start, never below the current peak:
+ * - weighted calisthenics (belt — pull-ups / dips): +2.5 kg on the 2.5 kg grid;
+ * - dumbbells: +1 kg (under 12 kg) / +2 kg — or keep the weight and add 1-2 reps;
+ * - bodyweight: +1 rep (+2 from 10 reps up); holds: +5 s.
+ * Static / regressed → repeat the peak exactly (no rounding, no drop).
  */
-export function calibrate(kind: BenchmarkKind, peak: BenchmarkLoad | null, delta: BenchmarkDelta): Calibration | null {
+export function calibrate(
+  kind: BenchmarkKind,
+  peak: BenchmarkLoad | null,
+  delta: BenchmarkDelta,
+  exerciseName = '',
+): Calibration | null {
   if (!peak) return null
   const improved = delta.trend === 'up'
   if (kind === 'loaded' && peak.weightKg != null) {
-    const step = improved ? LOAD_STEP : 0
-    const w = Math.round((peak.weightKg + step) / LOAD_STEP) * LOAD_STEP
+    const current = peak.weightKg
+    if (!improved) {
+      return {
+        delta: 0,
+        unit: 'kg',
+        target: `${fmtKg(current)} ק"ג × ${peak.reps}`,
+        reason: 'ללא שיפור — חזרה על השיא (ללא הורדת משקל)',
+      }
+    }
+    const equipment = loadEquipment(exerciseName)
+    if (equipment === 'dumbbell') {
+      const step = current < 12 ? 1 : 2
+      const w = Math.max(current, Math.round((current + step) * 100) / 100)
+      return {
+        delta: Math.round((w - current) * 100) / 100,
+        unit: 'kg',
+        target: `${fmtKg(w)} ק"ג × ${peak.reps} (או ${fmtKg(current)} ק"ג × ${peak.reps + 1}-${peak.reps + 2})`,
+        reason: `התחזקות — משקולות יד +${fmtKg(w - current)} ק"ג (או +1-2 חזרות באותו משקל)`,
+      }
+    }
+    const w = Math.max(current, nextOnGrid(current, BELT_STEP))
     return {
-      delta: step,
+      delta: Math.round((w - current) * 100) / 100,
       unit: 'kg',
       target: `${fmtKg(w)} ק"ג × ${peak.reps}`,
-      reason: improved ? 'התחזקות — עומס +2.5 ק"ג' : 'ללא שיפור — חזרה על השיא',
+      reason: `התחזקות — ${equipment === 'belt' ? 'חגורת משקולות' : 'עומס'} +${fmtKg(w - current)} ק"ג`,
     }
   }
   if (kind === 'hold') {
@@ -297,6 +395,31 @@ export function calibrate(kind: BenchmarkKind, peak: BenchmarkLoad | null, delta
     unit: 'reps',
     target: `${peak.reps + step} חזרות`,
     reason: improved ? `שיפור — +${step} ${step === 1 ? 'חזרה' : 'חזרות'}` : 'ללא שיפור — חזרה על השיא',
+  }
+}
+
+/**
+ * Start-of-block calibration: shift every loaded set so the heaviest set
+ * equals the tested working weight (pyramids keep their spacing).
+ */
+export function startCalibrationPatch(ex: Exercise, testedWeightKg: number): Partial<Exercise> | null {
+  const sets = ex.defaultSets ?? []
+  const top = sets.reduce<number | null>(
+    (max, s) => (s.weightKg != null && s.weightKg > 0 && (max == null || s.weightKg > max) ? s.weightKg : max),
+    ex.defaultWeightKg != null && ex.defaultWeightKg > 0 ? ex.defaultWeightKg : null,
+  )
+  if (top == null || !(testedWeightKg > 0)) return null
+  const shift = Math.round((testedWeightKg - top) * 100) / 100
+  if (shift === 0) return null
+  const move = (w: number) => Math.max(0.5, Math.round((w + shift) * 100) / 100)
+  const weight = ex.weight && /\d/.test(ex.weight) ? bumpNumbers(ex.weight, shift) : ex.weight
+  return {
+    ...(weight !== ex.weight ? { weight } : {}),
+    ...(sets.length
+      ? { defaultSets: sets.map((s) => (s.weightKg != null && s.weightKg > 0 ? { ...s, weightKg: move(s.weightKg) } : { ...s })) }
+      : {}),
+    ...(ex.defaultWeightKg != null && ex.defaultWeightKg > 0 ? { defaultWeightKg: move(ex.defaultWeightKg) } : {}),
+    defaultsUpdatedAt: new Date().toISOString(),
   }
 }
 
@@ -351,14 +474,19 @@ export function planExercisesNamed(days: WorkoutDay[], name: string): { dayId: s
 // AI export
 // ---------------------------------------------------------------------------
 
-function rowLine(row: Pick<BenchmarkRow, 'exerciseName' | 'kind' | 'baseline' | 'peak' | 'tested' | 'nextTarget'>): string {
+function rowLine(
+  row: Pick<BenchmarkRow, 'exerciseName' | 'kind' | 'baseline' | 'peak' | 'tested' | 'nextTarget'> & {
+    baselineSource?: BaselineSource | 'log'
+  },
+): string {
   const d = benchmarkDelta(row.kind, row.baseline, row.peak)
   const change = d.trend === 'none' ? 'אין נתונים' : d.parts.join(' / ')
-  return `| ${row.exerciseName} | ${formatLoad(row.baseline, row.kind)} | ${formatLoad(row.peak, row.kind)}${row.tested ? ' (מבדק)' : ''} | ${change} | ${row.nextTarget || '—'} |`
+  const src = row.baseline && row.baselineSource ? ` (${BASELINE_SOURCE_LABELS[row.baselineSource]})` : ''
+  return `| ${row.exerciseName} | ${formatLoad(row.baseline, row.kind)}${src} | ${formatLoad(row.peak, row.kind)}${row.tested ? ' (מבדק)' : ''} | ${change} | ${row.nextTarget || '—'} |`
 }
 
 const TABLE_HEAD = [
-  '| תרגיל | בסיס תחילת בלוק | שיא בבלוק | שינוי | יעד פתיחה לבלוק הבא |',
+  '| תרגיל | בסיס פתיחת בלוק | שיא / מבדק סיום | שינוי | יעד פתיחה לבלוק הבא |',
   '| --- | --- | --- | --- | --- |',
 ]
 
@@ -369,15 +497,20 @@ export function formatBlockBenchmarkSection(input: {
   today?: string
 }): string {
   const t = blockTimeline(input.tree, input.today)
-  const logged = input.candidates.filter((c) => c.peak)
+  const baseline = baselineForBlock(input.tree.blockBaselines, input.tree.blockStartDate)
+  const candidates = withBlockBaseline(input.candidates, baseline)
+  const logged = candidates.filter((c) => c.peak || c.baselineSource === 'test' || c.baselineSource === 'handover')
   const lines: string[] = [
-    '=== סיכום מבדקי חוזק וסיום בלוק ===',
+    '=== מבדקי חוזק — פתיחה / סיום בלוק ===',
     `- בלוק נוכחי: ${t.name} | ${t.startDate} עד ${t.endDate} | שבוע ${t.week} מתוך ${t.weeks} | ${countdownLabel(t)}`,
+    baseline
+      ? `- בסיס פתיחה רשמי: נרשם ${baseline.recordedAt.slice(0, 10)} (${baseline.rows.length} תרגילים · ${[...new Set(baseline.rows.map((r) => BASELINE_SOURCE_LABELS[r.source]))].join(' + ')})`
+      : '- בסיס פתיחה רשמי: טרם בוצע מבדק פתיחה — הבסיס הוא הסט הטוב ביותר באימון הראשון בבלוק.',
   ]
   if (logged.length) {
-    lines.push('', '### מצב נוכחי בבלוק (בסיס מול שיא עד היום)', ...TABLE_HEAD)
+    lines.push('', '### בסיס פתיחת בלוק מול שיא עד היום', ...TABLE_HEAD)
     for (const c of logged) {
-      const cal = calibrate(c.kind, c.peak, benchmarkDelta(c.kind, c.baseline, c.peak))
+      const cal = calibrate(c.kind, c.peak, benchmarkDelta(c.kind, c.baseline, c.peak), c.exerciseName)
       lines.push(rowLine({ ...c, tested: false, nextTarget: cal?.target ?? '' }))
     }
   } else {
@@ -401,7 +534,7 @@ export function formatBlockBenchmarkSection(input: {
   }
   lines.push(
     '',
-    'הנחיה: השתמש בטבלאות אלו כדי לתכנן את הבלוק הבא — עומסי פתיחה, טווחי חזרות והתקדמות סקילים לפי השיפור בפועל.',
+    'הנחיה: השתמש בטבלאות אלו כדי לתכנן את הבלוק הבא — עומסי פתיחה, טווחי חזרות והתקדמות סקילים לפי השיפור בפועל. שיא סיום בלוק N הוא בסיס הפתיחה של בלוק N+1. לעולם אל תמליץ על משקל נמוך מהשיא הנוכחי: חגורה (מתח/מקבילים) +2.5 ק"ג, משקולות יד +1-2 ק"ג או +1-2 חזרות, משקל גוף +1-2 חזרות, החזקות +5 שניות.',
   )
   return lines.join('\n')
 }

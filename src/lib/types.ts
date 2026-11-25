@@ -490,6 +490,8 @@ export type WorkoutProgram = {
   updatedAt: string
   /** Set on built-in programs; older versions get replaced on load. */
   planVersion?: number
+  /** Block 3 prescription migration revision (see BLOCK3_RX_REV in data/workouts). */
+  rxRev?: number
 }
 
 export type DayPlan =

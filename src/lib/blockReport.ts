@@ -131,3 +131,81 @@ export function liveBlockReports(reports: Record<string, BlockReport>): BlockRep
     .filter((r) => !r.deleted)
     .sort((a, b) => b.closedAt.localeCompare(a.closedAt))
 }
+
+// ---------------------------------------------------------------------------
+// Start-of-block baseline ("בסיס פתיחה") — one record per block start date
+// ---------------------------------------------------------------------------
+
+export type BaselineSource = 'test' | 'handover'
+
+export type BaselineRow = {
+  exerciseName: string
+  kind: BenchmarkKind
+  load: BenchmarkLoad
+  source: BaselineSource
+}
+
+/**
+ * Official start-of-block baseline. Written by "🎯 מבדק פתיחת בלוק" (source
+ * `test`) or automatically when the previous block closes — its end-of-block
+ * peaks become this block's baseline (source `handover`). Keyed by the block's
+ * start date, so a handover and a later test edit the same record (LWW).
+ */
+export type BlockBaseline = {
+  id: string
+  blockLabel: string
+  startDate: string
+  rows: BaselineRow[]
+  recordedAt: string
+  updatedAt: string
+  deleted?: boolean
+}
+
+export function baselineIdFor(startDate: string): string {
+  return `bb-${startDate}`
+}
+
+const SOURCES: readonly BaselineSource[] = ['test', 'handover']
+
+function baselineRow(value: unknown): BaselineRow | null {
+  const o = obj(value)
+  const exerciseName = str(o.exerciseName, 200).trim()
+  const l = load(o.load)
+  if (!exerciseName || !l) return null
+  return {
+    exerciseName,
+    kind: KINDS.includes(o.kind as BenchmarkKind) ? (o.kind as BenchmarkKind) : 'bodyweight',
+    load: l,
+    source: SOURCES.includes(o.source as BaselineSource) ? (o.source as BaselineSource) : 'test',
+  }
+}
+
+export function normalizeBlockBaselines(value: unknown): Record<string, BlockBaseline> {
+  const out: Record<string, BlockBaseline> = {}
+  for (const [key, raw] of Object.entries(obj(value))) {
+    const o = obj(raw)
+    const startDate = dateKey(o.startDate)
+    if (!startDate) continue
+    const id = str(o.id, 80) || key || baselineIdFor(startDate)
+    out[id] = {
+      id,
+      blockLabel: str(o.blockLabel, 60),
+      startDate,
+      rows: Array.isArray(o.rows) ? o.rows.map(baselineRow).filter((r): r is BaselineRow => !!r).slice(0, 80) : [],
+      recordedAt: iso(o.recordedAt),
+      updatedAt: iso(o.updatedAt),
+      ...(o.deleted === true ? { deleted: true } : {}),
+    }
+  }
+  return out
+}
+
+/** The live baseline of the block that starts on `startDate` (null = none recorded yet). */
+export function baselineForBlock(
+  baselines: Record<string, BlockBaseline>,
+  startDate: string,
+): BlockBaseline | null {
+  const hit = baselines[baselineIdFor(startDate)]
+  if (hit && !hit.deleted) return hit
+  return Object.values(baselines).find((b) => !b.deleted && b.startDate === startDate) ?? null
+}

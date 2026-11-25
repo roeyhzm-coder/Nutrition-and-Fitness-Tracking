@@ -9,7 +9,7 @@
  */
 
 import type { WeightEntry } from './types'
-import { uid } from './types'
+import { localDateKey, uid } from './types'
 
 export { BODY_LOG_PAYLOAD_KEY } from './weeklyConsistency'
 
@@ -18,6 +18,7 @@ export const BODY_LOG_STORAGE_KEY = 'tn.bodyLog.v1'
 export type BodyLogField =
   | 'bodyFatPct'
   | 'waistCm'
+  | 'neckCm'
   | 'chestCm'
   | 'armCm'
   | 'shouldersCm'
@@ -29,10 +30,15 @@ export type BodyLogEntry = {
   date: string
   bodyFatPct: number | null
   waistCm: number | null
+  neckCm: number | null
   chestCm: number | null
   armCm: number | null
   shouldersCm: number | null
   thighCm: number | null
+  /** U.S. Navy formula estimate (waist / neck / height) from the profile calculator. */
+  navyFatPct: number | null
+  /** Body weight measured with this entry (falls back to that day's weigh-in). */
+  weightKg: number | null
   note: string
   updatedAt: string
   /** Derived (seed / legacy weigh-in) — not stored until edited. */
@@ -53,6 +59,7 @@ export const BODY_LOG_FIELDS: readonly {
 }[] = [
   { key: 'bodyFatPct', label: 'אחוז שומן (%)', short: 'שומן', unit: '%', lowerIsBetter: true, max: 70 },
   { key: 'waistCm', label: 'היקף מותן (ס"מ)', short: 'מותן', unit: 'ס"מ', lowerIsBetter: true, max: 250 },
+  { key: 'neckCm', label: 'היקף צוואר (ס"מ)', short: 'צוואר', unit: 'ס"מ', lowerIsBetter: false, max: 80 },
   { key: 'chestCm', label: 'היקף חזה (ס"מ)', short: 'חזה', unit: 'ס"מ', lowerIsBetter: false, max: 250 },
   { key: 'armCm', label: 'היקף זרוע (ס"מ)', short: 'זרוע', unit: 'ס"מ', lowerIsBetter: false, max: 100 },
   { key: 'shouldersCm', label: 'היקף כתפיים (ס"מ)', short: 'כתפיים', unit: 'ס"מ', lowerIsBetter: false, max: 250 },
@@ -67,6 +74,7 @@ const SEED_CURRENT_FAT = 13.0
 const SEED_CURRENT_DATE = '2026-11-23'
 const EPOCH = '1970-01-01T00:00:00.000Z'
 const LEGACY_PREFIX = 'legacy-wl-'
+const FOLD_PREFIX = 'bm-'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
@@ -89,7 +97,11 @@ function iso(value: unknown): string {
 }
 
 function emptyMeasures(): Pick<BodyLogEntry, BodyLogField> {
-  return { bodyFatPct: null, waistCm: null, chestCm: null, armCm: null, shouldersCm: null, thighCm: null }
+  return { bodyFatPct: null, waistCm: null, neckCm: null, chestCm: null, armCm: null, shouldersCm: null, thighCm: null }
+}
+
+function noExtras(): Pick<BodyLogEntry, 'navyFatPct' | 'weightKg'> {
+  return { navyFatPct: null, weightKg: null }
 }
 
 export function hasAnyMeasure(entry: Pick<BodyLogEntry, BodyLogField>): boolean {
@@ -108,6 +120,8 @@ function normalizeEntry(raw: unknown, key: string): BodyLogEntry | null {
     id,
     date,
     ...measures,
+    navyFatPct: measure(o.navyFatPct, 70),
+    weightKg: measure(o.weightKg, 400),
     note: typeof o.note === 'string' ? o.note.slice(0, 200) : '',
     updatedAt: iso(o.updatedAt),
     ...(o.deleted === true ? { deleted: true } : {}),
@@ -134,16 +148,22 @@ export function mergeBodyLog(local: BodyLogState, remote: BodyLogState): BodyLog
   return out
 }
 
-export type BodyLogInput = Pick<BodyLogEntry, BodyLogField | 'date' | 'note'>
+export type BodyLogInput = Pick<BodyLogEntry, BodyLogField | 'date' | 'note'> &
+  Partial<Pick<BodyLogEntry, 'navyFatPct' | 'weightKg'>>
 
 /** Insert or replace an entry (stamps updatedAt; derived ids become stored entries). */
 export function upsertBodyLogEntry(state: BodyLogState, input: BodyLogInput & { id?: string }): BodyLogState {
   const id = input.id ?? `bl-${uid()}`
+  const prev = state[id]
   const entry: BodyLogEntry = {
     id,
     date: input.date,
     bodyFatPct: input.bodyFatPct,
     waistCm: input.waistCm,
+    neckCm: input.neckCm,
+    // The edit form has no Navy / weight inputs: keep what the entry already holds.
+    navyFatPct: input.navyFatPct !== undefined ? input.navyFatPct : (prev?.navyFatPct ?? null),
+    weightKg: input.weightKg !== undefined ? input.weightKg : (prev?.weightKg ?? null),
     chestCm: input.chestCm,
     armCm: input.armCm,
     shouldersCm: input.shouldersCm,
@@ -186,6 +206,7 @@ export function bodyLogHistory(
       id,
       date,
       ...emptyMeasures(),
+      ...noExtras(),
       bodyFatPct: Math.round(w.bodyFatPct * 100) / 100,
       note: '',
       updatedAt: EPOCH,
@@ -204,6 +225,7 @@ export function bodyLogHistory(
       id: BODY_LOG_SEED_BASELINE_ID,
       date: baselineDate,
       ...emptyMeasures(),
+      ...noExtras(),
       bodyFatPct: SEED_BASELINE_FAT,
       note: 'בסיס תחילת בלוק',
       updatedAt: EPOCH,
@@ -219,6 +241,7 @@ export function bodyLogHistory(
       id: BODY_LOG_SEED_CURRENT_ID,
       date: SEED_CURRENT_DATE > baselineDate ? SEED_CURRENT_DATE : baselineDate,
       ...emptyMeasures(),
+      ...noExtras(),
       bodyFatPct: SEED_CURRENT_FAT,
       note: 'מדידה נוכחית',
       updatedAt: EPOCH,
@@ -226,9 +249,89 @@ export function bodyLogHistory(
     })
   }
 
-  return [...live, ...derived].sort(
+  // One row per date: a seed never sits next to a real reading of the same day.
+  const realDays = new Set([...live, ...derived.filter((e) => e.source === 'legacy')].map((e) => e.date))
+  const visible = derived.filter((e) => e.source !== 'seed' || !realDays.has(e.date))
+  // A folded profile measurement (`bm-<date>`) yields to another real entry of
+  // that day (e.g. one that arrived from another device); the fold fills that one.
+  const ownDays = new Set(live.filter((e) => !e.id.startsWith(FOLD_PREFIX)).map((e) => e.date))
+  const liveVisible = live.filter((e) => !e.id.startsWith(FOLD_PREFIX) || !ownDays.has(e.date))
+  return [...liveVisible, ...visible].sort(
     (a, b) => a.date.localeCompare(b.date) || a.updatedAt.localeCompare(b.updatedAt),
   )
+}
+
+/** Minimal shape of a profile body-measurement row (lib/bodyMeasurements). */
+export type BodyMeasurementLike = {
+  recordedAt: string
+  weightKg: number | null
+  waistCircumferenceCm: number | null
+  neckCircumferenceCm: number | null
+  bodyFatPercentage: number | null
+}
+
+const round2 = (v: number | null | undefined) =>
+  v != null && Number.isFinite(v) && v > 0 ? Math.round(v * 100) / 100 : null
+
+/**
+ * Single source of truth: fold the profile's body-measurement rows (weight /
+ * waist / neck / Navy body fat) into the body log, one entry per date. Only
+ * empty fields are filled (never overwrites a value the user entered), ids are
+ * deterministic (`bm-<date>`, or the existing entry of that day), so every
+ * device converges on the same result. Returns null when nothing changes.
+ */
+export function foldBodyMeasurements(
+  state: BodyLogState,
+  history: BodyLogEntry[],
+  measurements: BodyMeasurementLike[],
+): BodyLogState | null {
+  const byDate = new Map<string, BodyMeasurementLike>()
+  for (const m of [...measurements].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt))) {
+    const d = new Date(m.recordedAt)
+    if (Number.isNaN(d.getTime())) continue
+    byDate.set(localDateKey(d), m)
+  }
+  let next: BodyLogState | null = null
+  const now = new Date().toISOString()
+  for (const [date, m] of byDate) {
+    const fat = round2(m.bodyFatPercentage)
+    const incoming = {
+      waistCm: round2(m.waistCircumferenceCm),
+      neckCm: round2(m.neckCircumferenceCm),
+      weightKg: round2(m.weightKg),
+      navyFatPct: fat,
+    }
+    const sameDay = history.filter((e) => e.date === date)
+    const target = sameDay.find((e) => !e.source) ?? sameDay.find((e) => e.source === 'legacy') ?? sameDay[0] ?? null
+    if (target) {
+      const patch: Partial<BodyLogEntry> = {}
+      for (const key of ['waistCm', 'neckCm', 'weightKg', 'navyFatPct'] as const) {
+        if (target[key] == null && incoming[key] != null) patch[key] = incoming[key]
+      }
+      if (target.bodyFatPct == null && fat != null) patch.bodyFatPct = fat
+      if (!Object.keys(patch).length) continue
+      const { source: _source, ...base } = target
+      next = { ...(next ?? state), [target.id]: { ...base, ...patch, updatedAt: now } }
+      continue
+    }
+    const id = `${FOLD_PREFIX}${date}`
+    if (state[id]) continue // deleted by the user (tombstone): never resurrect
+    const entry: BodyLogEntry = {
+      id,
+      date,
+      ...emptyMeasures(),
+      bodyFatPct: fat,
+      waistCm: incoming.waistCm,
+      neckCm: incoming.neckCm,
+      navyFatPct: fat,
+      weightKg: incoming.weightKg,
+      note: 'מדידת פרופיל (חיל הים)',
+      updatedAt: now,
+    }
+    if (!hasAnyMeasure(entry)) continue
+    next = { ...(next ?? state), [id]: entry }
+  }
+  return next
 }
 
 export type BodyLogDelta = { value: number; vsPrevious: number | null; vsBaseline: number | null }
@@ -305,7 +408,14 @@ export function weightOnDate(weightLogs: WeightEntry[], date: string): number | 
   return hit ? Math.round(hit.weightKg * 100) / 100 : null
 }
 
-/** AI export: the full history table (newest first) with deltas and same-day weight. */
+/** Body fat cell: "13.0% / 12.99% (חיל הים)" when both a reading and a Navy estimate exist. */
+export function formatFatWithNavy(entry: Pick<BodyLogEntry, 'bodyFatPct' | 'navyFatPct'>): string {
+  const main = formatMeasure(entry.bodyFatPct, '%')
+  if (entry.navyFatPct == null || entry.bodyFatPct == null || entry.navyFatPct === entry.bodyFatPct) return main
+  return `${main} / ${formatMeasure(entry.navyFatPct, '%')} (חיל הים)`
+}
+
+/** AI export: ONE unified chronological table (newest first) of body fat + weight + every circumference. */
 export function formatBodyLogSection(history: BodyLogEntry[], weightLogs: WeightEntry[] = []): string {
   if (!history.length) return ''
   const deltas = bodyLogDeltas(history)
@@ -319,15 +429,21 @@ export function formatBodyLogSection(history: BodyLogEntry[], weightLogs: Weight
     if (!d) return '—'
     return d.vsPrevious == null ? formatMeasure(d.value, unit) : `${formatMeasure(d.value, unit)} (${formatSigned(d.vsPrevious, unit)})`
   }
+  const fatCell = (entry: BodyLogEntry) => {
+    const base = cell(entry, 'bodyFatPct', '%')
+    return entry.navyFatPct != null && entry.navyFatPct !== entry.bodyFatPct
+      ? `${base} / ${formatMeasure(entry.navyFatPct, '%')} (חיל הים)`
+      : base
+  }
   const rows = [...history].reverse().map((entry) => {
-    const weight = weightOnDate(weightLogs, entry.date)
-    return `| ${entry.date} | ${cell(entry, 'bodyFatPct', '%')} | ${weight != null ? `${weight} ק"ג` : '—'} | ${cell(entry, 'waistCm', 'ס"מ')} | ${cell(entry, 'chestCm', 'ס"מ')} | ${cell(entry, 'armCm', 'ס"מ')} | ${cell(entry, 'shouldersCm', 'ס"מ')} | ${cell(entry, 'thighCm', 'ס"מ')} | ${entry.note || '—'} |`
+    const weight = entry.weightKg ?? weightOnDate(weightLogs, entry.date)
+    return `| ${entry.date} | ${fatCell(entry)} | ${weight != null ? `${weight} ק"ג` : '—'} | ${cell(entry, 'waistCm', 'ס"מ')} | ${cell(entry, 'neckCm', 'ס"מ')} | ${cell(entry, 'chestCm', 'ס"מ')} | ${cell(entry, 'armCm', 'ס"מ')} | ${cell(entry, 'shouldersCm', 'ס"מ')} | ${cell(entry, 'thighCm', 'ס"מ')} | ${entry.note || '—'} |`
   })
   return [
-    '## טבלת היסטוריית אחוזי שומן ומדדים (מעקב חודשי)',
+    '## היסטוריית מדידות גוף ואחוזי שומן (טבלה מאוחדת — מקור אמת יחיד)',
     fatTrend,
-    '| תאריך | אחוז שומן (שינוי מהקודם) | משקל | מותן | חזה | זרוע | כתפיים | ירך | הערה |',
-    '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    '| תאריך | אחוז שומן (שינוי מהקודם) | משקל | מותן | צוואר | חזה | זרוע | כתפיים | ירך | הערה |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |',
     ...rows,
   ]
     .filter(Boolean)

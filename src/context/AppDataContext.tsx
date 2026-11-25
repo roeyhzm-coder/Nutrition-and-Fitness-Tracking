@@ -51,8 +51,12 @@ import {
 } from '../lib/focusTracks'
 import { DEFAULT_FOOD_CATEGORIES, replaceLiveRecipes } from '../data/recipes'
 import {
+  B3_UPDATED_AT,
+  BLOCK3_RX_REV,
   DEFAULT_ACTIVE_PROGRAM_ID,
   OFFICIAL_PLAN_VERSION,
+  applyBlock3Prescription,
+  block3PrescribedExercises,
   ensureOfficialPlan,
   backfillProgramMedia,
   isStalePlan,
@@ -91,6 +95,7 @@ import {
 import { latestDateKey, readLastAiExportAt } from '../lib/aiCheckin'
 import { hydrateServingPresets } from '../lib/servingPresets'
 import {
+  blockExerciseKey,
   defaultsFromExercise,
   resolveExerciseMetric,
   type ExerciseDefaultValues,
@@ -178,6 +183,7 @@ import { reconcileFocusSlotDays, reconcileFocusSlotTemplates } from '../lib/skil
 import {
   BODY_LOG_STORAGE_KEY,
   bodyLogHistory as deriveBodyLogHistory,
+  foldBodyMeasurements,
   latestBodyStats,
   mergeBodyLog,
   normalizeBodyLog,
@@ -477,10 +483,12 @@ function migrateStoredPlan() {
   }
   const ensured = isStalePlan(stored) ? ensureOfficialPlan(stored) : stored
   const patched = replaceSingleLegWallSitInPlan(ensured)
-  const plan = withDefaultBlockActive(patched)
+  const rx = applyBlock3Prescription(patched)
+  const plan = withDefaultBlockActive(rx)
   const shouldWrite =
     isStalePlan(stored) ||
     patched.changed ||
+    rx.changed ||
     plan.activeProgramId !== stored.activeProgramId ||
     version < OFFICIAL_PLAN_VERSION
   if (shouldWrite) {
@@ -678,12 +686,20 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
     [bodyLog, weightLogs, skillTree.blockStartDate],
   )
   const latestBody = useMemo(() => latestBodyStats(bodyLogHistory), [bodyLogHistory])
+  // Single source of truth: profile body-measurement rows (weight / waist /
+  // neck / Navy fat) are folded into the body log by date — idempotent, only
+  // fills empty fields, synced like any other body-log edit.
   const updateBodyLog = useCallback(
     (fn: (prev: BodyLogState) => BodyLogState) => {
       setBodyLogRaw((raw) => fn(normalizeBodyLog(raw)))
     },
     [setBodyLogRaw],
   )
+  useEffect(() => {
+    if (!bodyMeasurements.length) return
+    const folded = foldBodyMeasurements(bodyLog, bodyLogHistory, bodyMeasurements)
+    if (folded) setBodyLogRaw(folded)
+  }, [bodyLog, bodyLogHistory, bodyMeasurements, setBodyLogRaw])
   const [antagonistRaw, setAntagonistRaw] = useLocalStorage<AntagonistState>(
     ANTAGONIST_STORAGE_KEY,
     {},
@@ -819,6 +835,30 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       setWorkoutTemplates((prev) => reconcileFocusSlotTemplates(prev, skillTree).templates)
     }
   }, [activeProgram, skillTree, workoutTemplates, setWorkoutPrograms, setWorkoutTemplates])
+
+  // Block 3 prescription rev: saved defaults rows (global + this block's own)
+  // written before the rebuild would overlay the old Block 2 numbers (e.g.
+  // 2×15 explosive push-ups) back onto Pull 3 / Push 3. Re-stamp them with the
+  // official values once; rows saved after the rebuild are the user's and win.
+  useEffect(() => {
+    const program = workoutPrograms.find((p) => p.id === DEFAULT_ACTIVE_PROGRAM_ID)
+    if (!program || (program.rxRev ?? 0) < BLOCK3_RX_REV) return
+    const at = new Date().toISOString()
+    const rows = block3PrescribedExercises().flatMap((ex) => {
+      const own = [exerciseDefaults[exerciseDefaultsKey(ex.name)], exerciseDefaults[blockExerciseKey(program.id, ex.name)]]
+      if (!own.some((row) => row && !row.notesOnly && row.updatedAt < B3_UPDATED_AT)) return []
+      const values = { ...defaultsFromExercise(ex), metric: resolveExerciseMetric(ex) }
+      return [storedDefaultsFromValues(ex.name, values, at), storedDefaultsFromValues(ex.name, values, at, program.id)]
+    })
+    if (!rows.length) return
+    const map: ExerciseDefaultsMap = Object.fromEntries(rows.map((row) => [row.exerciseKey, row]))
+    if (!rememberExerciseDefaults(map)) return
+    setWorkoutPrograms((prev) => applyStoredDefaultsToPrograms(prev, map).programs)
+    setWorkoutTemplates((prev) => applyStoredDefaultsToTemplates(prev, map).templates)
+    void pushExerciseDefaults(rows).then((res) => {
+      if (!res.ok) console.warn('[AppData] Block 3 defaults kept locally only', res.error)
+    })
+  }, [workoutPrograms, exerciseDefaults, rememberExerciseDefaults, setWorkoutPrograms, setWorkoutTemplates])
 
   const updateWorkoutDay = useCallback(
     (dayId: string, patch: Partial<WorkoutDay>) => {
@@ -1664,7 +1704,9 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
               remotePlan.activeProgramId || remotePlan.programs[0]?.id || '',
           }
       const patched = replaceSingleLegWallSitInPlan(basePlan)
-      const activePlan = withDefaultBlockActive(patched)
+      // Official Block 3 week + Pull 3 / Push 3 prescription (once per account, rxRev).
+      const rx = applyBlock3Prescription(patched)
+      const activePlan = withDefaultBlockActive(rx)
       // Saved exercise defaults (own table, row-level upserts) always win over a
       // program blob that another device pushed from a stale snapshot.
       const healedPrograms = applyStoredDefaultsToPrograms(
@@ -1683,6 +1725,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
       if (
         remoteStale ||
         patched.changed ||
+        rx.changed ||
         healedPrograms.changed ||
         healedTemplates.changed ||
         plan.activeProgramId !== remotePlan.activeProgramId
@@ -1696,7 +1739,7 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
         setActiveProgramIdState(plan.activeProgramId)
       }
       if (
-        (remote.workoutTemplates || patched.changed || healedTemplates.changed) &&
+        (remote.workoutTemplates || patched.changed || rx.changed || healedTemplates.changed) &&
         !localDirtyRef.current
       ) {
         setWorkoutTemplates(plan.templates)

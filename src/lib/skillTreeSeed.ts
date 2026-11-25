@@ -35,13 +35,15 @@ export const SKILL_SEED_V2_AT = '2026-11-17T10:30:00.000Z'
  * reset to the seed on load — independent of its timestamp, so a stale client
  * can never resurrect an old tier state again. Bump when the seed changes.
  */
-export const SKILL_SEED_REV = 6
+export const SKILL_SEED_REV = 7
 /**
  * Floor timestamp for the current seed revision's migration.
  * Rev 6: the pull/dip station can't fit Front Lever rows → Front Lever queued
  * (equipment note), One-Arm Chin-Up joins focus next to Handstand.
+ * Rev 7: content refresh only — Handstand stage 1 reads Morning Routine B
+ * (no injected duplicate), Archer slot prescription 3×4-6 per side.
  */
-export const SKILL_SEED_REV_AT = '2026-11-23T08:00:00.000Z'
+export const SKILL_SEED_REV_AT = '2026-11-25T08:00:00.000Z'
 /** Seed entities older than this revision are fully reset (rev 4: clean Stage 1 baseline). */
 export const SKILL_FULL_RESET_BELOW = 4
 /**
@@ -293,9 +295,9 @@ export const SKILL_FOCUS_HANDOFFS: Readonly<Record<string, SkillFocusHandoff>> =
     exercise: ex(
       'Archer Pull-ups / Uneven Chin-ups (מתח קשת)',
       3,
-      '3-5 לכל צד',
-      '2 דקות',
-      'מסלול One-Arm Chin-Up: היד העובדת מושכת, היד השנייה רק מייצבת. כשסוגרים 3×5 לכל צד — מעבר ל-OAC Negatives.',
+      '4-6 לכל צד',
+      '2-3 דקות',
+      'מסלול One-Arm Chin-Up: היד העובדת מושכת, היד השנייה רק מייצבת. מחליף את Tuck FL Rows (לא אפשרי בעמדת המתח הביתית). כשסוגרים 3×6 לכל צד — מעבר ל-OAC Negatives.',
     ),
   },
   'sk-muscle-up': {
@@ -439,7 +441,8 @@ export function seedSkillNodes(): SkillNode[] {
     // 4. Handstand & HSPU — slots: אימון 2 Pike + שגרת בוקר B.
     tier(hs, 1, 'active', 'עמידת ידיים חזה לקיר (60 שניות) + Wall HSPU בסיסי', {
       measures: [
-        hold('עמידת ידיים חזה לקיר', CTW_HS, 30, 60, { sets: 3 }),
+        // Already in Morning Routine B: progress is read from there, never injected into a workout.
+        hold('עמידת ידיים חזה לקיר', `${CTW_HS}|עמידת ידיים מול קיר`, 30, 60, { sets: 3, source: 'morning_routine' }),
         maxReps('Wall HSPU בסיסי', 'Wall HSPU', 1, 3),
       ],
     }),

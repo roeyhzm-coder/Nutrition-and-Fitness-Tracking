@@ -1,8 +1,10 @@
 /**
- * Skill Tree ↔ workout bridge: the single in-focus stage of every active-focus
- * track is injected at the very top of a matching workout (Pull → pull tracks,
- * Push / legs → push tracks, Combined → both), resolved from the workout
- * template type, never from the calendar day.
+ * Skill Tree ↔ workout bridge. Strict 1-in / 1-out: the in-focus stage of a
+ * track is NEVER prepended or injected into a workout. Its progress is read
+ * from the exercise that already lives in the plan (Pull 3 / Push 3 /
+ * Combined 3) or in Morning Routine A/B; the plan itself only changes through
+ * an explicitly confirmed Smart Slot Swap (lib/skillSlotSwap), which replaces
+ * one exercise in place.
  */
 
 import {
@@ -18,9 +20,9 @@ import {
   type SkillTreeState,
 } from './skillTree'
 import { createOfficialPrograms, DEFAULT_ACTIVE_PROGRAM_ID } from '../data/workouts'
-import { normalizeMorningState } from './morningRoutine'
+import { normalizeMorningState, type MorningRoutineState } from './morningRoutine'
 import type { Exercise, WorkoutDay } from './types'
-import { dayAllExercises } from './types'
+import { dayAllExercises, WEEKDAY_SHORT } from './types'
 
 export type WorkoutSkillKind = 'pull' | 'push' | 'both'
 
@@ -65,15 +67,16 @@ export type SkillFocusItem = {
   target: string
   /** Aliases of the stage's primary exercise (`|`). */
   link: string
+  /** Where the primary measure is tracked from. */
+  sourceType: SkillMeasure['sourceType']
   exercise: Exercise
 }
 
 export const SKILL_EXERCISE_PREFIX = 'skill-'
 
-/** Primary measure = first one fed by the workout log (else the first one). */
+/** Primary measure = the stage's first linked measure (workout exercise or Morning A/B). */
 function primaryMeasure(node: SkillNode): SkillMeasure | null {
-  const withLink = node.measures.filter((m) => m.linkedExercise.trim())
-  return withLink.find((m) => m.sourceType === 'workout_exercise') ?? withLink[0] ?? null
+  return node.measures.find((m) => m.linkedExercise.trim()) ?? null
 }
 
 function firstAlias(link: string): string {
@@ -135,6 +138,7 @@ export function focusSkillItems(
       tierCount: nodes.length,
       target: node.title,
       link: m.linkedExercise,
+      sourceType: m.sourceType,
       exercise: stageExercise(node, m, branch.title),
     })
   }
@@ -143,23 +147,54 @@ export function focusSkillItems(
 }
 
 /**
- * Put the skill stages first (index 0…). An exercise already in the list that
- * matches the stage is moved to the top instead of being duplicated.
+ * Strict 1-in / 1-out: the workout's own lineup, unchanged. Skill stages are
+ * linked to the exercise already in the list (see skillItemForExercise) and
+ * never added as an extra copy. Runtime skill copies (`skill-<nodeId>`) from
+ * older sessions are dropped.
  */
-export function injectSkillExercises(exercises: Exercise[], items: SkillFocusItem[]): Exercise[] {
-  if (!items.length) return exercises
-  const rest = [...exercises]
-  const head: Exercise[] = []
-  for (const item of items) {
-    const at = rest.findIndex((e) => e.id === item.exercise.id || matchesLink(e.name, item.link))
-    head.push(at >= 0 ? rest.splice(at, 1)[0]! : item.exercise)
-  }
-  return [...head, ...rest]
+export function injectSkillExercises(exercises: Exercise[], _items: SkillFocusItem[] = []): Exercise[] {
+  return exercises.some((e) => e.id.startsWith(SKILL_EXERCISE_PREFIX))
+    ? exercises.filter((e) => !e.id.startsWith(SKILL_EXERCISE_PREFIX))
+    : exercises
 }
 
-/** Full lineup for a weekday: its exercises with the matching skill stages on top. */
-export function dayLineupWithSkills(day: WorkoutDay, tree: SkillTreeState): Exercise[] {
-  return injectSkillExercises(dayAllExercises(day), focusSkillItems(tree, skillKindOfDay(day)))
+/** Full lineup for a weekday (no skill injection — see injectSkillExercises). */
+export function dayLineupWithSkills(day: WorkoutDay, _tree?: SkillTreeState): Exercise[] {
+  return injectSkillExercises(dayAllExercises(day))
+}
+
+/** Where a focus stage is tracked from: a plan exercise ("יום א׳/ג׳ · משיכה 3"), Morning B, or nowhere yet. */
+export function skillItemSource(
+  item: SkillFocusItem,
+  days: WorkoutDay[],
+  morning?: MorningRoutineState,
+): { label: string; linked: boolean } {
+  if (item.sourceType === 'morning_routine') {
+    const routines = morning?.routines ?? normalizeMorningState(null).routines
+    const hits = (['A', 'B'] as const).filter((id) =>
+      routines[id].exercises.some((ex) => matchesLink(`${ex.nameHe} ${ex.nameEn}`, item.link)),
+    )
+    return hits.length
+      ? { label: hits.map((id) => `שגרת בוקר ${id}`).join(' + '), linked: true }
+      : { label: 'שגרת בוקר (עדכון ידני)', linked: false }
+  }
+  const byWorkout = new Map<string, number[]>()
+  for (const day of days) {
+    if (day.isRest) continue
+    for (const s of day.sessions ?? []) {
+      if (!s.exercises.some((e) => matchesLink(e.name, item.link))) continue
+      byWorkout.set(s.name, [...(byWorkout.get(s.name) ?? []), day.dayNumber])
+    }
+    if ((day.exercises ?? []).some((e) => matchesLink(e.name, item.link))) {
+      const name = day.focus || day.title
+      byWorkout.set(name, [...(byWorkout.get(name) ?? []), day.dayNumber])
+    }
+  }
+  if (!byWorkout.size) return { label: 'לא בתוכנית הפעילה — נדרשת החלפת סלוט מאושרת', linked: false }
+  const label = [...byWorkout.entries()]
+    .map(([name, nums]) => `${nums.length > 1 ? 'ימים' : 'יום'} ${nums.map((n) => WEEKDAY_SHORT[n - 1] ?? n).join('/')} · ${name}`)
+    .join(' | ')
+  return { label, linked: true }
 }
 
 /** Skill stage an exercise in the active workout belongs to (injected or matched by name). */
